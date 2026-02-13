@@ -1,0 +1,27 @@
+{
+  "name": "bandcamp-bpm-key",
+  "version": "0.1.0",
+  "description": "BPM and key analyzer for Bandcamp",
+  "scripts": {
+    "build": "webpack --mode production",
+    "build:watch": "webpack --mode development --watch",
+    "serve": "webpack serve --mode development --open",
+    "dev": "webpack serve --mode development --watch",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@babel/core": "^7.x.x",
+    "@babel/preset-env": "^7.x.x",
+    "babel-loader": "^9.x.x",
+    "copy-webpack-plugin": "^11.x.x",
+    "webpack": "^5.x.x",
+    "webpack-cli": "^5.x.x",
+    "webpack-dev-server": "^5.2.3"
+  },
+  "dependencies": {
+    "meyda": "^5.6.3"
+  }
+}

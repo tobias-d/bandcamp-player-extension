@@ -1,0 +1,23 @@
+{
+  "manifest_version": 2,
+  "name": "Bandcamp BPM Analyzer",
+  "version": "0.1.0",
+  "description": "Estimate BPM and key on Bandcamp pages.",
+  "permissions": [
+    "storage",
+    "*://*.bandcamp.com/*",
+    "*://*.bcbits.com/*"
+  ],
+  "content_security_policy": "script-src 'self'; object-src 'self'",
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.bandcamp.com/*"],
+      "js": ["content-scripts/bandcamp-player.js"]
+    }
+  ]
+}
