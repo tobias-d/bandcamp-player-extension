@@ -10,8 +10,8 @@ module.exports = (env, argv) => {
     
     entry: {
       'background/index': './src/background/index.ts',
-      'content-scripts/bandcamp-player': './src/content-scripts/bandcamp-player.js',  // ← Changed to .js
-      'ui/results-panel': './src/ui/results-panel.js'  // ← Changed to .js
+      'content-scripts/bandcamp-player': './src/content-scripts/bandcamp-player.js',
+      'ui/results-panel': './src/ui/results-panel.js'
     },
     
     module: {
@@ -24,25 +24,21 @@ module.exports = (env, argv) => {
         {
           test: /\.js$/,
           exclude: /node_modules/,
-          use: {
-            loader: 'babel-loader',
-            options: {
-              presets: [
-                ['@babel/preset-env', { targets: { firefox: '90' } }]
-              ]
-            }
-          }
+          type: 'javascript/esm'  // ← Tell webpack to treat .js as ES modules
         }
       ]
     },
     
     resolve: {
       extensions: ['.ts', '.js'],
+      extensionAlias: {
+        '.js': ['.js', '.ts']
+      },
       alias: {
         '@background': path.resolve(__dirname, 'src/background'),
         '@ui': path.resolve(__dirname, 'src/ui'),
         '@content': path.resolve(__dirname, 'src/content-scripts'),
-        '@shared': path.resolve(__dirname, 'src/shared')  // ← Changed from @types to @shared
+        '@shared': path.resolve(__dirname, 'src/shared')
       }
     },
     
@@ -55,7 +51,7 @@ module.exports = (env, argv) => {
     plugins: [
       new CopyPlugin({
         patterns: [
-          { from: './manifest.json', to: 'manifest.json' },  // ← Added ./
+          { from: 'src/manifest.json', to: 'manifest.json' },
           { from: 'src/ui/*.html', to: 'ui/[name][ext]', noErrorOnMissing: true },
           { from: 'src/ui/*.css', to: 'ui/[name][ext]', noErrorOnMissing: true },
           { from: 'icons', to: 'icons', noErrorOnMissing: true }
