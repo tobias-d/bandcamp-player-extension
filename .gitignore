@@ -40,3 +40,6 @@ Icon?
 # Testing coverage
 coverage/
 .nyc_output/
+node_modules/
+dist/
+*.log
