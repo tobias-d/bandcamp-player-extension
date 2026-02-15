@@ -17,7 +17,7 @@
       "@background/*": ["background/*"],
       "@ui/*": ["ui/*"],
       "@content/*": ["content-scripts/*"],
-      "@types/*": ["types/*"]
+      "@shared/*": ["shared/*"]
     }
   },
   "include": ["src/**/*"],

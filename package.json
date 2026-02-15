@@ -13,10 +13,10 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@babel/core": "^7.x.x",
-    "@babel/preset-env": "^7.x.x",
+    "@babel/core": "^7.29.0",
+    "@babel/preset-env": "^7.29.0",
     "@types/chrome": "^0.1.36",
-    "babel-loader": "^9.x.x",
+    "babel-loader": "^9.2.1",
     "copy-webpack-plugin": "^11.0.0",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",

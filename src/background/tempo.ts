@@ -21,7 +21,7 @@
  * @version 2026-02-15-typescript
  */
 
-import type { BeatMode, BeatType, TempoResult, OnsetResult, TempoCandidateResult, TempoCluster, MeterEvidence } from '../types/index';
+import type { BeatMode, BeatType, TempoResult, OnsetResult, TempoCandidateResult, TempoCluster, MeterEvidence } from '../shared/index';
 
 /* ============================================================================
  * UTILITY FUNCTIONS
@@ -550,7 +550,7 @@ function clusterHypotheses(allHyps: Hypothesis[]): TempoCluster[] {
       if (Math.abs(h.bpm - c.center) < BPM_GROUP_TOL) {
         c.items.push(h);
         c.weightSum += h.weight;
-        c.center = c.items.reduce((sum, item) => sum + item.bpm * item.weight, 0) / c.weightSum;
+        c.center = c.items.reduce((sum: number, item: { bpm: number; weight: number }) => sum + item.bpm * item.weight, 0) / c.weightSum;
         found = true;
         break;
       }

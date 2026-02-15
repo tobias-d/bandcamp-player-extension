@@ -20,7 +20,7 @@
  * @version 2026-02-15-typescript
  */
 
-import type { BeatMode } from '../types/index';
+import type { BeatMode } from '../shared/index';
 
 // ============================================================================
 // TYPE DEFINITIONS

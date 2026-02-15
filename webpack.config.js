@@ -10,8 +10,8 @@ module.exports = (env, argv) => {
     
     entry: {
       'background/index': './src/background/index.ts',
-      'content-scripts/bandcamp-player': './src/content-scripts/bandcamp-player.ts',
-      'ui/results-panel': './src/ui/results-panel.ts'
+      'content-scripts/bandcamp-player': './src/content-scripts/bandcamp-player.js',  // ← Changed to .js
+      'ui/results-panel': './src/ui/results-panel.js'  // ← Changed to .js
     },
     
     module: {
@@ -20,6 +20,18 @@ module.exports = (env, argv) => {
           test: /\.ts$/,
           use: 'ts-loader',
           exclude: /node_modules/
+        },
+        {
+          test: /\.js$/,
+          exclude: /node_modules/,
+          use: {
+            loader: 'babel-loader',
+            options: {
+              presets: [
+                ['@babel/preset-env', { targets: { firefox: '90' } }]
+              ]
+            }
+          }
         }
       ]
     },
@@ -30,7 +42,7 @@ module.exports = (env, argv) => {
         '@background': path.resolve(__dirname, 'src/background'),
         '@ui': path.resolve(__dirname, 'src/ui'),
         '@content': path.resolve(__dirname, 'src/content-scripts'),
-        '@types': path.resolve(__dirname, 'src/types')
+        '@shared': path.resolve(__dirname, 'src/shared')  // ← Changed from @types to @shared
       }
     },
     
@@ -43,7 +55,7 @@ module.exports = (env, argv) => {
     plugins: [
       new CopyPlugin({
         patterns: [
-          { from: 'manifest.json', to: 'manifest.json' },
+          { from: './manifest.json', to: 'manifest.json' },  // ← Added ./
           { from: 'src/ui/*.html', to: 'ui/[name][ext]', noErrorOnMissing: true },
           { from: 'src/ui/*.css', to: 'ui/[name][ext]', noErrorOnMissing: true },
           { from: 'icons', to: 'icons', noErrorOnMissing: true }

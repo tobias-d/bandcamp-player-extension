@@ -25,7 +25,7 @@
  * @version 2026-02-15-typescript
  */
 
-import type { BeatMode, AnalysisResult } from '../types/index';
+import type { BeatMode, AnalysisResult } from '../shared/index';
 import { analyzeUrl } from './analyzer.js';
 import { getBeatModeStored, setBeatModeStored } from './storage.js';
 import { getWaveformForUrl } from './waveform.js';

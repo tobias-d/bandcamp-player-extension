@@ -1,5 +1,12 @@
 /**
- * Shared TypeScript types for Bandcamp Player Extension
+ * ============================================================================
+ * SHARED TYPESCRIPT TYPES
+ * ============================================================================
+ * 
+ * Centralized type definitions for the Bandcamp Player Extension.
+ * 
+ * @module types
+ * @version 2026-02-15-v2.0-final
  */
 
 // ============================================================================
@@ -20,15 +27,6 @@ export interface AnalysisOptions {
 
 export type BeatMode = 'straight' | 'breakbeat' | 'auto';
 
-export interface AnalysisResult {
-  bpm?: number;
-  confidence?: number;
-  beatType?: BeatType;
-  breakbeatScore?: number;
-  waveform?: WaveformData;
-  timestamp: number;
-}
-
 export type BeatType = 'straight' | 'breakbeat' | 'unknown';
 
 export interface TempoResult {
@@ -44,6 +42,21 @@ export interface TempoResult {
 // WAVEFORM TYPES
 // ============================================================================
 
+/**
+ * Three-band waveform data (low, mid, high frequencies)
+ * Used for multi-color waveform visualization
+ */
+export interface WaveformBands {
+  peaksLow: number[];
+  peaksMid: number[];
+  peaksHigh: number[];
+  duration: number;
+  buckets: number;
+}
+
+/**
+ * Single-channel waveform data
+ */
 export interface WaveformData {
   peaks: Float32Array;
   length: number;
@@ -110,6 +123,23 @@ export interface AnalysisProgressMessage {
 export interface AnalysisErrorMessage {
   error: string;
   details?: string;
+}
+
+// ============================================================================
+// ANALYSIS RESULT (Used by analyzer.ts and messaging.ts)
+// ============================================================================
+
+export interface AnalysisResult {
+  bpm?: number;
+  confidence: number;
+  beatMode: BeatMode;
+  beatTypeAuto?: BeatType;
+  breakbeatScore?: number;
+  waveform: WaveformBands | null;
+  waveformStatus: string;
+  note?: string;
+  error?: string;
+  ts: number;
 }
 
 // ============================================================================
