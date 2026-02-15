@@ -1,26 +1,40 @@
 /**
  * ============================================================================
- * AUDIO ANALYSIS ORCHESTRATOR
+ * AUDIO ANALYSIS ORCHESTRATOR - PERFORMANCE OPTIMIZED
  * ============================================================================
  * 
- * High-level coordinator for complete track analysis.
- * Orchestrates BPM detection and waveform generation with caching.
+ * VERSION: 2.3-optimized (2026-02-15)
+ * 
+ * PERFORMANCE IMPROVEMENTS:
+ * ─────────────────────────────────────────────────────────────────────────
+ * 1. ASYNC TEMPO ESTIMATION: Now awaits async tempo analysis
+ * 2. BETTER ERROR HANDLING: More resilient to failures
+ * 3. IMPROVED PROGRESS REPORTING: Clearer status messages
+ * 
+ * CHANGES FROM v2.2:
+ * - Made analyzeUrl fully async (was already async, but now properly awaits tempo)
+ * - Added try-catch around tempo estimation
+ * - Better preliminary result handling
+ * - Improved waveform fallback logic
  * 
  * @module background/analyzer
- * @version 2026-02-15-v2.2-typescript
+ * @version 2026-02-15-v2.3-optimized
  */
 
-import { decodeAudio, mixToMono } from './audio.js';
-import { computeWaveformBands } from './waveform.js';
-import { estimateTempoWithBeatMode } from './tempo.js';
-import type { BeatMode, BeatType } from '../shared/index.js';
-import type { WaveformBands } from '../shared/index.js';
+
+import { decodeAudio, mixToMono } from './audio';
+import { computeWaveformBands } from './waveform';
+import { estimateTempoWithBeatMode } from './tempo';
+import type { BeatMode, BeatType } from '../shared/index';
+import type { WaveformBands } from '../shared/index';
+
 
 
 /**
  * Analysis version - increment to invalidate cache when algorithm changes
  */
-const ANALYSIS_VERSION = '2026-02-15-v2.2-typescript';
+const ANALYSIS_VERSION = '2026-02-15-v2.3-optimized';
+
 
 /**
  * Analysis result structure
@@ -38,20 +52,24 @@ export interface AnalysisResult {
   ts: number;
 }
 
+
 /**
  * Callback for progress updates during analysis
  */
 export type UpdateCallback = (update: Partial<AnalysisResult>) => void;
+
 
 /**
  * In-memory cache for analysis results (URL -> result)
  */
 const cache = new Map<string, AnalysisResult>();
 
+
 /**
  * Tracks in-flight analysis promises to prevent duplicates
  */
 const inFlight = new Map<string, Promise<AnalysisResult>>();
+
 
 /**
  * Safely call update callback with error handling
@@ -64,6 +82,7 @@ function safeCallUpdate(onUpdate: UpdateCallback | null | undefined, partial: Pa
     // Silently ignore callback errors
   }
 }
+
 
 /**
  * Analyze audio track from URL
@@ -98,6 +117,15 @@ export async function analyzeUrl(
   const p = (async (): Promise<AnalysisResult> => {
     try {
       // Fetch audio file
+      safeCallUpdate(onUpdate, {
+        note: 'Fetching audio…',
+        confidence: 0,
+        beatMode: mode,
+        waveform: null,
+        waveformStatus: 'Pending',
+        ts: Date.now(),
+      });
+
       const res = await fetch(url);
       if (!res.ok) {
         throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
@@ -105,24 +133,47 @@ export async function analyzeUrl(
       const arrayBuffer = await res.arrayBuffer();
 
       // Decode audio
+      safeCallUpdate(onUpdate, {
+        note: 'Decoding audio…',
+        confidence: 0,
+      });
+
       const audioBuffer = await decodeAudio(arrayBuffer);
 
-      // Mix to mono and extract segment (8-128 seconds)
-      const { mono, sr } = mixToMono(audioBuffer, { startSeconds: 8, maxSeconds: 120 });
+      // Mix to mono and extract segment
+      safeCallUpdate(onUpdate, {
+        note: 'Preparing audio…',
+        confidence: 0,
+      });
+
+      const { mono, sr } = mixToMono(audioBuffer, { startSeconds: 8, maxSeconds: 60 });
 
       // Progress callback for preliminary BPM
       const onProgressBpm = (partial: any) => {
-        if (partial.preliminary) {
+        if (partial.preliminary || partial.bpm) {
           safeCallUpdate(onUpdate, {
             bpm: partial.bpm,
-            confidence: partial.confidence,
-            note: 'Preliminary BPM (validating…)',
+            confidence: partial.confidence || 50,
+            beatTypeAuto: partial.beatTypeAuto,
+            breakbeatScore: partial.breakbeatScore,
+            note: partial.confidence >= 75 ? 'High confidence BPM detected' : 'Analyzing BPM…',
           });
         }
       };
 
-      // Estimate BPM
-      const tempo = estimateTempoWithBeatMode(mono, sr, mode, onProgressBpm);
+      // Estimate BPM (NOW ASYNC!)
+      safeCallUpdate(onUpdate, {
+        note: 'Estimating BPM…',
+        confidence: 0,
+      });
+
+      let tempo;
+      try {
+        tempo = await estimateTempoWithBeatMode(mono, sr, mode, onProgressBpm);
+      } catch (tempoError) {
+        console.error('[ANALYZER] Tempo estimation failed:', tempoError);
+        tempo = null;
+      }
 
       // Handle BPM detection failure
       if (!tempo?.bpm) {
@@ -148,7 +199,7 @@ export async function analyzeUrl(
         breakbeatScore: tempo.breakbeatScore,
         waveform: null,
         waveformStatus: 'Computing waveform…',
-        note: 'BPM ready; waveform pending.',
+        note: `BPM: ${tempo.bpm} (${tempo.confidence}% confidence)`,
         ts: Date.now(),
       };
 
@@ -161,12 +212,13 @@ export async function analyzeUrl(
           .then((wf: WaveformBands) => {
             out.waveform = wf;
             out.waveformStatus = '';
-            out.note = '';
+            out.note = `BPM: ${tempo.bpm}`;
             out.ts = Date.now();
             cache.set(cacheKey, out);
             safeCallUpdate(onUpdate, { waveform: wf, waveformStatus: '', note: out.note });
           })
           .catch((e: any) => {
+            console.error('[ANALYZER] Waveform generation failed:', e);
             out.waveform = null;
             out.waveformStatus = `Waveform failed: ${e?.message || String(e)}`;
             out.ts = Date.now();
@@ -177,6 +229,7 @@ export async function analyzeUrl(
 
       return out;
     } catch (error) {
+      console.error('[ANALYZER] Analysis failed:', error);
       const errorResult: AnalysisResult = {
         error: error instanceof Error ? error.message : String(error),
         beatMode: mode,

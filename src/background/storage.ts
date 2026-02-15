@@ -58,7 +58,7 @@ interface SetBeatModeResult {
 /**
  * Get the appropriate storage area (sync or local)
  * 
- * @param api - Browser API object (from api.js)
+ * @param api - Browser API object (from api.ts)
  * @returns Storage area object or null if unavailable
  */
 export function getStorageArea(api: BrowserAPI): chrome.storage.StorageArea | null {

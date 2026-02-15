@@ -4,37 +4,29 @@
   "description": "BPM and key analyzer for Bandcamp",
   "scripts": {
     "build": "webpack --mode production",
-    "build:dev": "webpack --mode development",
-    "watch": "webpack --mode development --watch",
-    "type-check": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "build:watch": "webpack --mode development --watch",
+    "serve": "webpack serve --mode development --open",
+    "dev": "webpack serve --mode development --watch",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "type-check": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@babel/core": "^7.29.0",
-    "@babel/preset-env": "^7.29.0",
-    "@types/chrome": "^0.1.36",
-    "babel-loader": "^9.2.1",
-    "copy-webpack-plugin": "^11.0.0",
+    "@babel/core": "^7.x.x",
+    "@babel/preset-env": "^7.x.x",
+    "@types/chrome": "^0.0.258",
+    "@types/firefox-webext-browser": "^120.0.5",
+    "babel-loader": "^9.x.x",
+    "copy-webpack-plugin": "^11.x.x",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
-    "webpack": "^5.105.2",
-    "webpack-cli": "^5.1.4",
+    "webpack": "^5.x.x",
+    "webpack-cli": "^5.x.x",
     "webpack-dev-server": "^5.2.3"
   },
   "dependencies": {
     "meyda": "^5.6.3"
-  },
-  "main": "webpack.config.js",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/tobias-d/bandcamp-player-extension.git"
-  },
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/tobias-d/bandcamp-player-extension/issues"
-  },
-  "homepage": "https://github.com/tobias-d/bandcamp-player-extension#readme"
+  }
 }

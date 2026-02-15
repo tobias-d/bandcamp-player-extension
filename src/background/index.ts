@@ -11,8 +11,8 @@
  * @version 2026-02-15-typescript
  */
 
-import { api } from './api.js';
-import { registerMessageHandlers } from './messaging.js';
+import { api } from './api';
+import { registerMessageHandlers } from './messaging';
 
 // Initialize message handlers with browser API
 registerMessageHandlers(api);

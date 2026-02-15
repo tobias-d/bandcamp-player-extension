@@ -3,6 +3,8 @@
  * MESSAGE HANDLER REGISTRY
  * ============================================================================
  * 
+ * VERSION: 1.1 (2026-02-15)
+ * 
  * Central message routing for browser extension communication.
  * Handles messages from content scripts and dispatches to appropriate services.
  * 
@@ -22,17 +24,17 @@
  * via ANALYSIS_PARTIAL messages for real-time UI feedback.
  * 
  * @module background/messaging
- * @version 2026-02-15-typescript
+ * @version 2026-02-15-v1.1
  */
 
 import type { BeatMode, AnalysisResult } from '../shared/index';
-import { analyzeUrl } from './analyzer.js';
-import { getBeatModeStored, setBeatModeStored } from './storage.js';
-import { getWaveformForUrl } from './waveform.js';
+import { analyzeUrl } from './analyzer';
+import { getBeatModeStored, setBeatModeStored } from './storage';
+import { getWaveformForUrl } from './waveform';
 
-// ============================================================================
-// TYPE DEFINITIONS
-// ============================================================================
+/* ============================================================================
+ * TYPE DEFINITIONS
+ * ============================================================================ */
 
 /**
  * Browser API object (chrome or browser namespace)
@@ -89,11 +91,110 @@ interface AnalysisPartialMessage extends Partial<AnalysisResult> {
 /**
  * Progress update callback type
  */
-type ProgressCallback = ((partial: Partial<AnalysisResult>) => void) | null;
+type ProgressCallback = (partial: Partial<AnalysisResult>) => void;
 
-// ============================================================================
-// MESSAGE HANDLER
-// ============================================================================
+/* ============================================================================
+ * MESSAGE HANDLER
+ * ============================================================================ */
+
+/**
+ * Handle a single incoming message and return appropriate response
+ * 
+ * @param msg - Incoming message from content script
+ * @param sender - Message sender information
+ * @param api - Browser API object
+ * @returns Promise with response data, or undefined if message not handled
+ */
+async function handleMessage(
+  msg: IncomingMessage,
+  sender: chrome.runtime.MessageSender,
+  api: BrowserAPI
+): Promise<any> {
+  // Validate message
+  if (!msg || !msg.type) {
+    return undefined;
+  }
+
+  try {
+    // Get beat mode preference
+    if (msg.type === 'GETBEATMODE') {
+      const beatMode = await getBeatModeStored(api as any);
+      return { beatMode } as BeatModeResponse;
+    }
+
+    // Set beat mode preference
+    if (msg.type === 'SETBEATMODE') {
+      await setBeatModeStored(api as any, msg.beatMode);
+      return { success: true };
+    }
+
+    // Get waveform data only (without BPM analysis)
+    if (msg.type === 'GETWAVEFORM' || msg.type === 'GET_WAVEFORM') {
+      if (!msg.url) {
+        return { error: 'URL required', ts: Date.now() } as ErrorResponse;
+      }
+
+      try {
+        const waveform = await getWaveformForUrl(msg.url);
+        return waveform;
+      } catch (e: any) {
+        return {
+          error: e?.message || String(e),
+          ts: Date.now(),
+        } as ErrorResponse;
+      }
+    }
+
+    // Full track analysis with progressive updates
+    if (msg.type === 'ANALYZE_TRACK' || msg.type === 'ANALYZETRACK') {
+      if (!msg.url) {
+        return { error: 'URL required', ts: Date.now() } as ErrorResponse;
+      }
+
+      const tabId = sender?.tab?.id;
+
+      // Create update callback to send partial results back to content script
+      let onUpdate: ProgressCallback | null = null;
+
+      if (tabId !== undefined && tabId !== null) {
+        onUpdate = (partial: Partial<AnalysisResult>): void => {
+          try {
+            const message: AnalysisPartialMessage = {
+              type: 'ANALYSIS_PARTIAL',
+              url: msg.url,
+              ...partial,
+            };
+            api.tabs.sendMessage(tabId, message).catch(() => {
+              // Ignore errors (tab might be closed)
+            });
+          } catch (error) {
+            // Ignore errors (tab might be closed)
+          }
+        };
+      }
+
+      // Start analysis with progress updates
+      try {
+        const result = await analyzeUrl(msg.url, msg.beatMode, onUpdate);
+        return result;
+      } catch (e: any) {
+        return {
+          error: e?.message || String(e),
+          ts: Date.now(),
+        } as ErrorResponse;
+      }
+    }
+
+    // Message type not recognized
+    return undefined;
+  } catch (error: any) {
+    console.error('[Messaging] Unexpected error:', error);
+    return {
+      error: error?.message || String(error),
+      ts: Date.now(),
+    } as ErrorResponse;
+  }
+}
 
 /**
  * Register all message handlers for the extension
@@ -103,71 +204,30 @@ type ProgressCallback = ((partial: Partial<AnalysisResult>) => void) | null;
  * - Errors are caught and converted to {error, ts} responses
  * - Undefined returns allow message propagation
  * 
- * @param api - Browser API object (from api.js)
+ * @param api - Browser API object (from api.ts)
  */
 export function registerMessageHandlers(api: BrowserAPI): void {
   api.runtime.onMessage.addListener(
     (
       msg: IncomingMessage,
-      sender: chrome.runtime.MessageSender
-    ): Promise<any> | undefined => {
-      // Ignore malformed messages
-      if (!msg || !msg.type) return;
-
-      // Get beat mode preference
-      if (msg.type === 'GETBEATMODE') {
-        return getBeatModeStored(api as any).then(
-          (beatMode): BeatModeResponse => ({ beatMode })
-        );
-      }
-
-      // Set beat mode preference
-      if (msg.type === 'SETBEATMODE') {
-        return setBeatModeStored(api as any, msg.beatMode);
-      }
-
-      // Get waveform data only (without BPM analysis)
-      if ((msg.type === 'GETWAVEFORM' || msg.type === 'GET_WAVEFORM') && msg.url) {
-        return getWaveformForUrl(msg.url).catch(
-          (e: any): ErrorResponse => ({
-            error: e?.message || String(e),
+      sender: chrome.runtime.MessageSender,
+      sendResponse: (response?: any) => void
+    ): boolean => {
+      // Handle message asynchronously
+      handleMessage(msg, sender, api)
+        .then((response) => {
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error('[Messaging] Handler error:', error);
+          sendResponse({
+            error: error?.message || String(error),
             ts: Date.now(),
-          })
-        );
-      }
+          });
+        });
 
-      // Full track analysis with progressive updates
-      if ((msg.type === 'ANALYZE_TRACK' || msg.type === 'ANALYZETRACK') && msg.url) {
-        const tabId = sender?.tab?.id;
-
-        // Create update callback to send partial results back to content script
-        const onUpdate: ProgressCallback =
-          tabId !== undefined && tabId !== null
-            ? (partial: Partial<AnalysisResult>) => {
-                try {
-                  const message: AnalysisPartialMessage = {
-                    type: 'ANALYSIS_PARTIAL',
-                    url: msg.url,
-                    ...partial,
-                  };
-                  api.tabs.sendMessage(tabId, message);
-                } catch (_) {
-                  // Ignore errors (tab might be closed)
-                }
-              }
-            : null;
-
-        // Start analysis with progress updates
-        return analyzeUrl(msg.url, msg.beatMode, onUpdate).catch(
-          (e: any): ErrorResponse => ({
-            error: e?.message || String(e),
-            ts: Date.now(),
-          })
-        );
-      }
-
-      // Message not handled - allow propagation
-      return undefined;
+      // Return true to indicate we'll call sendResponse asynchronously
+      return true;
     }
   );
 }

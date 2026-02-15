@@ -6,17 +6,21 @@
   "permissions": [
     "storage",
     "*://*.bandcamp.com/*",
+    "*://bandcamp.com/*",
     "*://*.bcbits.com/*"
   ],
-  "content_security_policy": "script-src 'self'; object-src 'self'",
+  "content_security_policy": "script-src 'self'; object-src 'self'; connect-src https://*.bcbits.com https://*.bandcamp.com https://bandcamp.com",
   "background": {
     "scripts": [
-      "background/index.js"
+      "background.js"
     ]
   },
   "content_scripts": [
     {
-      "matches": ["*://*.bandcamp.com/*"],
+      "matches": [
+        "*://*.bandcamp.com/*",
+        "*://bandcamp.com/*"
+      ],
       "js": ["content-scripts/bandcamp-player.js"]
     }
   ]

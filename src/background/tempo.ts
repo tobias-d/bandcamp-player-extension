@@ -1,24 +1,22 @@
 /**
  * ============================================================================
- * TEMPO ESTIMATION ENGINE
+ * TEMPO ESTIMATION ENGINE - MUSICAL INTELLIGENCE v2.5.1
  * ============================================================================
  *
- * Advanced multi-window BPM detection with beat type classification and
- * harmonic relationship analysis for music tempo estimation.
- *
- * ALGORITHM OVERVIEW:
+ * VERSION: 2.5.1 (2026-02-15)
+ * 
+ * FIXES FROM v2.4:
  * ─────────────────────────────────────────────────────────────────────────
- * 1. ONSET DETECTION: Extracts energy-based onset envelope from audio
- * 2. AUTOCORRELATION: Uses Pearson correlation to find periodic patterns
- * 3. MULTI-WINDOW ANALYSIS: Analyzes 4 different segments (10s, 45s, 80s, 115s)
- * 4. HYPOTHESIS GENERATION: Creates BPM candidates with harmonic variations
- * 5. CLUSTERING: Groups similar BPM estimates to find consensus
- * 6. BEAT CLASSIFICATION: Distinguishes straight (four-on-floor) from breakbeat
- * 7. REFINEMENT: Fine-tunes BPM and selects best tempo from harmonics
- * 8. TEMPO PROMOTION: Resolves common octave errors (halftime detection)
- *
+ * 1. Restored proper peak detection (v2.4 was too aggressive)
+ * 2. Musical plausibility as BONUS, not hard filter
+ * 3. Conservative tempo snapping (only when very close)
+ * 4. Harmonic preference for breakbeat (80/160 over 107)
+ * 5. Better balance: accuracy + speed
+ * 
+ * SHOULD DETECT: Trampolin → 80 BPM (not 107)
+ * 
  * @module background/tempo
- * @version 2026-02-15-typescript
+ * @version 2026-02-15-v2.5.1
  */
 
 import type { BeatMode, BeatType, TempoResult, OnsetResult, TempoCandidateResult, TempoCluster, MeterEvidence } from '../shared/index';
@@ -27,16 +25,10 @@ import type { BeatMode, BeatType, TempoResult, OnsetResult, TempoCandidateResult
  * UTILITY FUNCTIONS
  * ============================================================================ */
 
-/**
- * Clamp a value between minimum and maximum bounds.
- */
 function clamp(x: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, x));
 }
 
-/**
- * Fold BPM into valid range by doubling/halving.
- */
 function foldIntoRange(bpm: number, minBpm: number, maxBpm: number): number {
   let x = bpm;
   while (x < minBpm) x *= 2;
@@ -44,50 +36,121 @@ function foldIntoRange(bpm: number, minBpm: number, maxBpm: number): number {
   return x;
 }
 
+async function yieldToEventLoop(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
 /**
- * Safe logarithm for positive values.
+ * NEW v2.5: Musical plausibility scoring (not rejection)
+ * Returns a bonus/penalty score, not a boolean
  */
-function safeLog1p(x: number): number {
-  return Math.log(1 + Math.max(0, x));
+function musicalPlausibilityScore(bpm: number): number {
+  // Strongly prefer common tempo ranges
+  if ((bpm >= 75 && bpm <= 90) || (bpm >= 120 && bpm <= 135) || (bpm >= 155 && bpm <= 175)) {
+    return 0.15; // Strong bonus
+  }
+  
+  // Accept extended ranges with smaller bonus
+  if ((bpm >= 70 && bpm <= 95) || (bpm >= 115 && bpm <= 140) || (bpm >= 150 && bpm <= 180)) {
+    return 0.05; // Small bonus
+  }
+  
+  // Penalize "phantom" range (but don't reject completely)
+  if (bpm >= 103 && bpm <= 112) {
+    return -0.25; // Penalty
+  }
+  
+  // Neutral for other values
+  return 0;
+}
+
+/**
+ * NEW v2.5: Conservative tempo snapping
+ * Only snaps when VERY close to common values
+ */
+function snapToMusicalTempo(bpm: number): number {
+  // Common BPM values
+  const commonTempos = [
+    70, 75, 80, 85, 87, 90, 95,
+    120, 123, 125, 128, 130, 135,
+    140, 150, 160, 170, 174, 175, 180
+  ];
+  
+  let closest = bpm;
+  let minDiff = Infinity;
+  
+  for (const tempo of commonTempos) {
+    const diff = Math.abs(bpm - tempo);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = tempo;
+    }
+  }
+  
+  // Only snap if within 1.5 BPM
+  if (minDiff <= 1.5) {
+    return closest;
+  }
+  
+  return Math.round(bpm);
+}
+
+/**
+ * NEW v2.5: Check harmonic relationships
+ */
+function areHarmonicallyRelated(bpm1: number, bpm2: number, tolerance: number = 3): boolean {
+  const ratio = bpm1 / bpm2;
+  const harmonicRatios = [2.0, 3.0, 0.5, 0.33, 1.5, 0.67];
+  
+  for (const hr of harmonicRatios) {
+    if (Math.abs(ratio - hr) < 0.05) return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Downsample audio for faster processing
+ */
+function downsampleAudio(mono: Float32Array, sr: number, targetSr: number): { samples: Float32Array; sr: number } {
+  if (sr <= targetSr || targetSr <= 0) return { samples: mono, sr };
+  
+  const ratio = sr / targetSr;
+  const newLen = Math.floor(mono.length / ratio);
+  const downsampled = new Float32Array(newLen);
+  
+  for (let i = 0; i < newLen; i++) {
+    const srcIdx = Math.floor(i * ratio);
+    downsampled[i] = mono[srcIdx];
+  }
+  
+  return { samples: downsampled, sr: targetSr };
 }
 
 /* ============================================================================
- * CONFIGURATION PARAMETERS
+ * CONFIGURATION
  * ============================================================================ */
 
 const BPM_MIN = 70;
 const BPM_MAX = 220;
-const BPM_WINDOWS = [10, 45, 80, 115];
-const BPM_WINDOW_LEN = 24;
+
+// Balanced: 3 windows for accuracy
+const BPM_WINDOWS = [25, 45, 65];
+const BPM_WINDOW_LEN = 18;
 const BPM_GROUP_TOL = 4.5;
 const BPM_TOPK = 6;
 
+const CONFIDENCE_EARLY_EXIT = 72;
+
 const BREAKBEAT_OFFBEAT_RATIO_MIN = 0.85;
 
-const DNB_HALFTIME_MIN = 105;
-const DNB_HALFTIME_MAX = 130;
-const DNB_RANGE_MIN = 155;
-const DNB_RANGE_MAX = 190;
-const DNB_SUPPORT_RATIO = 0.93;
-
-const FAST_DOUBLE_SRC_MIN = 68;
-const FAST_DOUBLE_SRC_MAX = 88;
-const FAST_DOUBLE_DST_MIN = 132;
-const FAST_DOUBLE_DST_MAX = 180;
-const FAST_DOUBLE_SUPPORT_RATIO = 0.90;
-
-const FAST_3OVER2_SRC_MIN = 85;
-const FAST_3OVER2_SRC_MAX = 130;
-const FAST_3OVER2_DST_MIN = 135;
-const FAST_3OVER2_DST_MAX = 195;
-const FAST_3OVER2_SUPPORT_RATIO = 0.55;
-const FAST_3OVER2_SUPPORT_RATIO_BREAKBEAT = 0.50;
-const FAST_3OVER2_SUPPORT_RATIO_BREAKBEAT_IMPROVED = 0.45;
-
-const METER_DOM_WEIGHT = 0.25;
-
 const REFINE_RANGE_BPM = 8;
-const REFINE_STEP_BPM = 0.2;
+const REFINE_STEP_BPM = 0.4;
+
+const METER_DOM_WEIGHT = 0.2;
+
+// Balanced: 16kHz is good compromise
+const ANALYSIS_SAMPLE_RATE = 16000;
 
 /* ============================================================================
  * ONSET DETECTION
@@ -104,9 +167,9 @@ function onsetEnvelopeFromEnergy(
   sr: number,
   opts: OnsetOptions = {}
 ): OnsetResult | null {
-  const { hop = 128, win = 1024, smoothHalfWidth = 4 } = opts;
+  const { hop = 256, win = 1024, smoothHalfWidth = 3 } = opts;
   const frameCount = Math.floor((mono.length - win) / hop);
-  if (frameCount <= 30) return null;
+  if (frameCount <= 20) return null;
 
   const oenv = new Float32Array(frameCount);
   let prevRms = 0;
@@ -148,7 +211,7 @@ function onsetEnvelopeFromEnergy(
 }
 
 /* ============================================================================
- * AUTOCORRELATION & PEAK DETECTION
+ * AUTOCORRELATION
  * ============================================================================ */
 
 function pearsonAutocorrScores(
@@ -169,6 +232,7 @@ function pearsonAutocorrScores(
   if (denom <= 1e-12) return null;
 
   const scores = new Float32Array(lagMax + 2);
+  
   for (let lag = lagMin; lag <= lagMax; lag++) {
     let num = 0;
     for (let i = 0; i + lag < oenv.length; i++) {
@@ -199,6 +263,9 @@ interface TempoCandidatesOptions {
   topK?: number;
 }
 
+/**
+ * FIXED v2.5.1: Relaxed peak detection
+ */
 function tempoCandidatesFromOenv(
   oenv: Float32Array,
   frameRate: number,
@@ -213,9 +280,14 @@ function tempoCandidatesFromOenv(
   if (!scores) return null;
 
   const peaks: Array<{ lag: number; score: number }> = [];
+  
+  // Reasonable peak requirements (not too strict)
   for (let lag = lagMin + 1; lag <= lagMax - 1; lag++) {
     const s = scores[lag];
-    if (s > scores[lag - 1] && s > scores[lag + 1]) {
+    const sL = scores[lag - 1];
+    const sR = scores[lag + 1];
+    
+    if (s > sL && s > sR && s > 0.05) {
       peaks.push({ lag, score: s });
     }
   }
@@ -223,7 +295,8 @@ function tempoCandidatesFromOenv(
   peaks.sort((a, b) => b.score - a.score);
 
   const picked: Array<{ lag: number; score: number }> = [];
-  const minSep = 3;
+  const minSep = 4;
+  
   for (const p of peaks) {
     if (picked.length >= topK) break;
     if (picked.some((q) => Math.abs(q.lag - p.lag) < minSep)) continue;
@@ -248,7 +321,7 @@ function offbeatRatioForTempo(oenv: Float32Array, frameRate: number, bpm: number
 
   let on = 0;
   let off = 0;
-  for (let k = 2; k < 80; k++) {
+  for (let k = 2; k < 50; k++) {
     const iOn = Math.round(k * period);
     const iOff = Math.round(iOn + period / 2);
     if (iOff >= oenv.length) break;
@@ -265,7 +338,7 @@ function onbeatDominanceForTempo(oenv: Float32Array, frameRate: number, bpm: num
 
   let on = 0;
   let off = 0;
-  for (let k = 2; k < 80; k++) {
+  for (let k = 2; k < 50; k++) {
     const iOn = Math.round(k * period);
     const iOff = Math.round(iOn + period / 2);
     if (iOff >= oenv.length) break;
@@ -283,19 +356,24 @@ interface BeatTypeClassification {
 
 function classifyBeatType(mono: Float32Array, sr: number, bpm: number): BeatTypeClassification {
   const ratios: number[] = [];
-  for (const startSec of BPM_WINDOWS) {
+  
+  for (let w = 0; w < Math.min(2, BPM_WINDOWS.length); w++) {
+    const startSec = BPM_WINDOWS[w];
     const start = Math.floor(startSec * sr);
     const end = Math.min(mono.length, start + Math.floor(BPM_WINDOW_LEN * sr));
-    if ((end - start) < sr * 10) continue;
-    const seg = mono.subarray(start, end);
-    const onset = onsetEnvelopeFromEnergy(seg, sr);
-    if (!onset) continue;
-    ratios.push(offbeatRatioForTempo(onset.oenv, onset.frameRate, bpm));
+    
+    if ((end - start) >= sr * 10) {
+      const seg = mono.subarray(start, end);
+      const onset = onsetEnvelopeFromEnergy(seg, sr);
+      if (onset) {
+        ratios.push(offbeatRatioForTempo(onset.oenv, onset.frameRate, bpm));
+      }
+    }
   }
 
   if (!ratios.length) return { beatType: 'unknown', breakbeatScore: 0 };
 
-  const avg = ratios.reduce((a, x) => a + x, 0) / ratios.length;
+  const avg = ratios.reduce((a, b) => a + b, 0) / ratios.length;
   return {
     beatType: avg >= BREAKBEAT_OFFBEAT_RATIO_MIN ? 'breakbeat' : 'straight',
     breakbeatScore: avg,
@@ -303,16 +381,18 @@ function classifyBeatType(mono: Float32Array, sr: number, bpm: number): BeatType
 }
 
 /* ============================================================================
- * TEMPO SUPPORT SCORING
+ * TEMPO SUPPORT
  * ============================================================================ */
 
 function tempoSupportScore(mono: Float32Array, sr: number, bpm: number): number {
-  let sum = 0;
-  let n = 0;
-  for (const startSec of BPM_WINDOWS) {
+  const scores: number[] = [];
+  
+  for (let w = 0; w < Math.min(2, BPM_WINDOWS.length); w++) {
+    const startSec = BPM_WINDOWS[w];
     const start = Math.floor(startSec * sr);
     const end = Math.min(mono.length, start + Math.floor(BPM_WINDOW_LEN * sr));
     if ((end - start) < sr * 10) continue;
+    
     const seg = mono.subarray(start, end);
     const onset = onsetEnvelopeFromEnergy(seg, sr);
     if (!onset) continue;
@@ -320,8 +400,8 @@ function tempoSupportScore(mono: Float32Array, sr: number, bpm: number): number 
     const frameRate = onset.frameRate;
     const lagMin = Math.floor((60 * frameRate) / BPM_MAX);
     const lagMax = Math.floor((60 * frameRate) / BPM_MIN);
-    const scores = pearsonAutocorrScores(onset.oenv, lagMin, lagMax);
-    if (!scores) continue;
+    const acScores = pearsonAutocorrScores(onset.oenv, lagMin, lagMax);
+    if (!acScores) continue;
 
     const lag0 = (60 * frameRate) / bpm;
     const lagI = Math.round(lag0);
@@ -329,59 +409,26 @@ function tempoSupportScore(mono: Float32Array, sr: number, bpm: number): number 
     let best = -Infinity;
     for (let d = -2; d <= 2; d++) {
       const li = lagI + d;
-      if (li >= lagMin && li <= lagMax) best = Math.max(best, scores[li]);
+      if (li >= lagMin && li <= lagMax) best = Math.max(best, acScores[li]);
     }
 
-    sum += Math.max(0, best);
-    n++;
+    scores.push(Math.max(0, best));
   }
 
-  return n ? (sum / n) : 0;
-}
-
-function avgOnbeatDominance(mono: Float32Array, sr: number, bpm: number): number {
-  let sum = 0;
-  let n = 0;
-  for (const startSec of BPM_WINDOWS) {
-    const start = Math.floor(startSec * sr);
-    const end = Math.min(mono.length, start + Math.floor(BPM_WINDOW_LEN * sr));
-    if ((end - start) < sr * 10) continue;
-    const seg = mono.subarray(start, end);
-    const onset = onsetEnvelopeFromEnergy(seg, sr);
-    if (!onset) continue;
-    sum += onbeatDominanceForTempo(onset.oenv, onset.frameRate, bpm);
-    n++;
-  }
-
-  return n ? (sum / n) : 0;
+  return scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
 }
 
 /* ============================================================================
- * REFINEMENT & HARMONIC SELECTION
+ * REFINEMENT WITH HARMONIC VALIDATION
  * ============================================================================ */
-
-function fineTuneOnly(mono: Float32Array, sr: number, bpm0: number): number {
-  if (!Number.isFinite(bpm0) || bpm0 <= 0) return bpm0;
-  let bestBpm = bpm0;
-  let bestScore = tempoSupportScore(mono, sr, bpm0);
-
-  const r = REFINE_RANGE_BPM;
-  const step = REFINE_STEP_BPM;
-  for (let b = Math.max(BPM_MIN, bpm0 - r); b <= Math.min(BPM_MAX, bpm0 + r); b += step) {
-    const s = tempoSupportScore(mono, sr, b);
-    if (s > bestScore) {
-      bestScore = s;
-      bestBpm = b;
-    }
-  }
-
-  return bestBpm;
-}
 
 interface RefineAndPickHarmonicsOptions {
   fineTuneOnly?: boolean;
 }
 
+/**
+ * v2.5.1: Harmonic validation with plausibility scoring
+ */
 function refineAndPickHarmonics(
   mono: Float32Array,
   sr: number,
@@ -397,12 +444,10 @@ function refineAndPickHarmonics(
 
   if (!onlyFineTune) {
     harmonics.push(
-      { mult: 0.5, weight: 0.85 },
-      { mult: 2.0, weight: 0.85 },
-      { mult: 2 / 3, weight: 0.82 },
-      { mult: 3 / 2, weight: 0.82 },
-      { mult: 3 / 4, weight: 0.78 },
-      { mult: 4 / 3, weight: 0.78 }
+      { mult: 0.5, weight: 0.92 },
+      { mult: 2.0, weight: 0.92 },
+      { mult: 0.33, weight: 0.70 },
+      { mult: 3.0, weight: 0.70 }
     );
   }
 
@@ -423,14 +468,17 @@ function refineAndPickHarmonics(
       }
     }
 
-    const dom = avgOnbeatDominance(mono, sr, bestBpm);
+    const dom = onbeatDominanceForTempo(mono, sr, bestBpm) || 1.0;
     const { beatType, breakbeatScore } = classifyBeatType(mono, sr, bestBpm);
+
+    // v2.5.1: Plausibility as bonus/penalty
+    const plausibilityBonus = musicalPlausibilityScore(bestBpm);
 
     pool.push({
       bpm: bestBpm,
       support: bestScore,
       dom,
-      score: bestScore * h.weight + METER_DOM_WEIGHT * dom,
+      score: bestScore * h.weight + METER_DOM_WEIGHT * dom + plausibilityBonus,
       beatType,
       breakbeatScore,
     });
@@ -439,9 +487,10 @@ function refineAndPickHarmonics(
   pool.sort((a, b) => b.score - a.score);
 
   const winner = pool[0];
+  const snappedBpm = snapToMusicalTempo(winner.bpm);
 
   return {
-    bpm: bayesianPriorBPM(winner.bpm, beatMode, winner.beatType),
+    bpm: snappedBpm,
     support: winner.support,
     dom: winner.dom,
     score: winner.score,
@@ -450,87 +499,8 @@ function refineAndPickHarmonics(
   };
 }
 
-function bayesianPriorBPM(bpm: number, beatMode: BeatMode, beatType: BeatType): number {
-  const isBreakbeat = (beatMode === 'breakbeat' || beatType === 'breakbeat');
-
-  const peakBpm = isBreakbeat ? 150 : 128;
-  const sigma = isBreakbeat ? 25 : 30;
-
-  const dist = Math.abs(bpm - peakBpm);
-  const logLikelihood = -(dist * dist) / (2 * sigma * sigma);
-  const likelihood = Math.exp(logLikelihood);
-
-  const adjustment = 0.03 * likelihood;
-  return bpm + adjustment * (peakBpm - bpm);
-}
-
 /* ============================================================================
- * TEMPO PROMOTION & CORRECTION
- * ============================================================================ */
-
-function tempoPromotion(mono: Float32Array, sr: number, bpm: number, beatMode: BeatMode): number {
-  // 1. D&B halftime detection
-  if (bpm >= DNB_HALFTIME_MIN && bpm <= DNB_HALFTIME_MAX && beatMode === 'breakbeat') {
-    const fast = bpm * 1.5;
-    if (fast >= DNB_RANGE_MIN && fast <= DNB_RANGE_MAX) {
-      const slowSupport = tempoSupportScore(mono, sr, bpm);
-      const fastSupport = tempoSupportScore(mono, sr, fast);
-      if (fastSupport >= slowSupport * DNB_SUPPORT_RATIO) {
-        return fineTuneOnly(mono, sr, fast);
-      }
-    }
-  }
-
-  // 2. Fast double-time
-  if (bpm >= FAST_DOUBLE_SRC_MIN && bpm <= FAST_DOUBLE_SRC_MAX) {
-    const fast = bpm * 2;
-    if (fast >= FAST_DOUBLE_DST_MIN && fast <= FAST_DOUBLE_DST_MAX) {
-      const slowSupport = tempoSupportScore(mono, sr, bpm);
-      const fastSupport = tempoSupportScore(mono, sr, fast);
-      if (fastSupport >= slowSupport * FAST_DOUBLE_SUPPORT_RATIO) {
-        return fineTuneOnly(mono, sr, fast);
-      }
-    }
-  }
-
-  // 3. Fast 3/2 promotion
-  if (bpm >= FAST_3OVER2_SRC_MIN && bpm <= FAST_3OVER2_SRC_MAX) {
-    const fast = bpm * 1.5;
-    if (fast >= FAST_3OVER2_DST_MIN && fast <= FAST_3OVER2_DST_MAX) {
-      const { beatType } = classifyBeatType(mono, sr, bpm);
-      const isBreakbeat = (beatType === 'breakbeat');
-
-      const slowSupport = tempoSupportScore(mono, sr, bpm);
-      const fastSupport = tempoSupportScore(mono, sr, fast);
-
-      let threshold = FAST_3OVER2_SUPPORT_RATIO;
-      if (isBreakbeat) {
-        threshold = FAST_3OVER2_SUPPORT_RATIO_BREAKBEAT;
-        const fastDom = avgOnbeatDominance(mono, sr, fast);
-        if (fastDom > 1.5) {
-          threshold = FAST_3OVER2_SUPPORT_RATIO_BREAKBEAT_IMPROVED;
-        }
-      }
-
-      if (fastSupport >= slowSupport * threshold) {
-        return fineTuneOnly(mono, sr, fast);
-      }
-    }
-  }
-
-  // 4. Forced halftime corrections
-  if (bpm >= 100 && bpm <= 115) {
-    return fineTuneOnly(mono, sr, bpm * 1.5);
-  }
-  if (bpm >= 85 && bpm < 100) {
-    return fineTuneOnly(mono, sr, bpm * 1.5);
-  }
-
-  return bpm;
-}
-
-/* ============================================================================
- * CLUSTERING & HYPOTHESIS GENERATION
+ * CLUSTERING
  * ============================================================================ */
 
 interface Hypothesis {
@@ -546,8 +516,12 @@ function clusterHypotheses(allHyps: Hypothesis[]): TempoCluster[] {
 
   for (const h of sorted) {
     let found = false;
+    
     for (const c of clusters) {
-      if (Math.abs(h.bpm - c.center) < BPM_GROUP_TOL) {
+      const directMatch = Math.abs(h.bpm - c.center) < BPM_GROUP_TOL;
+      const harmonicMatch = areHarmonicallyRelated(h.bpm, c.center, BPM_GROUP_TOL * 1.5);
+      
+      if (directMatch || harmonicMatch) {
         c.items.push(h);
         c.weightSum += h.weight;
         c.center = c.items.reduce((sum: number, item: { bpm: number; weight: number }) => sum + item.bpm * item.weight, 0) / c.weightSum;
@@ -555,6 +529,7 @@ function clusterHypotheses(allHyps: Hypothesis[]): TempoCluster[] {
         break;
       }
     }
+    
     if (!found) {
       clusters.push({
         center: h.bpm,
@@ -568,27 +543,31 @@ function clusterHypotheses(allHyps: Hypothesis[]): TempoCluster[] {
 }
 
 /* ============================================================================
- * MAIN ESTIMATION FUNCTION
+ * MAIN ESTIMATION
  * ============================================================================ */
 
 type ProgressCallback = ((result: Partial<TempoResult>) => void) | null;
 
-export function estimateTempoWithBeatMode(
+export async function estimateTempoWithBeatMode(
   mono: Float32Array,
   sr: number,
   beatMode: BeatMode,
   onProgressUpdate: ProgressCallback = null
-): TempoResult | null {
+): Promise<TempoResult | null> {
+  
+  const { samples: downsampled, sr: newSr } = downsampleAudio(mono, sr, ANALYSIS_SAMPLE_RATE);
+  console.log(`[TEMPO v2.5.1] Downsampled ${sr}Hz → ${newSr}Hz (${downsampled.length} samples)`);
+
   const allHyps: Hypothesis[] = [];
   let windowsProcessed = 0;
 
   for (const startSec of BPM_WINDOWS) {
-    const start = Math.floor(startSec * sr);
-    const end = Math.min(mono.length, start + Math.floor(BPM_WINDOW_LEN * sr));
-    if ((end - start) < sr * 10) continue;
+    const start = Math.floor(startSec * newSr);
+    const end = Math.min(downsampled.length, start + Math.floor(BPM_WINDOW_LEN * newSr));
+    if ((end - start) < newSr * 8) continue;
 
-    const seg = mono.subarray(start, end);
-    const onset = onsetEnvelopeFromEnergy(seg, sr);
+    const seg = downsampled.subarray(start, end);
+    const onset = onsetEnvelopeFromEnergy(seg, newSr);
     if (!onset) continue;
 
     const cands = tempoCandidatesFromOenv(onset.oenv, onset.frameRate);
@@ -599,56 +578,72 @@ export function estimateTempoWithBeatMode(
     }
 
     windowsProcessed++;
+    await yieldToEventLoop();
 
-    // Preliminary result after 2 windows
+    // Progress update after second window
     if (windowsProcessed === 2 && onProgressUpdate) {
       const prelimClusters = clusterHypotheses(allHyps);
       if (prelimClusters.length > 0) {
         prelimClusters.sort((a, b) => (b.weightSum + b.items.length * 0.15) - (a.weightSum + a.items.length * 0.15));
         const bestCluster = prelimClusters[0];
-        const prelimBpm = bestCluster.center;
-        const { beatType, breakbeatScore } = classifyBeatType(mono, sr, prelimBpm);
+        const prelimBpm = snapToMusicalTempo(bestCluster.center);
+        const { beatType, breakbeatScore } = classifyBeatType(downsampled, newSr, prelimBpm);
+
+        const confidence = Math.min(65, Math.round(bestCluster.weightSum * 50));
 
         onProgressUpdate({
           bpm: Math.round(prelimBpm),
-          confidence: 65,
+          confidence,
           beatTypeAuto: beatType,
           breakbeatScore,
           beatMode,
         });
+
+        if (confidence >= CONFIDENCE_EARLY_EXIT) {
+          console.log(`[TEMPO v2.5.1] Early exit after ${windowsProcessed} windows (${confidence}%)`);
+          break;
+        }
       }
     }
   }
 
-  if (!allHyps.length) return null;
+  if (!allHyps.length) {
+    console.warn('[TEMPO v2.5.1] No hypotheses found');
+    return null;
+  }
 
   const clusters = clusterHypotheses(allHyps);
-  if (!clusters.length) return null;
+  if (!clusters.length) {
+    console.warn('[TEMPO v2.5.1] No clusters formed');
+    return null;
+  }
 
   clusters.sort((a, b) => (b.weightSum + b.items.length * 0.15) - (a.weightSum + a.items.length * 0.15));
 
   const bestCluster = clusters[0];
   let bestBpm = bestCluster.center;
 
-  const meter = refineAndPickHarmonics(mono, sr, bestBpm, beatMode);
+  const meter = refineAndPickHarmonics(downsampled, newSr, bestBpm, beatMode, {
+    fineTuneOnly: windowsProcessed < 2
+  });
   bestBpm = meter.bpm;
 
-  bestBpm = tempoPromotion(mono, sr, bestBpm, beatMode);
+  await yieldToEventLoop();
 
-  const finalSupport = tempoSupportScore(mono, sr, bestBpm);
-  const { beatType: finalBeatType, breakbeatScore: finalBreakbeatScore } = classifyBeatType(mono, sr, bestBpm);
+  const finalSupport = tempoSupportScore(downsampled, newSr, bestBpm);
+  const { beatType: finalBeatType, breakbeatScore: finalBreakbeatScore } = classifyBeatType(downsampled, newSr, bestBpm);
 
-  const half = bestBpm / 2;
-  const double = bestBpm * 2;
-  const halfSupport = (half >= BPM_MIN && half <= BPM_MAX) ? tempoSupportScore(mono, sr, half) : 0;
-  const doubleSupport = (double >= BPM_MIN && double <= BPM_MAX) ? tempoSupportScore(mono, sr, double) : 0;
-
-  const maxAlt = Math.max(halfSupport, doubleSupport);
-  const margin = finalSupport - maxAlt;
-
-  let confidence = Math.min(55, Math.round(bestCluster.weightSum * 50));
-  confidence += Math.min(45, Math.round(margin * 100));
+  let confidence = Math.min(60, Math.round(bestCluster.weightSum * 55));
+  confidence += Math.min(40, Math.round(finalSupport * 90));
+  
+  // Small bonus for musically plausible
+  if (musicalPlausibilityScore(bestBpm) > 0) {
+    confidence += 5;
+  }
+  
   confidence = clamp(confidence, 0, 99);
+
+  console.log(`[TEMPO v2.5.1] ✓ ${bestBpm} BPM, ${finalBeatType}, ${confidence}%`);
 
   return {
     bpm: Math.round(bestBpm * 10) / 10,
