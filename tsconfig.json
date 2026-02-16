@@ -1,40 +1,37 @@
 {
   "compilerOptions": {
-    /* Language and Environment */
     "target": "ES2020",
-    "lib": ["ES2020", "DOM"],
-    
-    /* Modules */
+    "lib": ["ES2020", "DOM", "DOM.Iterable", "WebWorker"],
     "module": "ESNext",
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
+    "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
-    
-    /* Type Checking */
-    "strict": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "skipLibCheck": true,
-    
-    /* Emit */
-    "declaration": false,
-    "sourceMap": true,
-    "outDir": "./dist",
-    "removeComments": false,
-    
-    /* Interop Constraints */
+    "esModuleInterop": true,
     "allowJs": true,
-    "checkJs": false,
-    "forceConsistentCasingInFileNames": true
+    "skipLibCheck": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "types": [
+      "chrome",
+      "node"
+    ]
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "src/background/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "dist"
-  ]
+  ],
+  "ts-node": {
+    "esm": true
+  }
 }

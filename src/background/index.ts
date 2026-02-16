@@ -1,20 +1,27 @@
 /**
- * ============================================================================
- * BACKGROUND SERVICE ENTRY POINT
- * ============================================================================
- * 
- * Entry point for the browser extension's background service worker.
- * Initializes the message handling system for communication between
- * the content scripts and background service.
- * 
+ * Background entrypoint.
+ *
+ * Responsibilities:
+ * - Initialize Essentia WASM once at startup
+ * - Register runtime message handlers for content/background communication
+ *
  * @module background/index
- * @version 2026-02-15-typescript
  */
 
-import { api } from './api';
 import { registerMessageHandlers } from './messaging';
+import { initEssentia } from './tempo-essentia';
 
-// Initialize message handlers with browser API
-registerMessageHandlers(api);
+const api = typeof chrome !== 'undefined' ? chrome : (globalThis as any).browser;
 
-console.log('Bandcamp Player Extension: Background service initialized');
+(async () => {
+  try {
+    console.log('[Extension] Initializing Essentia BPM detector...');
+    await initEssentia();
+    console.log('[Extension] Essentia initialized successfully');
+    
+    registerMessageHandlers(api);
+    console.log('[Extension] Ready!');
+  } catch (error) {
+    console.error('[Extension] Initialization failed:', error);
+  }
+})();

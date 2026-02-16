@@ -1,31 +1,22 @@
 /**
- * ============================================================================
- * BANDCAMP PLAYER INTEGRATION - TYPESCRIPT VERSION
- * ============================================================================
- * 
- * VERSION: 2.0 (2026-02-15)
- * 
+ * Bandcamp player content script.
+ *
+ * Responsibilities:
+ * - Detect and track the active Bandcamp `<audio>` element
+ * - Bridge user actions (play/seek/skip) to native player controls
+ * - Request analysis from background and consume progressive updates
+ * - Assemble state for the floating results panel UI
+ *
+ * Design notes:
+ * - Keeps rendering lightweight via scheduled animation-frame updates
+ * - Uses runtime messaging wrappers compatible with Chrome + Firefox APIs
+ *
  * @module content-scripts/bandcamp-player
- * @version 2026-02-15-v2.0
- * ============================================================================
  */
 
 import showResultsPanel from '../ui/results-panel.js';
 import { getTrackMeta } from './metadata-extractor';
-
-/* ============================================================================
- * TYPE DEFINITIONS
- * ============================================================================ */
-
-interface AnalysisResult {
-  bpm?: number;
-  confidence?: number;
-  keyConfidence?: number;
-  note?: string;
-  waveform?: WaveformData | null;
-  waveformStatus?: string;
-  error?: string;
-}
+import type { BeatMode } from '../shared/index';
 
 interface WaveformData {
   peaksLow?: number[];
@@ -36,11 +27,28 @@ interface WaveformData {
   buckets?: number;
 }
 
+interface AnalysisResult {
+  bpm?: number;
+  confidence?: number;
+  beatMode?: BeatMode;
+  beatTypeAuto?: string;
+  breakbeatScore?: number;
+  note?: string;
+  waveform?: WaveformData | null;
+  waveformStatus?: string;
+  error?: string;
+  ts?: number;
+}
+
+interface AnalysisPartialMessage extends Partial<AnalysisResult> {
+  type: 'ANALYSIS_PARTIAL';
+  url: string;
+}
+
 interface PanelState {
   title: string;
   artistName: string;
   trackTitle: string;
-  beatportQuery: string;
   tempoScale: number;
   beatMode: BeatMode;
   isPlaying: boolean;
@@ -50,36 +58,44 @@ interface PanelState {
   isAnalyzing: boolean;
   bpm?: number;
   confidence?: number;
-  keyName: string;
-  camelot: string;
-  keyConfidence?: number;
   note?: string;
   waveform: WaveformData | null;
   waveformStatus: string;
 }
 
 interface PanelCallbacks {
-  onOpenBeatportSearch: (query: string) => void;
   onTogglePlayPause: () => void;
   onSeekToFraction: (fraction: number) => void;
   onPrevTrack: () => void;
   onNextTrack: () => void;
-  onSetBeatMode: (mode: BeatMode) => void;
-  onSetTempoScale: (scale: number) => void;
 }
 
-type BeatMode = 'auto' | 'straight' | 'breakbeat';
+type RuntimeApi = {
+  runtime?: {
+    sendMessage?: (...args: any[]) => any;
+    onMessage?: {
+      addListener?: (cb: (msg: any, sender: any, sendResponse: (response?: any) => void) => void | boolean) => void;
+    };
+  };
+};
 
-/* ============================================================================
- * BROWSER API POLYFILL
- * ============================================================================ */
+const api: RuntimeApi | null = (() => {
+  const g = globalThis as any;
+  if (g.chrome?.runtime) return g.chrome as RuntimeApi;
+  if (g.browser?.runtime) return g.browser as RuntimeApi;
+  return null;
+})();
 
-// Fix type issues by casting to chrome API
-const api = (typeof browser !== 'undefined' ? browser : chrome) as typeof chrome;
-
-/* ============================================================================
- * UTILITY FUNCTIONS
- * ============================================================================ */
+let beatMode: BeatMode = 'auto';
+let tempoScale = 1.0;
+let activeAudio: HTMLAudioElement | null = null;
+let currentSrc = '';
+let lastAnalysis: AnalysisResult | null = null;
+let analysisInFlight = false;
+let pendingSeekFraction: number | null = null;
+let renderScheduled = false;
+let rafId = 0;
+const audioBound = new WeakSet<HTMLAudioElement>();
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -89,41 +105,55 @@ function norm(s: string | null | undefined): string {
   return String(s || '').replace(/\s+/g, ' ').trim();
 }
 
-/* ============================================================================
- * EXTERNAL SEARCH INTEGRATION
- * ============================================================================ */
-
-function openBeatportSearch(query: string): void {
-  const q = String(query || '').trim();
-  if (!q) return;
-  
-  const url = `https://www.beatport.com/search/tracks?q=${encodeURIComponent(q)}`;
-  window.open(url, '_blank', 'noopener,noreferrer');
+function canMessage(): boolean {
+  return Boolean(api?.runtime?.sendMessage);
 }
 
-/* ============================================================================
- * STATE MANAGEMENT
- * ============================================================================ */
+function sendRuntimeMessage<T = any>(message: any): Promise<T> {
+  if (!canMessage()) {
+    return Promise.reject(new Error('Runtime messaging API not available'));
+  }
 
-let beatMode: BeatMode = 'auto';
-let tempoScale = 1.0;
-let activeAudio: HTMLAudioElement | null = null;
-const audioBound = new WeakSet<HTMLAudioElement>();
-let currentSrc = '';
-let lastAnalysis: AnalysisResult | null = null;
-let analysisInFlight = false;
-let pendingSeekFraction: number | null = null;
-let renderScheduled = false;
-let rafId = 0;
+  const sendMessage = api!.runtime!.sendMessage!;
 
-/* ============================================================================
- * AUDIO ELEMENT DETECTION & MANAGEMENT
- * ============================================================================ */
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+
+    const resolveOnce = (value: T) => {
+      if (!settled) {
+        settled = true;
+        resolve(value);
+      }
+    };
+
+    const rejectOnce = (error: any) => {
+      if (!settled) {
+        settled = true;
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    };
+
+    try {
+      const maybePromise = sendMessage(message, (response: T) => {
+        const lastErr = (globalThis as any)?.chrome?.runtime?.lastError;
+        if (lastErr) {
+          rejectOnce(new Error(lastErr.message || String(lastErr)));
+          return;
+        }
+        resolveOnce(response);
+      });
+
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        (maybePromise as Promise<T>).then(resolveOnce).catch(rejectOnce);
+      }
+    } catch (error) {
+      rejectOnce(error);
+    }
+  });
+}
 
 function pickActiveAudio(): HTMLAudioElement | null {
-  if (activeAudio && document.contains(activeAudio)) {
-    return activeAudio;
-  }
+  if (activeAudio && document.contains(activeAudio)) return activeAudio;
 
   const audios = Array.from(document.querySelectorAll('audio'));
   if (!audios.length) return null;
@@ -145,79 +175,23 @@ function getAudioSrc(el: HTMLAudioElement | null): string {
   return String(el.currentSrc || el.src || '').trim();
 }
 
-function getPlayheadFraction(el: HTMLAudioElement | null): number {
-  if (!el) return NaN;
-  
-  const dur = Number.isFinite(el.duration) ? el.duration : NaN;
-  const cur = Number.isFinite(el.currentTime) ? el.currentTime : NaN;
-  
-  if (!Number.isFinite(dur) || dur <= 0 || !Number.isFinite(cur)) {
-    return NaN;
-  }
-  
-  return cur / dur;
-}
-
 function isPlayingNow(el: HTMLAudioElement | null): boolean {
   if (!el) return false;
   return !el.paused && !el.ended;
 }
 
-function bindAudio(el: HTMLAudioElement): void {
-  if (!el || audioBound.has(el)) return;
-
-  audioBound.add(el);
-
-  const onAny = () => scheduleRender();
-
-  el.addEventListener('play', onAny);
-  el.addEventListener('pause', onAny);
-  el.addEventListener('ended', onAny);
-  el.addEventListener('timeupdate', onAny);
-  el.addEventListener('seeking', onAny);
-  el.addEventListener('seeked', onAny);
-  el.addEventListener('durationchange', onAny);
-  el.addEventListener('emptied', onAny);
-
-  el.addEventListener('loadedmetadata', () => {
-    if (pendingSeekFraction !== null) {
-      const fraction = pendingSeekFraction;
-      pendingSeekFraction = null;
-      seekToFraction(el, fraction);
-      scheduleRender();
-    }
-  });
+function getPlayheadFraction(el: HTMLAudioElement | null): number {
+  if (!el) return NaN;
+  const dur = Number.isFinite(el.duration) ? el.duration : NaN;
+  const cur = Number.isFinite(el.currentTime) ? el.currentTime : NaN;
+  if (!Number.isFinite(dur) || dur <= 0 || !Number.isFinite(cur)) return NaN;
+  return cur / dur;
 }
-
-function ensureActiveAudio(): HTMLAudioElement | null {
-  const el = pickActiveAudio();
-  if (!el) return null;
-
-  if (activeAudio !== el) {
-    activeAudio = el;
-    bindAudio(activeAudio);
-    
-    const newSrc = getAudioSrc(activeAudio);
-    if (newSrc !== currentSrc) {
-      currentSrc = newSrc;
-      lastAnalysis = null;
-      if (currentSrc) {
-        analyzeCurrentTrack();
-      }
-    }
-  }
-
-  return activeAudio;
-}
-
-/* ============================================================================
- * RENDERING & RAF LOOP
- * ============================================================================ */
 
 function scheduleRender(): void {
   if (renderScheduled) return;
-  
   renderScheduled = true;
+
   requestAnimationFrame(() => {
     renderScheduled = false;
     renderPanel();
@@ -229,11 +203,7 @@ function startRafPlayheadLoop(): void {
 
   const tick = () => {
     rafId = requestAnimationFrame(tick);
-    
-    if (!activeAudio || !isPlayingNow(activeAudio)) {
-      return;
-    }
-    
+    if (!activeAudio || !isPlayingNow(activeAudio)) return;
     renderPanel();
   };
 
@@ -241,22 +211,57 @@ function startRafPlayheadLoop(): void {
 }
 
 function stopRafPlayheadLoop(): void {
-  if (rafId) {
-    cancelAnimationFrame(rafId);
-    rafId = 0;
-  }
+  if (!rafId) return;
+  cancelAnimationFrame(rafId);
+  rafId = 0;
 }
 
-/* ============================================================================
- * PLAYBACK CONTROLS
- * ============================================================================ */
+function bindAudio(el: HTMLAudioElement): void {
+  if (audioBound.has(el)) return;
+  audioBound.add(el);
+
+  const onAny = () => scheduleRender();
+  el.addEventListener('play', onAny);
+  el.addEventListener('pause', onAny);
+  el.addEventListener('ended', onAny);
+  el.addEventListener('timeupdate', onAny);
+  el.addEventListener('seeking', onAny);
+  el.addEventListener('seeked', onAny);
+  el.addEventListener('durationchange', onAny);
+  el.addEventListener('emptied', onAny);
+
+  el.addEventListener('loadedmetadata', () => {
+    if (pendingSeekFraction === null) return;
+    const fraction = pendingSeekFraction;
+    pendingSeekFraction = null;
+    seekToFraction(el, fraction);
+    scheduleRender();
+  });
+}
+
+function ensureActiveAudio(): HTMLAudioElement | null {
+  const el = pickActiveAudio();
+  if (!el) return null;
+
+  if (activeAudio !== el) {
+    activeAudio = el;
+    bindAudio(activeAudio);
+
+    const src = getAudioSrc(activeAudio);
+    if (src !== currentSrc) {
+      currentSrc = src;
+      lastAnalysis = null;
+      if (currentSrc) {
+        void analyzeCurrentTrack();
+      }
+    }
+  }
+
+  return activeAudio;
+}
 
 function tryClickBandcampPlayButton(): void {
-  const selectors = [
-    '.playbutton',
-    '#big_play_button',
-    '[data-bind*="play"]',
-  ];
+  const selectors = ['.playbutton', '#big_play_button', '[data-bind*="play"]'];
 
   for (const selector of selectors) {
     const btn = document.querySelector(selector) as HTMLElement | null;
@@ -269,21 +274,19 @@ function tryClickBandcampPlayButton(): void {
 
 function togglePlayPause(): void {
   const el = ensureActiveAudio();
-  
+
   if (!el) {
     tryClickBandcampPlayButton();
     return;
   }
 
   if (el.paused) {
-    const playPromise = el.play();
-    
-    if (playPromise && typeof playPromise.catch === 'function') {
-      playPromise.catch(() => {
+    const maybePromise = el.play();
+    if (maybePromise && typeof maybePromise.catch === 'function') {
+      maybePromise.catch(() => {
         tryClickBandcampPlayButton();
       });
     }
-    
     startRafPlayheadLoop();
   } else {
     el.pause();
@@ -300,37 +303,30 @@ function seekToFraction(el: HTMLAudioElement | null, fraction: number): void {
   if (!Number.isFinite(f)) return;
 
   const dur = Number.isFinite(el.duration) ? el.duration : NaN;
-  
   if (!Number.isFinite(dur) || dur <= 0) {
     pendingSeekFraction = f;
     return;
   }
 
-  const targetTime = f * dur;
-
+  const t = f * dur;
   try {
     if (typeof el.fastSeek === 'function') {
-      el.fastSeek(targetTime);
+      el.fastSeek(t);
     } else {
-      el.currentTime = targetTime;
+      el.currentTime = t;
     }
-  } catch (error) {
+  } catch (_) {
     pendingSeekFraction = f;
     setTimeout(() => {
-      if (pendingSeekFraction !== null) {
-        const retryFraction = pendingSeekFraction;
-        pendingSeekFraction = null;
-        seekToFraction(el, retryFraction);
-      }
+      if (pendingSeekFraction === null) return;
+      const retry = pendingSeekFraction;
+      pendingSeekFraction = null;
+      seekToFraction(el, retry);
     }, 120);
   }
 
   scheduleRender();
 }
-
-/* ============================================================================
- * TRACK NAVIGATION
- * ============================================================================ */
 
 function findTrackRows(): HTMLElement[] {
   const selectors = [
@@ -341,15 +337,11 @@ function findTrackRows(): HTMLElement[] {
   ];
 
   const rows: HTMLElement[] = [];
-  
   for (const selector of selectors) {
-    const elements = document.querySelectorAll(selector);
-    elements.forEach((el) => {
-      if (el && el.querySelector) {
-        const hasContent = el.querySelector('a, .title, .track-title, .track_title');
-        if (hasContent) {
-          rows.push(el as HTMLElement);
-        }
+    const els = document.querySelectorAll(selector);
+    els.forEach((el) => {
+      if (el.querySelector('a, .title, .track-title, .track_title')) {
+        rows.push(el as HTMLElement);
       }
     });
   }
@@ -368,8 +360,8 @@ function findCurrentTrackRow(): HTMLElement | null {
   ];
 
   for (const selector of selectors) {
-    const el = document.querySelector(selector);
-    if (el) return el as HTMLElement;
+    const row = document.querySelector(selector);
+    if (row) return row as HTMLElement;
   }
 
   return null;
@@ -378,7 +370,7 @@ function findCurrentTrackRow(): HTMLElement | null {
 function clickPlayOnRow(row: HTMLElement | null): boolean {
   if (!row) return false;
 
-  const playSelectors = [
+  const selectors = [
     '.play_col .play_status',
     '.play_col .playbutton',
     '.play_col a',
@@ -388,14 +380,14 @@ function clickPlayOnRow(row: HTMLElement | null): boolean {
     'a',
   ];
 
-  for (const selector of playSelectors) {
+  for (const selector of selectors) {
     const btn = row.querySelector(selector) as HTMLElement | null;
     if (btn && typeof btn.click === 'function') {
       try {
         btn.click();
         return true;
-      } catch (error) {
-        // Continue to next selector
+      } catch (_) {
+        // Try next selector.
       }
     }
   }
@@ -403,7 +395,7 @@ function clickPlayOnRow(row: HTMLElement | null): boolean {
   try {
     row.click();
     return true;
-  } catch (error) {
+  } catch (_) {
     return false;
   }
 }
@@ -442,8 +434,8 @@ function clickGlobalPrevNext(direction: number): boolean {
       try {
         el.click();
         return true;
-      } catch (error) {
-        // Continue
+      } catch (_) {
+        // Continue to fallback selectors.
       }
     }
   }
@@ -464,11 +456,12 @@ function skipTrack(direction: number): void {
   if (!rows.length) return;
 
   const currentRow = findCurrentTrackRow();
-  let currentIndex = currentRow ? rows.indexOf(currentRow) : -1;
-
+  const currentIndex = currentRow ? rows.indexOf(currentRow) : -1;
   const nextIndex =
     currentIndex < 0
-      ? (direction > 0 ? 0 : rows.length - 1)
+      ? direction > 0
+        ? 0
+        : rows.length - 1
       : (currentIndex + direction + rows.length) % rows.length;
 
   if (clickPlayOnRow(rows[nextIndex])) {
@@ -479,38 +472,37 @@ function skipTrack(direction: number): void {
   }
 }
 
-/* ============================================================================
- * ANALYSIS INTEGRATION
- * ============================================================================ */
+function listenForPartialUpdates(): void {
+  const listener = api?.runtime?.onMessage?.addListener;
+  if (!listener) return;
 
-api.runtime.onMessage.addListener((msg: any) => {
-  try {
-    if (!msg || msg.type !== 'ANALYSIS_PARTIAL') return;
-    if (!msg.url || msg.url !== currentSrc) return;
-    
-    const { type, url, ...partial } = msg;
-    lastAnalysis = { ...(lastAnalysis || {}), ...partial };
-    scheduleRender();
-  } catch (error) {
-    console.warn('[Player] Error handling message:', error);
-  }
-});
+  listener((msg: AnalysisPartialMessage) => {
+    try {
+      if (!msg || msg.type !== 'ANALYSIS_PARTIAL') return;
+      if (!msg.url || msg.url !== currentSrc) return;
+
+      const { type: _type, url: _url, ...partial } = msg;
+      lastAnalysis = { ...(lastAnalysis || {}), ...partial };
+      scheduleRender();
+    } catch (error) {
+      console.warn('[Player] Failed to handle ANALYSIS_PARTIAL:', error);
+    }
+  });
+}
 
 async function analyzeCurrentTrack(): Promise<void> {
   const el = ensureActiveAudio();
-  if (!el) return;
+  if (!el || !canMessage()) return;
 
   const src = getAudioSrc(el);
-  if (!src) return;
-
-  if (analysisInFlight) return;
+  if (!src || analysisInFlight) return;
 
   analysisInFlight = true;
   scheduleRender();
 
   try {
-    const result = await api.runtime.sendMessage({
-      type: 'ANALYZETRACK',
+    const result = await sendRuntimeMessage<AnalysisResult>({
+      type: 'ANALYZE_TRACK',
       url: src,
       beatMode,
     });
@@ -518,9 +510,9 @@ async function analyzeCurrentTrack(): Promise<void> {
     lastAnalysis = result || null;
 
     if (lastAnalysis && !lastAnalysis.waveform && !lastAnalysis.waveformStatus) {
-      lastAnalysis = { 
-        ...lastAnalysis, 
-        waveformStatus: 'Computing waveform…' 
+      lastAnalysis = {
+        ...lastAnalysis,
+        waveformStatus: 'Computing waveform…',
       };
     }
 
@@ -528,32 +520,31 @@ async function analyzeCurrentTrack(): Promise<void> {
       const fallbackUrl = src;
       setTimeout(async () => {
         try {
-          if (fallbackUrl !== currentSrc || lastAnalysis?.waveform) {
-            return;
-          }
-          
-          const waveformResult = await api.runtime.sendMessage({ 
-            type: 'GETWAVEFORM', 
-            url: fallbackUrl 
+          if (fallbackUrl !== currentSrc || lastAnalysis?.waveform) return;
+
+          const waveform = await sendRuntimeMessage<WaveformData>({
+            type: 'GETWAVEFORM',
+            url: fallbackUrl,
           });
-          
-          if (waveformResult && (waveformResult.peaksLow || waveformResult.peaks)) {
-            lastAnalysis = { 
-              ...(lastAnalysis || {}), 
-              waveform: waveformResult, 
-              waveformStatus: '' 
+
+          if (waveform && (waveform.peaksLow || waveform.peaks)) {
+            lastAnalysis = {
+              ...(lastAnalysis || {}),
+              waveform,
+              waveformStatus: '',
             };
             scheduleRender();
           }
         } catch (error) {
-          console.warn('[Player] Waveform fetch failed:', error);
+          console.warn('[Player] Deferred waveform fetch failed:', error);
         }
       }, 5000);
     }
   } catch (error) {
-    lastAnalysis = { 
-      error: String((error as Error)?.message || error), 
-      waveformStatus: 'Analysis failed' 
+    lastAnalysis = {
+      error: String((error as Error)?.message || error),
+      waveformStatus: 'Analysis failed',
+      ts: Date.now(),
     };
   } finally {
     analysisInFlight = false;
@@ -561,11 +552,7 @@ async function analyzeCurrentTrack(): Promise<void> {
   }
 }
 
-/* ============================================================================
- * UI PANEL RENDERING
- * ============================================================================ */
-
-function renderPanel(): void {
+function buildPanelState(): PanelState {
   const el = ensureActiveAudio();
   const meta = getTrackMeta();
 
@@ -573,28 +560,22 @@ function renderPanel(): void {
   const isPlaying = isPlayingNow(el);
   const playheadFraction = getPlayheadFraction(el);
 
-  if (isPlaying) {
-    startRafPlayheadLoop();
-  } else {
-    stopRafPlayheadLoop();
-  }
+  if (isPlaying) startRafPlayheadLoop();
+  else stopRafPlayheadLoop();
 
   const src = getAudioSrc(el);
   if (src && src !== currentSrc) {
     currentSrc = src;
     lastAnalysis = null;
-    analyzeCurrentTrack();
+    void analyzeCurrentTrack();
   }
 
-  const waveformStatus = analysisInFlight 
-    ? 'Analyzing…' 
-    : (lastAnalysis?.waveformStatus || '');
+  const waveformStatus = analysisInFlight ? 'Analyzing…' : lastAnalysis?.waveformStatus || '';
 
-  const state: PanelState = {
+  return {
     title,
     artistName: meta.artistName,
     trackTitle: meta.trackTitle,
-    beatportQuery: title,
     tempoScale,
     beatMode,
     isPlaying,
@@ -604,16 +585,16 @@ function renderPanel(): void {
     isAnalyzing: analysisInFlight,
     bpm: lastAnalysis?.bpm,
     confidence: lastAnalysis?.confidence,
-    keyName: '',
-    camelot: '',
-    keyConfidence: lastAnalysis?.keyConfidence,
     note: lastAnalysis?.note,
     waveform: lastAnalysis?.waveform || null,
     waveformStatus,
   };
+}
+
+function renderPanel(): void {
+  const state = buildPanelState();
 
   const callbacks: PanelCallbacks = {
-    onOpenBeatportSearch: (query: string) => openBeatportSearch(query),
     onTogglePlayPause: () => togglePlayPause(),
     onSeekToFraction: (fraction: number) => {
       const audio = ensureActiveAudio();
@@ -621,84 +602,73 @@ function renderPanel(): void {
       seekToFraction(audio, fraction);
     },
     onPrevTrack: () => skipTrack(-1),
-    onNextTrack: () => skipTrack(+1),
-    onSetBeatMode: async (mode: BeatMode) => {
-      beatMode = mode || 'auto';
-      try {
-        await api.runtime.sendMessage({ 
-          type: 'SETBEATMODE', 
-          beatMode 
-        });
-      } catch (error) {
-        console.warn('[Player] Failed to set beat mode:', error);
-      }
-      if (src) {
-        analyzeCurrentTrack();
-      }
-      scheduleRender();
-    },
-    onSetTempoScale: (scale: number) => {
-      const value = Number(scale);
-      tempoScale = Number.isFinite(value) ? value : 1.0;
-      scheduleRender();
-    },
+    onNextTrack: () => skipTrack(1),
   };
 
   showResultsPanel(state, callbacks);
 }
 
-/* ============================================================================
- * INITIALIZATION
- * ============================================================================ */
-
-async function init(): Promise<void> {
-  console.log('[Player] Initializing Bandcamp player integration');
+async function restoreBeatMode(): Promise<void> {
+  if (!canMessage()) return;
 
   try {
-    const result = await api.runtime.sendMessage({ type: 'GETBEATMODE' });
+    const result = await sendRuntimeMessage<{ beatMode?: BeatMode }>({ type: 'GETBEATMODE' });
     if (result && typeof result.beatMode === 'string') {
-      beatMode = result.beatMode as BeatMode;
+      const mode = result.beatMode;
+      beatMode = mode === 'straight' || mode === 'breakbeat' || mode === 'auto' ? mode : 'auto';
     }
   } catch (error) {
     console.warn('[Player] Failed to restore beat mode:', error);
   }
+}
 
+function listenForPlayEvents(): void {
   document.addEventListener(
     'play',
     (event) => {
       const target = event.target;
-      if (target && (target as HTMLElement).tagName === 'AUDIO') {
-        activeAudio = target as HTMLAudioElement;
-        bindAudio(activeAudio);
-        
-        const newSrc = getAudioSrc(activeAudio);
-        if (newSrc !== currentSrc) {
-          currentSrc = newSrc;
-          lastAnalysis = null;
-          if (currentSrc) {
-            analyzeCurrentTrack();
-          }
+      if (!target || (target as HTMLElement).tagName !== 'AUDIO') return;
+
+      activeAudio = target as HTMLAudioElement;
+      bindAudio(activeAudio);
+
+      const src = getAudioSrc(activeAudio);
+      if (src !== currentSrc) {
+        currentSrc = src;
+        lastAnalysis = null;
+        if (currentSrc) {
+          void analyzeCurrentTrack();
         }
-        
-        scheduleRender();
       }
+
+      scheduleRender();
     },
     true
   );
+}
 
-  for (let i = 0; i < 80; i++) {
-    const el = pickActiveAudio();
-    if (el) {
-      console.log('[Player] Found audio element after', i * 250, 'ms');
-      break;
-    }
-    await sleep(250);
+async function waitForAudio(timeoutMs = 20000): Promise<void> {
+  const stepMs = 250;
+  const iterations = Math.ceil(timeoutMs / stepMs);
+
+  for (let i = 0; i < iterations; i += 1) {
+    if (pickActiveAudio()) return;
+    await sleep(stepMs);
   }
+}
+
+async function init(): Promise<void> {
+  console.log('[Player] Initializing Bandcamp player integration');
+
+  listenForPartialUpdates();
+  listenForPlayEvents();
+  await restoreBeatMode();
+  await waitForAudio();
 
   ensureActiveAudio();
   scheduleRender();
-  
+
   console.log('[Player] Initialization complete');
 }
 
-init();
+void init();

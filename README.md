@@ -1,56 +1,94 @@
 # Bandcamp Player Extension
 
-A browser extension that provides a floating player with BPM detection and waveform visualization for Bandcamp tracks.
+Floating Bandcamp player extension with BPM detection (Essentia.js), waveform visualization, and transport controls.
 
 ![Screenshot](image.png)
 
-## Features
+## What It Does
 
-- 🎵 **Floating Player Window** - Draggable, persistent player that stays on top while browsing
-- 🎯 **Alternative BPM Analysis** - Autocorrelation-based tempo estimation with a different algorithmic approach
-- 👆 **Manual BPM Tapper** - Simple tap-to-detect solution for tracks with complex rhythms or difficult-to-analyze material
-- 📊 **3-Band Waveform Visualization** - Real-time display of low/mid/high frequency components
-- 🎚️ **Playback Controls** - Play, pause, and track navigation in a compact interface
+- Floating draggable player UI on Bandcamp pages
+- BPM analysis using Essentia WASM in the background script
+- 3-band waveform generation (low / mid / high)
+- Play/pause, seek, previous/next controls
+- Manual BPM tapper in the UI
 
-## Why Another Bandcamp Tool?
+## Browser Targets
 
-While other Bandcamp enhancement tools exist, this extension offers:
+This project ships with two manifests:
 
-- **Floating window approach** - Unlike inline players, the floating window stays accessible across different pages and tabs
-- **Different BPM detection algorithm** - Alternative analysis method that may work better for certain genres or production styles
-- **Manual fallback option** - The BPM tapper provides a reliable way to detect tempo for material that's difficult to analyze automatically (polyrhythms, ambient tracks, experimental music, etc.)
+- `src/manifest.firefox.json` (MV2) for Firefox Developer Edition temporary add-ons
+- `src/manifest.json` (MV3) for Chromium-based browsers
 
+Webpack selects the manifest by build target.
 
-## Installation
+## Build Commands
 
+1. Install dependencies:
+```bash
+npm install
+```
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/YOUR-USERNAME/bandcamp-player-extension.git
-   cd bandcamp-player-extension
-   ```
+2. Build for Firefox (default):
+```bash
+npm run build
+# same as: npm run build:firefox
+```
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+3. Build for Chrome/Chromium:
+```bash
+npm run build:chrome
+```
 
-3. **Build the extension:**
-   ```bash
-   npm run build
-   ```
+4. Development build:
+```bash
+npm run build:dev
+```
 
-4. **Load in Firefox:**
-   - Open `about:debugging#/runtime/this-firefox`
-   - Click "Load Temporary Add-on"
-   - Select any file in the `dist/` folder
+## Load In Firefox Developer Edition
 
+1. Build:
+```bash
+npm run build
+```
 
+2. Open:
+`about:debugging#/runtime/this-firefox`
+
+3. Click `Load Temporary Add-on...`
+
+4. Select:
+`dist/manifest.json`
+
+## Project Structure
+
+- `src/content-scripts/bandcamp-player.ts`: content script orchestration + panel callbacks
+- `src/background/index.ts`: background entrypoint and startup
+- `src/background/messaging.ts`: request routing between content/background
+- `src/background/analyzer.ts`: analysis pipeline orchestration
+- `src/background/tempo-essentia.ts`: Essentia WASM tempo estimator
+- `src/background/waveform.ts`: waveform computation/cache
+- `src/ui/results-panel.js`: floating panel UI
+- `webpack.config.js`: target-aware bundling + manifest selection
+
+## Troubleshooting
+
+- `background.service_worker is currently disabled. Add background.scripts.`
+  - Use Firefox build target (`npm run build` / `npm run build:firefox`).
+
+- `call to Function() blocked by CSP`
+  - Firefox manifest includes CSP for Essentia runtime in MV2 build.
+  - Rebuild and reload temporary add-on.
+
+- `Cross-Origin Request Blocked ... bcbits.com`
+  - Firefox manifest must include `*://*.bcbits.com/*` permission (already configured).
+  - Remove and re-add the temporary add-on after manifest changes.
 
 ## License
 
-MIT License - see LICENSE file for details
+This repository's original source is MIT-licensed (see `LICENSE`), and it also includes third-party dependencies with their own licenses.
 
-## Contributing
+Important: this project currently uses `essentia.js` (`AGPL-3.0`). If you distribute the built extension, you must comply with AGPL-3.0 obligations for that dependency and any combined distribution.
 
-Contributions welcome! Please open an issue or submit a pull request.
+See:
+- `docs/THIRD_PARTY_NOTICES.md`
+- `node_modules/essentia.js/LICENSE`
