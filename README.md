@@ -12,6 +12,14 @@ Floating Bandcamp player extension with BPM detection (Essentia.js), waveform vi
 - Play/pause, seek, previous/next controls
 - Manual BPM tapper in the UI
 
+## What Is Essentia?
+
+Essentia is an open-source audio analysis and music information retrieval library.  
+This extension uses `essentia.js` (the WebAssembly/JavaScript port) to run BPM detection in the background.
+
+- Project site: https://mtg.github.io/essentia.js/
+- GitHub: https://github.com/MTG/essentia.js
+
 ## Browser Targets
 
 This project ships with two manifests:
