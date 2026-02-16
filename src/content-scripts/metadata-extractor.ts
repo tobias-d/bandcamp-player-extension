@@ -197,7 +197,6 @@ function extractJsonLd(): JsonLdData | null {
   try {
     return JSON.parse(script.textContent) as JsonLdData;
   } catch (error) {
-    console.warn('[Metadata] Failed to parse JSON-LD:', error);
     return null;
   }
 }
@@ -220,7 +219,6 @@ function extractDataAttribute(selector: string, attr: string): any | null {
   try {
     return JSON.parse(data);
   } catch (error) {
-    console.warn(`[Metadata] Failed to parse ${attr}:`, error);
     return null;
   }
 }
@@ -635,7 +633,6 @@ export function getTrackMetaRobust(): TrackMetadata | null {
   const artistResult = extractArtistName();
 
   if (!titleResult && !artistResult) {
-    console.warn('[Metadata] Could not extract any metadata');
     return null;
   }
 
@@ -669,7 +666,6 @@ export function getTrackMetaRobust(): TrackMetadata | null {
     },
   };
 
-  console.log('[Metadata] Extracted:', metadata);
   return metadata;
 }
 

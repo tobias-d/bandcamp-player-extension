@@ -15,6 +15,7 @@
  */
 
 import showResultsPanel from '../ui/results-panel.js';
+import { createLikeController, type LikeState } from './like-controller';
 import { getTrackMeta } from './metadata-extractor';
 import type { BeatMode } from '../shared/index';
 
@@ -61,6 +62,7 @@ interface PanelState {
   note?: string;
   waveform: WaveformData | null;
   waveformStatus: string;
+  likeState: LikeState;
 }
 
 interface PanelCallbacks {
@@ -68,6 +70,8 @@ interface PanelCallbacks {
   onSeekToFraction: (fraction: number) => void;
   onPrevTrack: () => void;
   onNextTrack: () => void;
+  onToggleAlbumLike: () => void;
+  onToggleTrackLike: () => void;
 }
 
 type RuntimeApi = {
@@ -197,6 +201,13 @@ function scheduleRender(): void {
     renderPanel();
   });
 }
+
+const likeController = createLikeController({
+  getCurrentSrc: () => currentSrc,
+  findCurrentTrackRow: () => findCurrentTrackRow(),
+  scheduleRender,
+  norm,
+});
 
 function startRafPlayheadLoop(): void {
   if (rafId) return;
@@ -588,6 +599,7 @@ function buildPanelState(): PanelState {
     note: lastAnalysis?.note,
     waveform: lastAnalysis?.waveform || null,
     waveformStatus,
+    likeState: likeController.getLikeState(),
   };
 }
 
@@ -603,6 +615,8 @@ function renderPanel(): void {
     },
     onPrevTrack: () => skipTrack(-1),
     onNextTrack: () => skipTrack(1),
+    onToggleAlbumLike: () => likeController.toggleAlbumLike(),
+    onToggleTrackLike: () => likeController.toggleTrackLike(),
   };
 
   showResultsPanel(state, callbacks);
@@ -662,6 +676,7 @@ async function init(): Promise<void> {
 
   listenForPartialUpdates();
   listenForPlayEvents();
+  likeController.init();
   await restoreBeatMode();
   await waitForAudio();
 
