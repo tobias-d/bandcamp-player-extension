@@ -19,6 +19,9 @@ module.exports = (env = {}, argv = {}) => {
       filename: '[name].js',
       clean: true,
       globalObject: 'self',
+      environment: {
+        globalThis: true,
+      },
     },
     module: {
       rules: [
@@ -64,6 +67,8 @@ module.exports = (env = {}, argv = {}) => {
       new CopyWebpackPlugin({
         patterns: [
           { from: 'src/public', to: 'public', noErrorOnMissing: true },
+          // Prefer root-level public/ for assets if present during release prep.
+          { from: 'public', to: 'public', noErrorOnMissing: true },
           { from: manifestSource, to: 'manifest.json' },
           {
             from: 'node_modules/essentia.js/dist/essentia-wasm.web.wasm',

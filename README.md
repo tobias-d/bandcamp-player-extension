@@ -44,6 +44,11 @@ npm run build:chrome
 npm run build:dev
 ```
 
+5. Build upload package for AMO:
+```bash
+npm run package:firefox
+```
+
 ## Load In Firefox Developer Edition
 
 1. Build:
@@ -76,7 +81,8 @@ npm run build
   - Use Firefox build target (`npm run build` / `npm run build:firefox`).
 
 - `call to Function() blocked by CSP`
-  - Firefox manifest includes CSP for Essentia runtime in MV2 build.
+  - `essentia-wasm.umd.js` is patched at build time by `scripts/patch-essentia-no-eval.js` to remove `new Function(...)`.
+  - Ensure build ran through npm scripts (they run the patch automatically).
   - Rebuild and reload temporary add-on.
 
 - `Cross-Origin Request Blocked ... bcbits.com`

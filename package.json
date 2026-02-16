@@ -4,10 +4,15 @@
   "description": "Bandcamp Player Extension with Essentia.js BPM detection",
   "scripts": {
     "build": "npm run build:firefox",
+    "prebuild:firefox": "node scripts/patch-essentia-no-eval.js",
     "build:firefox": "webpack --env target=firefox --mode production",
+    "prebuild:chrome": "node scripts/patch-essentia-no-eval.js",
     "build:chrome": "webpack --env target=chrome --mode production",
+    "prebuild:dev": "node scripts/patch-essentia-no-eval.js",
     "build:dev": "webpack --env target=firefox --mode development",
+    "prewatch": "node scripts/patch-essentia-no-eval.js",
     "watch": "webpack --env target=firefox --watch",
+    "package:firefox": "bash scripts/package-firefox.sh",
     "clean": "rm -rf dist node_modules package-lock.json"
   },
   "devDependencies": {
