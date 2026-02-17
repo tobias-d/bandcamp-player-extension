@@ -6,7 +6,7 @@
  * Centralized type definitions for the Bandcamp Player Extension.
  * 
  * @module types
- * @version 2026-02-15-v2.0-final
+ * @version 2026-02-17-v2.1
  */
 
 // ============================================================================

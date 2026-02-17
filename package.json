@@ -1,6 +1,6 @@
 {
   "name": "bandcamp-player-extension",
-  "version": "2.4.0-essentia",
+  "version": "2.1",
   "description": "Bandcamp Player Extension with Essentia.js BPM detection",
   "scripts": {
     "build": "npm run build:firefox",

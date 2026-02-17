@@ -4,6 +4,13 @@ Floating Bandcamp player extension with BPM detection (Essentia.js), waveform vi
 
 ![Screenshot](image.png)
 
+## Latest Change (v2.1)
+
+- Introduced a scalable panel UI with intuitive edge/corner resizing
+- Added persistent panel scale so size is kept across reloads
+- Kept drag behavior focused on the panel header for cleaner interaction
+- Refined panel chrome and spacing for a cleaner minimal layout
+
 ## What It Does
 
 - Floating draggable player UI on Bandcamp pages
@@ -80,7 +87,7 @@ npm run build
 - `src/background/analyzer.ts`: analysis pipeline orchestration
 - `src/background/tempo-essentia.ts`: Essentia WASM tempo estimator
 - `src/background/waveform.ts`: waveform computation/cache
-- `src/ui/results-panel.js`: floating panel UI
+- `src/ui/results-panel.ts`: floating panel UI
 - `webpack.config.js`: target-aware bundling + manifest selection
 
 ## Troubleshooting

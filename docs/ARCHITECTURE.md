@@ -10,7 +10,14 @@
    - runs BPM estimation via `src/background/tempo-essentia.ts`
    - computes waveform via `src/background/waveform.ts`
    - sends `ANALYSIS_PARTIAL` updates back to content script
-5. UI updates are rendered by `src/ui/results-panel.js`.
+5. UI updates are rendered by `src/ui/results-panel.ts`.
+
+## Latest Change (v2.1): Scalable UI
+
+- `src/ui/results-panel.ts` now supports full edge/corner resize interactions.
+- Panel scale is persisted via local/session storage and restored on load.
+- Dragging remains header-driven while resize is handled by hit-testing panel edges.
+- UI rendering remains single-source through `showResultsPanel(...)`.
 
 ## Key Modules
 

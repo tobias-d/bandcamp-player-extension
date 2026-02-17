@@ -1,79 +1,110 @@
-// NOTE: Alt UI panel - NO KEY ANALYSIS, macOS close button, BPMs left + Tapper right
+type WaveformData = {
+  peaksLow?: number[];
+  peaksMid?: number[];
+  peaksHigh?: number[];
+  peaks?: number[];
+  duration?: number;
+};
 
-// Version: alt-v27-inline-indicator - Purple waveform, unified transport, rounded hover
+type PanelInput = {
+  title?: string;
+  artistName?: string;
+  trackTitle?: string;
+  bpm?: number;
+  tempoScale?: number;
+  confidence?: number;
+  note?: string;
+  waveform?: WaveformData | null;
+  waveformStatus?: string;
+  isAnalyzing?: boolean;
+  isPlaying?: boolean;
+  playheadFraction?: number;
+  currentTimeSec?: number;
+  durationSec?: number;
+};
 
-let containerEl = null;
-let dragHandleEl = null;
-let artistEl = null;
-let trackTitleEl = null;
-let waveformWrapEl = null;
-let waveformCanvasEl = null;
-let waveformHintEl = null;
-let waveformHintTextEl = null;
-let waveformHintDotsEl = null;
-let transportRowEl = null;
-let playBtnEl = null;
-let prevTrackBtnEl = null;
-let timeBtnEl = null;
-let nextTrackBtnEl = null;
-let closeBtnEl = null;
+type PanelHandlers = {
+  onTogglePlayPause?: (() => void) | null;
+  onPrevTrack?: (() => void) | null;
+  onNextTrack?: (() => void) | null;
+  onSeekToFraction?: ((fraction: number) => void) | null;
+};
 
-// Detected BPM only (KEY REMOVED)
-let bpmMainEl = null;
-let bpmConfLabelEl = null;
-
-// Manual tapper
-let tapBpmEl = null;
-let tapBtnEl = null;
-let tapLabelEl = null;
-let tapHintLine1El = null;
-let tapHintLine2El = null;
-let tapHintLine3El = null;
-
-let noteEl = null;
-
-let currentHandlers = {
+const EMPTY_HANDLERS: PanelHandlers = {
   onTogglePlayPause: null,
   onPrevTrack: null,
   onNextTrack: null,
   onSeekToFraction: null,
 };
 
+let containerEl: HTMLDivElement | null = null;
+let dragHandleEl: HTMLDivElement | null = null;
+let artistEl: HTMLDivElement | null = null;
+let trackTitleEl: HTMLDivElement | null = null;
+let waveformWrapEl: HTMLDivElement | null = null;
+let waveformCanvasEl: HTMLCanvasElement | null = null;
+let waveformHintEl: HTMLDivElement | null = null;
+let waveformHintTextEl: HTMLSpanElement | null = null;
+let waveformHintDotsEl: HTMLSpanElement | null = null;
+let transportRowEl: HTMLDivElement | null = null;
+let playBtnEl: HTMLButtonElement | null = null;
+let prevTrackBtnEl: HTMLButtonElement | null = null;
+let timeBtnEl: HTMLButtonElement | null = null;
+let nextTrackBtnEl: HTMLButtonElement | null = null;
+let closeBtnEl: HTMLButtonElement | null = null;
+let bpmMainEl: HTMLDivElement | null = null;
+let bpmConfLabelEl: HTMLDivElement | null = null;
+let tapBpmEl: HTMLDivElement | null = null;
+let tapBtnEl: HTMLButtonElement | null = null;
+let tapHintLine1El: HTMLDivElement | null = null;
+let tapHintLine2El: HTMLDivElement | null = null;
+let tapHintLine3El: HTMLDivElement | null = null;
+let noteEl: HTMLDivElement | null = null;
+
+let currentHandlers: PanelHandlers = { ...EMPTY_HANDLERS };
+
 let currentIsPlaying = false;
 let currentPlayheadFraction = NaN;
 let currentTimeSec = NaN;
 let currentDurationSec = NaN;
 let showRemainingTime = false;
-let currentWaveform = null;
+let currentWaveform: WaveformData | null = null;
 let currentWaveformStatus = '';
 let currentIsAnalyzing = false;
-let tapTimesMs = [];
+let tapTimesMs: number[] = [];
 let tapBpm = NaN;
-let tapLongPressTimer = null;
+let tapLongPressTimer: ReturnType<typeof setTimeout> | null = null;
 let tapLongPressed = false;
 
 const PANEL_ID = 'bc-bpm-panel';
-const PANEL_UI_VERSION = 'alt-v29-compact';
+const PANEL_UI_VERSION = 'alt-v34-edge-resize';
 const PLAYED_BLUE = '#5aa7ff';
 const TAP_LONG_PRESS_MS = 2000;
 const CLOSED_FLAG = '__BC_BPM_PANEL_CLOSED__';
 const POS_KEY = '__BC_BPM_PANEL_POS__';
+const SCALE_KEY = '__BC_BPM_PANEL_SCALE__';
+const PANEL_MIN_SCALE = 0.6;
+const PANEL_MAX_SCALE = 1;
+const PANEL_DEFAULT_SCALE = 0.8;
+let panelScale = PANEL_MAX_SCALE;
 
-function isPanelClosed() {
+const win = window as unknown as Record<string, unknown>;
+
+function isPanelClosed(): boolean {
   try {
-    return Boolean(window[CLOSED_FLAG]);
+    return Boolean(win[CLOSED_FLAG]);
   } catch (_) {
     return false;
   }
 }
 
-function setPanelClosed(v) {
+function setPanelClosed(v: boolean): void {
   try {
-    window[CLOSED_FLAG] = Boolean(v);
+    win[CLOSED_FLAG] = Boolean(v);
   } catch (_) {}
 }
 
-function getSavedPos() {
+function getSavedPos(): { left: number; top: number } | null {
   try {
     const raw = sessionStorage.getItem(POS_KEY);
     if (!raw) return null;
@@ -85,22 +116,52 @@ function getSavedPos() {
   }
 }
 
-function savePos(left, top) {
+function savePos(left: number, top: number): void {
   try {
     sessionStorage.setItem(POS_KEY, JSON.stringify({ left, top }));
   } catch (_) {}
 }
 
-function clamp(x, lo, hi) {
+function getSavedScale(): number {
+  try {
+    const fromLocal = localStorage.getItem(SCALE_KEY);
+    const fromSession = sessionStorage.getItem(SCALE_KEY);
+    const rawStr = fromLocal != null ? fromLocal : fromSession;
+    if (rawStr == null) return PANEL_DEFAULT_SCALE;
+    const raw = Number(rawStr);
+    if (!Number.isFinite(raw)) return PANEL_DEFAULT_SCALE;
+    return clamp(raw, PANEL_MIN_SCALE, PANEL_MAX_SCALE);
+  } catch (_) {
+    return PANEL_DEFAULT_SCALE;
+  }
+}
+
+function saveScale(scale: number): void {
+  const safe = String(clamp(scale, PANEL_MIN_SCALE, PANEL_MAX_SCALE));
+  try {
+    localStorage.setItem(SCALE_KEY, safe);
+  } catch (_) {}
+  try {
+    sessionStorage.setItem(SCALE_KEY, safe);
+  } catch (_) {}
+}
+
+function applyPanelScale(scale: number): void {
+  panelScale = clamp(scale, PANEL_MIN_SCALE, PANEL_MAX_SCALE);
+  if (!containerEl) return;
+  containerEl.style.setProperty('--panel-scale', String(panelScale));
+}
+
+function clamp(x: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, x));
 }
 
-function pad2(n) {
+function pad2(n: number): string {
   const x = Math.max(0, Math.floor(Number(n) || 0));
   return String(x).padStart(2, '0');
 }
 
-function fmtTime(sec) {
+function fmtTime(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return '--:--';
   const s = Math.floor(sec);
   const m = Math.floor(s / 60);
@@ -108,15 +169,15 @@ function fmtTime(sec) {
   return `${m}:${pad2(r)}`;
 }
 
-function fmtConfParen(x) {
+function fmtConfParen(x: number): string {
   return Number.isFinite(x) ? `(Confidence: ${Math.round(x)}%)` : '(Confidence: ---)';
 }
 
-function norm(s) {
+function norm(s?: string): string {
   return String(s || '').replace(/\s+/g, ' ').trim();
 }
 
-function parseArtistTitleFallback(title) {
+function parseArtistTitleFallback(title?: string): { artistName: string; trackTitle: string } {
   const t = norm(title);
   if (!t) return { artistName: '', trackTitle: '' };
 
@@ -134,8 +195,6 @@ function parseArtistTitleFallback(title) {
 
 function setupCanvasForDpr(canvas, cssW, cssH) {
   const dpr = window.devicePixelRatio || 1;
-  canvas.style.width = `${cssW}px`;
-  canvas.style.height = `${cssH}px`;
   canvas.width = Math.max(1, Math.floor(cssW * dpr));
   canvas.height = Math.max(1, Math.floor(cssH * dpr));
   const ctx = canvas.getContext('2d');
@@ -176,8 +235,8 @@ function drawWaveform(waveform, statusText, playheadFraction, isAnalyzing) {
   const hasAny = (low && low.length) || (mid && mid.length) || (high && high.length);
 
   const rect = waveformCanvasEl.getBoundingClientRect();
-  const W = Math.max(1, Math.floor(rect.width || 440));
-  const H = 58;
+  const W = Math.max(1, Math.floor(rect.width || waveformCanvasEl.clientWidth || 440));
+  const H = Math.max(1, Math.floor(rect.height || 58));
 
   const ctx = setupCanvasForDpr(waveformCanvasEl, W, H);
   ctx.clearRect(0, 0, W, H);
@@ -556,6 +615,120 @@ function ensurePanelDraggable(handleEls) {
   }
 }
 
+function ensurePanelResizable() {
+  if (!containerEl || containerEl.dataset.resizeBound === '1') return;
+  containerEl.dataset.resizeBound = '1';
+  const EDGE_PX = 8;
+
+  const getResizeDir = (clientX: number, clientY: number) => {
+    if (!containerEl) return '';
+    const r = containerEl.getBoundingClientRect();
+    const nearLeft = clientX - r.left <= EDGE_PX;
+    const nearRight = r.right - clientX <= EDGE_PX;
+    const nearTop = clientY - r.top <= EDGE_PX;
+    const nearBottom = r.bottom - clientY <= EDGE_PX;
+    if (!nearLeft && !nearRight && !nearTop && !nearBottom) return '';
+    const v = nearTop ? 'n' : nearBottom ? 's' : '';
+    const h = nearLeft ? 'w' : nearRight ? 'e' : '';
+    return `${v}${h}`;
+  };
+
+  const cursorForDir = (dir: string) => {
+    if (!dir) return '';
+    if (dir === 'n' || dir === 's') return 'ns-resize';
+    if (dir === 'w' || dir === 'e') return 'ew-resize';
+    if (dir === 'ne' || dir === 'sw') return 'nesw-resize';
+    return 'nwse-resize';
+  };
+
+  const startResize = (ev) => {
+    if (!containerEl) return;
+    if (ev.button != null && ev.button !== 0) return;
+    const dir = getResizeDir(ev.clientX, ev.clientY);
+    if (!dir) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    const startRect = containerEl.getBoundingClientRect();
+    const startScale = panelScale || PANEL_MAX_SCALE;
+    const baseWidth = startRect.width / startScale;
+    const baseHeight = startRect.height / startScale;
+    const anchorLeft = startRect.left;
+    const anchorTop = startRect.top;
+    const anchorRight = startRect.right;
+    const anchorBottom = startRect.bottom;
+    const startX = ev.clientX;
+    const startY = ev.clientY;
+
+    const onMove = (e) => {
+      if (!containerEl) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      const widthPx = dir.includes('w')
+        ? startRect.width - dx
+        : dir.includes('e')
+        ? startRect.width + dx
+        : NaN;
+      const heightPx = dir.includes('n')
+        ? startRect.height - dy
+        : dir.includes('s')
+        ? startRect.height + dy
+        : NaN;
+      const targetScaleX = Number.isFinite(widthPx) ? widthPx / Math.max(1, baseWidth) : Infinity;
+      const targetScaleY = Number.isFinite(heightPx) ? heightPx / Math.max(1, baseHeight) : Infinity;
+      const nextScale = clamp(Math.min(targetScaleX, targetScaleY), PANEL_MIN_SCALE, PANEL_MAX_SCALE);
+      applyPanelScale(nextScale);
+
+      const nextWidth = baseWidth * nextScale;
+      const nextHeight = baseHeight * nextScale;
+      const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+      const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+
+      let left = dir.includes('w') ? anchorRight - nextWidth : anchorLeft;
+      let top = dir.includes('n') ? anchorBottom - nextHeight : anchorTop;
+      left = clamp(left, 0, Math.max(0, vw - nextWidth));
+      top = clamp(top, 0, Math.max(0, vh - nextHeight));
+
+      containerEl.style.left = `${Math.round(left)}px`;
+      containerEl.style.top = `${Math.round(top)}px`;
+      containerEl.style.right = 'auto';
+      containerEl.style.bottom = 'auto';
+      drawWaveform(currentWaveform, currentWaveformStatus, currentPlayheadFraction, currentIsAnalyzing);
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onUp, true);
+
+      if (!containerEl) return;
+      const r = containerEl.getBoundingClientRect();
+      savePos(Math.round(r.left), Math.round(r.top));
+      saveScale(panelScale);
+      drawWaveform(currentWaveform, currentWaveformStatus, currentPlayheadFraction, currentIsAnalyzing);
+    };
+
+    window.addEventListener('pointermove', onMove, true);
+    window.addEventListener('pointerup', onUp, true);
+    window.addEventListener('pointercancel', onUp, true);
+  };
+
+  const onHoverMove = (ev: PointerEvent) => {
+    if (!containerEl) return;
+    containerEl.style.cursor = cursorForDir(getResizeDir(ev.clientX, ev.clientY));
+  };
+
+  const onLeave = () => {
+    if (!containerEl) return;
+    containerEl.style.cursor = '';
+  };
+
+  containerEl.addEventListener('pointermove', onHoverMove, true);
+  containerEl.addEventListener('pointerleave', onLeave, true);
+  containerEl.addEventListener('pointerdown', startResize, true);
+}
+
 function closePanel() {
   setPanelClosed(true);
   if (containerEl && containerEl.remove) containerEl.remove();
@@ -579,7 +752,6 @@ function closePanel() {
   bpmConfLabelEl = null;
   tapBpmEl = null;
   tapBtnEl = null;
-  tapLabelEl = null;
   tapHintLine1El = null;
   tapHintLine2El = null;
   tapHintLine3El = null;
@@ -591,30 +763,31 @@ function closePanel() {
 
 function bindRefsFromContainer() {
   if (!containerEl) return;
+  const byRole = <T extends Element>(role: string) =>
+    containerEl?.querySelector(`[data-role="${role}"]`) as T | null;
 
-  dragHandleEl = containerEl.querySelector('[data-role="dragHandle"]');
-  artistEl = containerEl.querySelector('[data-role="artist"]');
-  trackTitleEl = containerEl.querySelector('[data-role="trackTitle"]');
-  waveformWrapEl = containerEl.querySelector('[data-role="waveWrap"]');
-  waveformCanvasEl = containerEl.querySelector('[data-role="waveCanvas"]');
-  waveformHintEl = containerEl.querySelector('[data-role="waveHint"]');
-  waveformHintTextEl = containerEl.querySelector('[data-role="waveHintText"]');
-  waveformHintDotsEl = containerEl.querySelector('[data-role="waveHintDots"]');
-  transportRowEl = containerEl.querySelector('[data-role="transportRow"]');
-  playBtnEl = containerEl.querySelector('[data-role="playPause"]');
-  prevTrackBtnEl = containerEl.querySelector('[data-role="prevTrack"]');
-  timeBtnEl = containerEl.querySelector('[data-role="timeBox"]');
-  nextTrackBtnEl = containerEl.querySelector('[data-role="nextTrack"]');
-  closeBtnEl = containerEl.querySelector('[data-role="closeX"]');
-  bpmMainEl = containerEl.querySelector('[data-role="bpmMain"]');
-  bpmConfLabelEl = containerEl.querySelector('[data-role="bpmConfLabel"]');
-  tapBpmEl = containerEl.querySelector('[data-role="tapBpm"]');
-  tapBtnEl = containerEl.querySelector('[data-role="tapBtn"]');
-  tapLabelEl = containerEl.querySelector('[data-role="tapLabel"]');
-  tapHintLine1El = containerEl.querySelector('[data-role="tapHintLine1"]');
-  tapHintLine2El = containerEl.querySelector('[data-role="tapHintLine2"]');
-  tapHintLine3El = containerEl.querySelector('[data-role="tapHintLine3"]');
-  noteEl = containerEl.querySelector('[data-role="note"]');
+  dragHandleEl = byRole<HTMLDivElement>('dragHandle');
+  artistEl = byRole<HTMLDivElement>('artist');
+  trackTitleEl = byRole<HTMLDivElement>('trackTitle');
+  waveformWrapEl = byRole<HTMLDivElement>('waveWrap');
+  waveformCanvasEl = byRole<HTMLCanvasElement>('waveCanvas');
+  waveformHintEl = byRole<HTMLDivElement>('waveHint');
+  waveformHintTextEl = byRole<HTMLSpanElement>('waveHintText');
+  waveformHintDotsEl = byRole<HTMLSpanElement>('waveHintDots');
+  transportRowEl = byRole<HTMLDivElement>('transportRow');
+  playBtnEl = byRole<HTMLButtonElement>('playPause');
+  prevTrackBtnEl = byRole<HTMLButtonElement>('prevTrack');
+  timeBtnEl = byRole<HTMLButtonElement>('timeBox');
+  nextTrackBtnEl = byRole<HTMLButtonElement>('nextTrack');
+  closeBtnEl = byRole<HTMLButtonElement>('closeX');
+  bpmMainEl = byRole<HTMLDivElement>('bpmMain');
+  bpmConfLabelEl = byRole<HTMLDivElement>('bpmConfLabel');
+  tapBpmEl = byRole<HTMLDivElement>('tapBpm');
+  tapBtnEl = byRole<HTMLButtonElement>('tapBtn');
+  tapHintLine1El = byRole<HTMLDivElement>('tapHintLine1');
+  tapHintLine2El = byRole<HTMLDivElement>('tapHintLine2');
+  tapHintLine3El = byRole<HTMLDivElement>('tapHintLine3');
+  noteEl = byRole<HTMLDivElement>('note');
 }
 
 function ensurePanel() {
@@ -622,12 +795,16 @@ function ensurePanel() {
 
   if (containerEl && document.contains(containerEl)) return containerEl;
 
-  containerEl = document.getElementById(PANEL_ID);
+  containerEl = document.getElementById(PANEL_ID) as HTMLDivElement | null;
   if (containerEl && document.contains(containerEl)) {
     const ver = containerEl.getAttribute('data-ui-version');
     if (ver === PANEL_UI_VERSION) {
       bindRefsFromContainer();
-      ensurePanelDraggable([dragHandleEl]);
+      ensurePanelDraggable([
+        containerEl?.querySelector('[data-role="topRow"]') as HTMLDivElement | null,
+      ]);
+      ensurePanelResizable();
+      applyPanelScale(getSavedScale());
       ensureWaveformSeeking();
       return containerEl;
     }
@@ -652,6 +829,9 @@ right:16px;
 bottom:16px;
 z-index:2147483647;
 width:460px;
+--panel-scale:1;
+transform-origin:top left;
+transform:scale(var(--panel-scale));
 font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
 background:rgba(235,235,235,0.62);
 color:#111;
@@ -665,14 +845,7 @@ backdrop-filter:blur(10px);
 #${PANEL_ID} .inner{ position:relative; }
 
 #${PANEL_ID} .dragHandle{
-width:180px;
-height:22px;
-margin:0 auto 8px auto;
-display:flex;
-align-items:center;
-justify-content:center;
-user-select:none;
-touch-action:none;
+display:none;
 }
 
 #${PANEL_ID} .dragHandle .dragLine{
@@ -689,47 +862,42 @@ background:rgba(0,0,0,0.40);
 /* macOS close button */
 #${PANEL_ID} .closeX{
 position:absolute;
-top:6px;
-right:6px;
-width:14px;
-height:14px;
+top:4px;
+right:4px;
+width:16px;
+height:16px;
 display:flex;
 align-items:center;
 justify-content:center;
 padding:0;
-border-radius:50%;
-font-size:0;
+border-radius:6px;
+font-size:12px;
 line-height:1;
-font-weight:600;
-background:#606060;
+font-weight:500;
+background:transparent;
 border:none;
-box-shadow:0 1px 3px rgba(0,0,0,0.25);
 user-select:none;
 cursor:pointer;
-transition:all 0.2s ease;
+color:rgba(0,0,0,0.45);
+transition:background 0.15s ease, color 0.15s ease;
 overflow:hidden;
 z-index:10;
 }
 
 #${PANEL_ID} .closeX::before{
 content:'×';
-font-size:11px;
-color:rgba(0,0,0,0);
-transition:color 0.2s ease;
+font-size:12px;
+color:currentColor;
 }
 
 #${PANEL_ID} .closeX:hover{
-background:#FF3B30;
-transform:scale(1.1);
-box-shadow:0 2px 6px rgba(0,0,0,0.35);
-}
-
-#${PANEL_ID} .closeX:hover::before{
-color:rgba(138,16,10,0.85);
+background:rgba(0,0,0,0.08);
+color:rgba(0,0,0,0.72);
 }
 
 #${PANEL_ID} .closeX:active{
-transform:scale(0.95);
+background:rgba(0,0,0,0.14);
+color:rgba(0,0,0,0.82);
 }
 
 #${PANEL_ID} .topRow{
@@ -738,6 +906,10 @@ justify-content:flex-start;
 align-items:center;
 margin-bottom:6px;
 min-height:32px;
+padding-right:24px;
+cursor:move;
+user-select:none;
+touch-action:none;
 }
 
 #${PANEL_ID} .artist{
@@ -1308,11 +1480,10 @@ user-select:none;
   const tapLine = document.createElement('div');
   tapLine.className = 'labelLine';
 
-  tapLabelEl = document.createElement('div');
+  const tapLabelEl = document.createElement('div');
   tapLabelEl.className = 'label';
   tapLabelEl.setAttribute('data-role', 'tapLabel');
   tapLabelEl.textContent = 'Manual BPM';
-
   tapLine.appendChild(tapLabelEl);
 
   tapBpmEl = document.createElement('div');
@@ -1401,7 +1572,6 @@ user-select:none;
   noteEl.style.display = 'none';
 
   inner.appendChild(closeBtnEl);
-  inner.appendChild(dragHandleEl);
   inner.appendChild(topRowEl);
   inner.appendChild(trackTitleEl);
   inner.appendChild(waveformWrapEl);
@@ -1411,6 +1581,12 @@ user-select:none;
 
   containerEl.appendChild(inner);
   document.documentElement.appendChild(containerEl);
+
+  const r0 = containerEl.getBoundingClientRect();
+  containerEl.style.left = `${Math.round(r0.left)}px`;
+  containerEl.style.top = `${Math.round(r0.top)}px`;
+  containerEl.style.right = 'auto';
+  containerEl.style.bottom = 'auto';
 
   const pos = getSavedPos();
   if (pos) {
@@ -1425,7 +1601,9 @@ user-select:none;
     containerEl.style.bottom = 'auto';
   }
 
-  ensurePanelDraggable([dragHandleEl]);
+  applyPanelScale(getSavedScale());
+  ensurePanelDraggable([topRowEl]);
+  ensurePanelResizable();
   ensureWaveformSeeking();
   refreshTransportUI();
   drawWaveform(null, '', NaN, false);
@@ -1434,17 +1612,12 @@ user-select:none;
   return containerEl;
 }
 
-export default function showResultsPanel(input, handlers = {}) {
+export default function showResultsPanel(input: PanelInput = {}, handlers: PanelHandlers = EMPTY_HANDLERS): void {
   if (isPanelClosed()) return;
   ensurePanel();
   if (!containerEl) return;
 
-  currentHandlers = {
-    onTogglePlayPause: handlers.onTogglePlayPause || null,
-    onPrevTrack: handlers.onPrevTrack || null,
-    onNextTrack: handlers.onNextTrack || null,
-    onSeekToFraction: handlers.onSeekToFraction || null,
-  };
+  currentHandlers = { ...EMPTY_HANDLERS, ...handlers };
 
   const rawArtist = norm(input?.artistName);
   const rawTrack = norm(input?.trackTitle);
@@ -1465,8 +1638,6 @@ export default function showResultsPanel(input, handlers = {}) {
   const bpm = input?.bpm;
   const tempoScale = Number.isFinite(input?.tempoScale) ? input.tempoScale : 1;
   const bpmConfidence = input?.confidence ?? NaN;
-  const note = input?.note || '';
-
   currentWaveform = input?.waveform || null;
   currentWaveformStatus = input?.waveformStatus || '';
   currentIsAnalyzing = Boolean(input?.isAnalyzing);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Bandcamp Player Extension",
-  "version": "2.0",
+  "version": "2.1",
   "description": "Enhanced Bandcamp player with BPM detection",
   "permissions": [
     "activeTab",
@@ -13,13 +13,20 @@
   ],
   "content_scripts": [
     {
-      "matches": ["*://bandcamp.com/*", "*://*.bandcamp.com/*"],
-      "js": ["content-scripts/bandcamp-player.js"],
+      "matches": [
+        "*://bandcamp.com/*",
+        "*://*.bandcamp.com/*"
+      ],
+      "js": [
+        "content-scripts/bandcamp-player.js"
+      ],
       "run_at": "document_end"
     }
   ],
   "background": {
-    "scripts": ["background.js"],
+    "scripts": [
+      "background.js"
+    ],
     "persistent": true
   },
   "icons": {

@@ -14,8 +14,7 @@
  * @module content-scripts/bandcamp-player
  */
 
-import showResultsPanel from '../ui/results-panel.js';
-import { createLikeController, type LikeState } from './like-controller';
+import showResultsPanel from '../ui/results-panel';
 import { getTrackMeta } from './metadata-extractor';
 import type { BeatMode } from '../shared/index';
 
@@ -62,7 +61,6 @@ interface PanelState {
   note?: string;
   waveform: WaveformData | null;
   waveformStatus: string;
-  likeState: LikeState;
 }
 
 interface PanelCallbacks {
@@ -70,8 +68,6 @@ interface PanelCallbacks {
   onSeekToFraction: (fraction: number) => void;
   onPrevTrack: () => void;
   onNextTrack: () => void;
-  onToggleAlbumLike: () => void;
-  onToggleTrackLike: () => void;
 }
 
 type RuntimeApi = {
@@ -201,13 +197,6 @@ function scheduleRender(): void {
     renderPanel();
   });
 }
-
-const likeController = createLikeController({
-  getCurrentSrc: () => currentSrc,
-  findCurrentTrackRow: () => findCurrentTrackRow(),
-  scheduleRender,
-  norm,
-});
 
 function startRafPlayheadLoop(): void {
   if (rafId) return;
@@ -345,6 +334,8 @@ function findTrackRows(): HTMLElement[] {
     '.tracklist .trackrow',
     '#track_list .track_row',
     '#tracklist .trackrow',
+    'table.track_list tr.track_row_view',
+    'tr.track_row_view',
   ];
 
   const rows: HTMLElement[] = [];
@@ -368,6 +359,10 @@ function findCurrentTrackRow(): HTMLElement | null {
     '.tracklist .trackrow.playing',
     '.tracklist .trackrow.current',
     '.tracklist .trackrow.nowplaying',
+    'table.track_list tr.track_row_view.current_track',
+    'tr.track_row_view.current_track',
+    'table.track_list tr.track_row_view.playing',
+    'tr.track_row_view.playing',
   ];
 
   for (const selector of selectors) {
@@ -599,7 +594,6 @@ function buildPanelState(): PanelState {
     note: lastAnalysis?.note,
     waveform: lastAnalysis?.waveform || null,
     waveformStatus,
-    likeState: likeController.getLikeState(),
   };
 }
 
@@ -615,8 +609,6 @@ function renderPanel(): void {
     },
     onPrevTrack: () => skipTrack(-1),
     onNextTrack: () => skipTrack(1),
-    onToggleAlbumLike: () => likeController.toggleAlbumLike(),
-    onToggleTrackLike: () => likeController.toggleTrackLike(),
   };
 
   showResultsPanel(state, callbacks);
@@ -676,7 +668,6 @@ async function init(): Promise<void> {
 
   listenForPartialUpdates();
   listenForPlayEvents();
-  likeController.init();
   await restoreBeatMode();
   await waitForAudio();
 
