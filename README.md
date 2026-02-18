@@ -1,13 +1,36 @@
 # Bandcamp Player Extension
 
-Floating Bandcamp player extension with BPM detection (Essentia.js), waveform visualization, and transport controls.
+Bandcamp Player Extension is a floating player add-on for Bandcamp. A key focus of this add-on is accurate tempo (BPM) detection for DJs, producers, and music diggers.  
+This plugin was developed with ChatGPT 5.3 Codex.
+
+It adds a lightweight player overlay with transport controls and real-time analysis tools directly on Bandcamp pages. The main differentiator versus other Bandcamp plugins is its analysis engine: BPM is detected with Essentia (WASM), not simple heuristics, for more reliable tempo readings.
+
+The add-on currently supports Firefox and Chromium builds, and publication on the Firefox Add-ons Store is in the pipeline.
+
+## Main Features
+
+- Accurate BPM detection optimized for electronic music workflows
+- 3-band waveform visualization (low / mid / high)
+- Background analysis caching for faster repeat lookups
+- Album-track preload analysis on `/album/` pages (analyzes upcoming tracks in the background)
+- Play/pause, seek, and previous/next transport controls
+- Manual tap tempo as a quick secondary BPM reference
+
+## Additional Info About Essentia
+
+Essentia is an open-source audio analysis and music information retrieval library developed for high-quality music signal analysis.
+
+This extension uses `essentia.js` (the WebAssembly/JavaScript port of Essentia) in the background script to estimate tempo from decoded audio data. That analysis-first approach is what sets this add-on apart from typical Bandcamp player extensions.
+
+- Project site: https://mtg.github.io/essentia.js/
+- GitHub: https://github.com/MTG/essentia.js
 
 ![Screenshot](image.png)
 
 ## Latest Change (v2.3)
 
-- Added analysis caching improvements so BPM/waveform results are reused across track revisits and sessions
-- Added album-track background preload analysis (`/album/` pages) that analyzes upcoming tracks while the current track is playing
+- Added analysis caching so BPM/waveform results are reused across track revisits and sessions
+- Added album-track background preload analysis that analyzes upcoming tracks while the current track is playing
 - Added smooth waveform blend-in behavior so waveform visuals appear more naturally as analysis data becomes available
 
 ## Previous Change (v2.2)
@@ -98,20 +121,6 @@ npm run build
 - `src/background/waveform.ts`: waveform computation/cache
 - `src/ui/results-panel.ts`: floating panel UI
 - `webpack.config.js`: target-aware bundling + manifest selection
-
-## Troubleshooting
-
-- `background.service_worker is currently disabled. Add background.scripts.`
-  - Use Firefox build target (`npm run build` / `npm run build:firefox`).
-
-- `call to Function() blocked by CSP`
-  - `essentia-wasm.umd.js` is patched at build time by `scripts/patch-essentia-no-eval.js` to remove `new Function(...)`.
-  - Ensure build ran through npm scripts (they run the patch automatically).
-  - Rebuild and reload temporary add-on.
-
-- `Cross-Origin Request Blocked ... bcbits.com`
-  - Firefox manifest must include `*://*.bcbits.com/*` permission (already configured).
-  - Remove and re-add the temporary add-on after manifest changes.
 
 ## License
 
