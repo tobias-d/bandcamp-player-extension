@@ -84,11 +84,9 @@ interface BandcampTralbumData {
   trackinfo?: BandcampTrackInfo[];
 }
 
-interface PreloadResponse {
-  preloading?: boolean;
-  queued?: number;
-  error?: string;
-  ts?: number;
+interface PreloadTrackTarget {
+  url: string;
+  cacheKey: string;
 }
 
 type RuntimeApi = {
@@ -115,8 +113,10 @@ let lastAnalysis: AnalysisResult | null = null;
 let analysisInFlight = false;
 let analysisRunId = 0;
 let activeAnalysisSrc = '';
+let preloadQueue: PreloadTrackTarget[] = [];
 let preloadInFlight = false;
-let preloadAlbumSignature = '';
+let preloadRunId = 0;
+let activePreloadSrc = '';
 let pendingSeekFraction: number | null = null;
 let renderScheduled = false;
 let rafId = 0;
@@ -194,10 +194,16 @@ function onSourceChanged(nextSrc: string): void {
   if (activeAnalysisSrc && activeAnalysisSrc !== nextSrc) {
     void cancelAnalysis(activeAnalysisSrc);
   }
+  if (activePreloadSrc && activePreloadSrc !== nextSrc) {
+    void cancelAnalysis(activePreloadSrc);
+  }
   analysisRunId += 1;
+  preloadRunId += 1;
   activeAnalysisSrc = '';
+  activePreloadSrc = '';
   analysisInFlight = false;
   preloadInFlight = false;
+  preloadQueue = [];
   currentSrc = nextSrc;
   lastAnalysis = null;
 }
@@ -216,12 +222,6 @@ function extractDataAttribute(selector: string, attr: string): any | null {
 
 function getTralbumData(): BandcampTralbumData | null {
   return extractDataAttribute('script[data-tralbum]', 'data-tralbum') as BandcampTralbumData | null;
-}
-
-function isAlbumCompilationContext(): boolean {
-  const tralbum = getTralbumData();
-  if (!tralbum?.trackinfo || tralbum.trackinfo.length < 2) return false;
-  return tralbum?.current?.type === 'album';
 }
 
 function extractTrackIdFromSrc(src: string): string {
@@ -276,72 +276,141 @@ function getCurrentTrackIndex(tracks: BandcampTrackInfo[], currentAudioSrc: stri
   return index;
 }
 
-function getAlbumPreloadPlan(currentAudioSrc: string): { signature: string; urls: string[] } | null {
-  if (!isAlbumCompilationContext()) return null;
-
+function getTrackStableCacheKey(currentAudioSrc: string): string {
   const tralbum = getTralbumData();
-  const tracks = Array.isArray(tralbum?.trackinfo) ? tralbum!.trackinfo! : [];
-  if (tracks.length < 2) return null;
+  const tracks = Array.isArray(tralbum?.trackinfo) ? tralbum.trackinfo : [];
 
-  const trackUrls = tracks.map((t) => pickTrackFileUrl(t?.file));
-  const allUniqueUrls = Array.from(new Set(trackUrls.filter(Boolean)));
-  if (allUniqueUrls.length < 2) return null;
-
-  const currentIndex = getCurrentTrackIndex(tracks, currentAudioSrc);
-  const currentUrl = normalizeTrackUrl(currentAudioSrc);
-  const ordered: string[] = [];
-  const seen = new Set<string>();
-
-  if (currentIndex >= 0) {
-    for (let step = 1; step < tracks.length; step++) {
-      const idx = (currentIndex + step) % tracks.length;
-      const url = trackUrls[idx];
-      if (!url || url === currentUrl || seen.has(url)) continue;
-      ordered.push(url);
-      seen.add(url);
-    }
-  } else {
-    for (const url of trackUrls) {
-      if (!url || url === currentUrl || seen.has(url)) continue;
-      ordered.push(url);
-      seen.add(url);
+  if (tracks.length) {
+    const index = getCurrentTrackIndex(tracks, currentAudioSrc);
+    if (index >= 0) {
+      const track = tracks[index];
+      const trackId = String(track?.track_id ?? track?.id ?? '').trim();
+      if (trackId) return `bandcamp-track-id:${trackId}`;
+      const trackUrl = pickTrackFileUrl(track?.file);
+      if (trackUrl) return `bandcamp-track-url:${trackUrl}`;
     }
   }
 
-  if (!ordered.length) return null;
+  const srcTrackId = extractTrackIdFromSrc(currentAudioSrc);
+  if (srcTrackId) return `stream-track-id:${srcTrackId}`;
 
-  const signature = `${window.location.origin}${window.location.pathname}|${allUniqueUrls.join('|')}`;
-  return { signature, urls: ordered };
+  const normalized = normalizeTrackUrl(currentAudioSrc);
+  if (normalized) return `stream-url:${normalized}`;
+
+  return '';
 }
 
-async function maybePreloadAlbumOrCompilation(): Promise<void> {
-  if (!canMessage()) return;
-  if (!isAlbumCompilationContext()) return;
-  if (!activeAudio || !isPlayingNow(activeAudio)) return;
-  if (!currentSrc) return;
+function getTrackCacheKey(track: BandcampTrackInfo, fallbackUrl: string): string {
+  const trackId = String(track?.track_id ?? track?.id ?? '').trim();
+  if (trackId) return `bandcamp-track-id:${trackId}`;
 
-  // Keep preload non-intrusive: wait until current track analysis has settled.
+  const trackUrl = pickTrackFileUrl(track?.file);
+  if (trackUrl) return `bandcamp-track-url:${trackUrl}`;
+
+  const srcTrackId = extractTrackIdFromSrc(fallbackUrl);
+  if (srcTrackId) return `stream-track-id:${srcTrackId}`;
+
+  const normalized = normalizeTrackUrl(fallbackUrl);
+  if (normalized) return `stream-url:${normalized}`;
+
+  return '';
+}
+
+function isAlbumPage(): boolean {
+  return window.location.pathname.includes('/album/');
+}
+
+function buildPreloadQueue(currentAudioSrc: string): PreloadTrackTarget[] {
+  if (!isAlbumPage()) return [];
+
+  const tralbum = getTralbumData();
+  const tracks = Array.isArray(tralbum?.trackinfo) ? tralbum.trackinfo : [];
+  if (!tracks.length) return [];
+
+  const currentIndex = getCurrentTrackIndex(tracks, currentAudioSrc);
+  const normalizedCurrent = normalizeTrackUrl(currentAudioSrc);
+  const ordered =
+    currentIndex >= 0
+      ? [...tracks.slice(currentIndex + 1), ...tracks.slice(0, currentIndex)]
+      : tracks;
+
+  const queue: PreloadTrackTarget[] = [];
+  const seen = new Set<string>();
+
+  for (const track of ordered) {
+    const url = pickTrackFileUrl(track?.file);
+    if (!url) continue;
+    if (url === normalizedCurrent) continue;
+    if (seen.has(url)) continue;
+    seen.add(url);
+
+    queue.push({
+      url,
+      cacheKey: getTrackCacheKey(track, url),
+    });
+  }
+
+  return queue;
+}
+
+function stopPreloadWorker(): void {
+  preloadRunId += 1;
+  preloadInFlight = false;
+  preloadQueue = [];
+  if (activePreloadSrc) {
+    void cancelAnalysis(activePreloadSrc);
+    activePreloadSrc = '';
+  }
+}
+
+function maybeKickoffPreload(): void {
+  if (!canMessage()) return;
+  if (!isAlbumPage()) return;
+  if (!currentSrc) return;
   if (analysisInFlight) return;
-  if (!Number.isFinite(lastAnalysis?.bpm)) return;
   if (preloadInFlight) return;
 
-  const plan = getAlbumPreloadPlan(currentSrc);
-  if (!plan || !plan.urls.length) return;
-  if (preloadAlbumSignature === plan.signature) return;
+  const el = ensureActiveAudio();
+  if (!isPlayingNow(el)) return;
 
-  preloadInFlight = true;
-  try {
-    await sendRuntimeMessage<PreloadResponse>({
-      type: 'PRELOAD_ANALYSIS_BATCH',
-      urls: plan.urls,
-      beatMode,
-    });
-    preloadAlbumSignature = plan.signature;
-  } catch (error) {
-    console.warn('[Player] Preload analysis request failed:', error);
-  } finally {
-    preloadInFlight = false;
+  if (!preloadQueue.length) {
+    preloadQueue = buildPreloadQueue(currentSrc);
   }
+  if (!preloadQueue.length) return;
+
+  const target = preloadQueue.shift();
+  if (!target?.url) return;
+
+  const runId = preloadRunId;
+  preloadInFlight = true;
+  activePreloadSrc = target.url;
+
+  void sendRuntimeMessage<AnalysisResult>({
+    type: 'ANALYZE_TRACK',
+    url: target.url,
+    beatMode,
+    cacheKey: target.cacheKey,
+  })
+    .then(() =>
+      sendRuntimeMessage<WaveformData>({
+        type: 'GETWAVEFORM',
+        url: target.url,
+      }).catch(() => {
+        // Ignore waveform preload errors.
+      })
+    )
+    .catch(() => {
+      // Ignore preload errors and continue queueing.
+    })
+    .finally(() => {
+      if (runId !== preloadRunId) return;
+      preloadInFlight = false;
+      activePreloadSrc = '';
+      setTimeout(() => {
+        if (runId !== preloadRunId) return;
+        maybeKickoffPreload();
+      }, 0);
+    });
 }
 
 function pickActiveAudio(): HTMLAudioElement | null {
@@ -697,6 +766,12 @@ async function analyzeCurrentTrack(): Promise<void> {
   if (analysisInFlight && activeAnalysisSrc && activeAnalysisSrc !== src) {
     void cancelAnalysis(activeAnalysisSrc);
   }
+  if (preloadInFlight && activePreloadSrc && activePreloadSrc !== src) {
+    void cancelAnalysis(activePreloadSrc);
+    preloadRunId += 1;
+    preloadInFlight = false;
+    activePreloadSrc = '';
+  }
 
   const runId = ++analysisRunId;
   activeAnalysisSrc = src;
@@ -704,10 +779,12 @@ async function analyzeCurrentTrack(): Promise<void> {
   scheduleRender();
 
   try {
+    const cacheKey = getTrackStableCacheKey(src);
     const result = await sendRuntimeMessage<AnalysisResult>({
       type: 'ANALYZE_TRACK',
       url: src,
       beatMode,
+      cacheKey,
     });
 
     if (runId !== analysisRunId || src !== currentSrc) return;
@@ -759,6 +836,7 @@ async function analyzeCurrentTrack(): Promise<void> {
       analysisInFlight = false;
       activeAnalysisSrc = '';
       scheduleRender();
+      maybeKickoffPreload();
     }
   }
 }
@@ -778,10 +856,10 @@ function buildPanelState(): PanelState {
   if (src && src !== currentSrc) {
     onSourceChanged(src);
     void analyzeCurrentTrack();
-  }
-
-  if (isPlaying) {
-    void maybePreloadAlbumOrCompilation();
+  } else if (isPlaying) {
+    maybeKickoffPreload();
+  } else {
+    stopPreloadWorker();
   }
 
   const waveformStatus = analysisInFlight ? 'Analyzing…' : lastAnalysis?.waveformStatus || '';
@@ -852,6 +930,8 @@ function listenForPlayEvents(): void {
         if (currentSrc) {
           void analyzeCurrentTrack();
         }
+      } else {
+        maybeKickoffPreload();
       }
 
       scheduleRender();

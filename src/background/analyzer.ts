@@ -22,8 +22,8 @@ import type { BeatMode, WaveformBands } from '../shared/index';
 const ANALYSIS_VERSION = '2026-02-16-v2.4-essentia';
 const ANALYSIS_TTL_MS = 6 * 60 * 60 * 1000;
 const PERSISTED_CACHE_STORAGE_KEY = '__BC_ANALYSIS_CACHE_V1__';
-const PERSISTED_CACHE_MAX_ENTRIES = 30;
-const PERSISTED_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const PERSISTED_CACHE_MAX_ENTRIES = 200;
+const PERSISTED_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface AnalysisResult {
   bpm?: number;
@@ -41,6 +41,7 @@ export interface AnalysisResult {
 export type UpdateCallback = (update: Partial<AnalysisResult>) => void;
 export interface AnalyzeOptions {
   signal?: AbortSignal | null;
+  cacheIdentity?: string | null;
 }
 
 const cache = new Map<string, AnalysisResult>();
@@ -97,6 +98,24 @@ function throwIfAborted(signal?: AbortSignal | null): void {
 
 function normalizeBeatMode(mode: unknown): BeatMode {
   return mode === 'auto' || mode === 'straight' || mode === 'breakbeat' ? mode : 'auto';
+}
+
+function getStableTrackCacheId(rawUrl: string): string {
+  const url = String(rawUrl || '').trim();
+  if (!url) return '';
+
+  try {
+    const parsed = new URL(url);
+    const haystack = `${parsed.pathname}${parsed.search}`;
+    const digitRuns = haystack.match(/\d{6,}/g);
+    const lastId = digitRuns?.[digitRuns.length - 1];
+    if (lastId) {
+      return `${parsed.hostname}|id:${lastId}`;
+    }
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return url;
+  }
 }
 
 function reviveAnalysisResult(raw: any): AnalysisResult | null {
@@ -191,6 +210,43 @@ function safeCallUpdate(onUpdate: UpdateCallback | null | undefined, partial: Pa
   }
 }
 
+function scheduleWaveformComputation(
+  params: {
+    url: string;
+    audioBuffer: AudioBuffer;
+    cacheKey: string;
+    out: AnalysisResult;
+    signal?: AbortSignal | null;
+    onUpdate?: UpdateCallback | null;
+  }
+): void {
+  const { url, audioBuffer, cacheKey, out, signal, onUpdate } = params;
+
+  setTimeout(() => {
+    if (signal?.aborted) return;
+    computeAndCacheWaveformForUrlFromAudioBuffer(url, audioBuffer)
+      .then((wf: WaveformBands) => {
+        if (signal?.aborted) return;
+        out.waveform = wf;
+        out.waveformStatus = '';
+        out.ts = Date.now();
+        cache.set(cacheKey, out);
+        schedulePersistedCacheFlush();
+        safeCallUpdate(onUpdate, { waveform: wf, waveformStatus: '', note: out.note });
+      })
+      .catch((e: any) => {
+        if (signal?.aborted) return;
+        console.error('[ANALYZER] Waveform generation failed:', e);
+        out.waveform = null;
+        out.waveformStatus = `Waveform failed: ${e?.message || String(e)}`;
+        out.ts = Date.now();
+        cache.set(cacheKey, out);
+        schedulePersistedCacheFlush();
+        safeCallUpdate(onUpdate, { waveformStatus: out.waveformStatus });
+      });
+  }, 0);
+}
+
 export async function analyzeUrl(
   url: string,
   beatMode: BeatMode = 'auto',
@@ -201,7 +257,10 @@ export async function analyzeUrl(
 
   const signal = options?.signal || null;
   const mode: BeatMode = ['auto', 'straight', 'breakbeat'].includes(beatMode) ? beatMode : 'auto';
-  const cacheKey = `${url}|${ANALYSIS_VERSION}`;
+  const explicitCacheId = typeof options?.cacheIdentity === 'string' ? options.cacheIdentity.trim() : '';
+  const stableTrackId = getStableTrackCacheId(url);
+  const cacheIdentity = explicitCacheId || stableTrackId || url;
+  const cacheKey = `${cacheIdentity}|${ANALYSIS_VERSION}`;
   const now = Date.now();
 
   const cached = cache.get(cacheKey);
@@ -297,12 +356,15 @@ export async function analyzeUrl(
           beatMode: mode,
           confidence: 0,
           waveform: null,
-          waveformStatus: 'Waveform deferred',
+          waveformStatus: 'Computing waveform…',
+          note: 'BPM unavailable',
           ts: Date.now(),
         };
         cache.set(cacheKey, out);
         schedulePersistedCacheFlush();
         safeCallUpdate(onUpdate, out);
+        scheduleWaveformComputation({ url, audioBuffer, cacheKey, out, signal, onUpdate });
+
         return out;
       }
 
@@ -341,30 +403,7 @@ export async function analyzeUrl(
           });
       }, 0);
 
-      setTimeout(() => {
-        if (signal?.aborted) return;
-        computeAndCacheWaveformForUrlFromAudioBuffer(url, audioBuffer)
-          .then((wf: WaveformBands) => {
-            if (signal?.aborted) return;
-            out.waveform = wf;
-            out.waveformStatus = '';
-            out.note = `BPM: ${tempo.bpm}`;
-            out.ts = Date.now();
-            cache.set(cacheKey, out);
-            schedulePersistedCacheFlush();
-            safeCallUpdate(onUpdate, { waveform: wf, waveformStatus: '', note: out.note });
-          })
-          .catch((e: any) => {
-            if (signal?.aborted) return;
-            console.error('[ANALYZER] Waveform generation failed:', e);
-            out.waveform = null;
-            out.waveformStatus = `Waveform failed: ${e?.message || String(e)}`;
-            out.ts = Date.now();
-            cache.set(cacheKey, out);
-            schedulePersistedCacheFlush();
-            safeCallUpdate(onUpdate, { waveformStatus: out.waveformStatus });
-          });
-      }, 0);
+      scheduleWaveformComputation({ url, audioBuffer, cacheKey, out, signal, onUpdate });
 
       return out;
     } catch (error) {

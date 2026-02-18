@@ -71,6 +71,7 @@ let showRemainingTime = false;
 let currentWaveform: WaveformData | null = null;
 let currentWaveformStatus = '';
 let currentIsAnalyzing = false;
+let revealedWaveformKey = '';
 let tapTimesMs: number[] = [];
 let tapBpm = NaN;
 let tapLongPressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -384,6 +385,27 @@ function getWaveArrays(waveform) {
   return { low: null, mid: null, high: null };
 }
 
+function waveformRevealKey(waveform, low, mid, high) {
+  const duration = Number.isFinite(waveform?.duration) ? Math.round(waveform.duration * 1000) : -1;
+  const lowLen = Array.isArray(low) ? low.length : 0;
+  const midLen = Array.isArray(mid) ? mid.length : 0;
+  const highLen = Array.isArray(high) ? high.length : 0;
+  const sampleLow = lowLen ? Math.round(Number(low[0] || 0) * 1000) : 0;
+  const sampleMid = midLen ? Math.round(Number(mid[0] || 0) * 1000) : 0;
+  const sampleHigh = highLen ? Math.round(Number(high[0] || 0) * 1000) : 0;
+  return `${duration}|${lowLen}|${midLen}|${highLen}|${sampleLow}|${sampleMid}|${sampleHigh}`;
+}
+
+function triggerWaveformReveal(waveform, low, mid, high) {
+  if (!waveformCanvasEl) return;
+  const key = waveformRevealKey(waveform, low, mid, high);
+  if (!key || key === revealedWaveformKey) return;
+  revealedWaveformKey = key;
+  waveformCanvasEl.classList.remove('waveRevealReady');
+  void waveformCanvasEl.offsetWidth;
+  waveformCanvasEl.classList.add('waveRevealReady');
+}
+
 function setWaveHint(statusText, isAnalyzing) {
   if (!waveformHintEl || !waveformHintTextEl || !waveformHintDotsEl) return;
   const txt = String(statusText || '').trim();
@@ -408,7 +430,17 @@ function drawWaveform(waveform, statusText, playheadFraction, isAnalyzing) {
   const ctx = setupCanvasForDpr(waveformCanvasEl, W, H);
   ctx.clearRect(0, 0, W, H);
 
-  if (!hasAny) return;
+  if (!hasAny) {
+    revealedWaveformKey = '';
+    if (waveformCanvasEl.classList.contains('waveRevealReady')) {
+      waveformCanvasEl.classList.remove('waveRevealReady');
+    }
+    return;
+  }
+
+  if (!isAnalyzing && !String(statusText || '').trim()) {
+    triggerWaveformReveal(waveform, low, mid, high);
+  }
 
   const baseY = H - 0.5;
   const maxAmp = H - 3;
@@ -1123,6 +1155,10 @@ height:58px;
 order:2;
 }
 
+#${PANEL_ID} canvas.wave.waveRevealReady{
+animation: bcWaveReveal 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
 #${PANEL_ID} .waveHint{
 margin-bottom:6px;
 order:1;
@@ -1155,6 +1191,17 @@ animation: bcDots 1.0s infinite;
 0%{ opacity:0.20; transform: translateY(0px); }
 50%{ opacity:0.90; transform: translateY(-1px); }
 100%{ opacity:0.20; transform: translateY(0px); }
+}
+
+@keyframes bcWaveReveal{
+0%{
+opacity:0;
+clip-path:inset(0 100% 0 0);
+}
+100%{
+opacity:1;
+clip-path:inset(0 0 0 0);
+}
 }
 
 #${PANEL_ID} .transportRow{

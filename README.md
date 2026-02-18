@@ -4,7 +4,13 @@ Floating Bandcamp player extension with BPM detection (Essentia.js), waveform vi
 
 ![Screenshot](image.png)
 
-## Latest Change (v2.2)
+## Latest Change (v2.3)
+
+- Added analysis caching improvements so BPM/waveform results are reused more aggressively across track revisits and sessions
+- Added album-track background preload analysis (`/album/` pages) that analyzes upcoming tracks while the current track is playing
+- Added smooth waveform blend-in behavior so waveform visuals appear more naturally as analysis data becomes available
+
+## Previous Change (v2.2)
 
 - Replaced static BPM confidence with Essentia-derived confidence and switched UI to a compact confidence light
 - Decoupled BPM from confidence timing so BPM appears first and confidence updates later
