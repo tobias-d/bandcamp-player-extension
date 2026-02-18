@@ -169,8 +169,23 @@ function fmtTime(sec: number): string {
   return `${m}:${pad2(r)}`;
 }
 
-function fmtConfParen(x: number): string {
-  return Number.isFinite(x) ? `(Confidence: ${Math.round(x)}%)` : '(Confidence: ---)';
+function confLevelLabel(x: number): string {
+  if (!Number.isFinite(x)) return 'Confidence: Unknown';
+  if (x >= 25) return 'Confidence: High';
+  if (x >= 10) return 'Confidence: Medium';
+  return 'Confidence: Low';
+}
+
+function confLevelClass(x: number): string {
+  if (!Number.isFinite(x)) return 'level-unknown';
+  if (x >= 25) return 'level-high';
+  if (x >= 10) return 'level-medium';
+  return 'level-low';
+}
+
+function confLevelClassForState(x: number, isAnalyzing: boolean): string {
+  if (isAnalyzing) return 'level-unknown';
+  return confLevelClass(x);
 }
 
 function norm(s?: string): string {
@@ -1073,10 +1088,49 @@ white-space:nowrap;
 }
 
 #${PANEL_ID} .confLabel{
-font-size:11px;
-opacity:0.72;
-white-space:nowrap;
+opacity:1;
 margin:0;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+width:7px;
+height:7px;
+flex:0 0 auto;
+margin-left:8px;
+}
+
+#${PANEL_ID} .confLabel::before{
+content:'';
+width:7px;
+height:7px;
+border-radius:50%;
+background:#98a2b3;
+flex:0 0 auto;
+box-shadow:0 0 0 1px rgba(0,0,0,0.10) inset;
+}
+
+#${PANEL_ID} .confLabel.level-low{
+filter:saturate(1.05);
+}
+
+#${PANEL_ID} .confLabel.level-low::before{
+background:#f04438;
+}
+
+#${PANEL_ID} .confLabel.level-medium{
+filter:saturate(1.05);
+}
+
+#${PANEL_ID} .confLabel.level-medium::before{
+background:#f79009;
+}
+
+#${PANEL_ID} .confLabel.level-high{
+filter:saturate(1.05);
+}
+
+#${PANEL_ID} .confLabel.level-high::before{
+background:#12b76a;
 }
 
 /* FIXED HEIGHT: Value */
@@ -1459,9 +1513,11 @@ user-select:none;
   bpmLabel.textContent = 'Detected BPM';
 
   bpmConfLabelEl = document.createElement('div');
-  bpmConfLabelEl.className = 'confLabel';
+  bpmConfLabelEl.className = 'confLabel level-unknown';
   bpmConfLabelEl.setAttribute('data-role', 'bpmConfLabel');
-  bpmConfLabelEl.textContent = '(Conf: ---)';
+  bpmConfLabelEl.textContent = '';
+  bpmConfLabelEl.title = 'Confidence: Unknown';
+  bpmConfLabelEl.setAttribute('aria-label', 'Confidence: Unknown');
 
   bpmLine.appendChild(bpmLabel);
   bpmLine.appendChild(bpmConfLabelEl);
@@ -1651,7 +1707,14 @@ export default function showResultsPanel(input: PanelInput = {}, handlers: Panel
   const shownBpm = Number.isFinite(bpm) ? bpm * tempoScale : NaN;
 
   if (bpmMainEl) bpmMainEl.textContent = Number.isFinite(shownBpm) ? String(Math.round(shownBpm)) : '---';
-  if (bpmConfLabelEl) bpmConfLabelEl.textContent = fmtConfParen(bpmConfidence);
+  if (bpmConfLabelEl) {
+    const label = confLevelLabel(bpmConfidence);
+    bpmConfLabelEl.textContent = '';
+    bpmConfLabelEl.title = label;
+    bpmConfLabelEl.setAttribute('aria-label', label);
+    bpmConfLabelEl.classList.remove('level-low', 'level-medium', 'level-high', 'level-unknown');
+    bpmConfLabelEl.classList.add('confLabel', confLevelClassForState(bpmConfidence, currentIsAnalyzing));
+  }
   if (tapBpmEl) tapBpmEl.textContent = Number.isFinite(tapBpm) ? String(Math.round(tapBpm)) : '---';
 
   // Control BPM pulsing animation during analysis

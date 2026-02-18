@@ -63,7 +63,8 @@ type IncomingMessage =
   | { type: 'GETBEATMODE' }
   | { type: 'SETBEATMODE'; beatMode: string }
   | { type: 'GETWAVEFORM' | 'GET_WAVEFORM'; url: string }
-  | { type: 'ANALYZE_TRACK' | 'ANALYZETRACK'; url: string; beatMode?: BeatMode };
+  | { type: 'ANALYZE_TRACK' | 'ANALYZETRACK'; url: string; beatMode?: BeatMode }
+  | { type: 'CANCEL_ANALYSIS'; url?: string };
 
 /**
  * Response for beat mode get request
@@ -92,6 +93,27 @@ interface AnalysisPartialMessage extends Partial<AnalysisResult> {
  * Progress update callback type
  */
 type ProgressCallback = (partial: Partial<AnalysisResult>) => void;
+
+interface ActiveAnalysis {
+  url: string;
+  controller: AbortController;
+}
+
+const activeAnalysisByTab = new Map<number, ActiveAnalysis>();
+
+function isAbortError(error: unknown): boolean {
+  return (error as any)?.name === 'AbortError';
+}
+
+function cancelActiveAnalysisForTab(tabId: number | null | undefined, url?: string): boolean {
+  if (tabId === undefined || tabId === null) return false;
+  const active = activeAnalysisByTab.get(tabId);
+  if (!active) return false;
+  if (url && active.url !== url) return false;
+  active.controller.abort();
+  activeAnalysisByTab.delete(tabId);
+  return true;
+}
 
 /* ============================================================================
  * MESSAGE HANDLER
@@ -145,6 +167,12 @@ async function handleMessage(
       }
     }
 
+    if (msg.type === 'CANCEL_ANALYSIS') {
+      const tabId = sender?.tab?.id;
+      const cancelled = cancelActiveAnalysisForTab(tabId, msg.url);
+      return { cancelled, ts: Date.now() };
+    }
+
     // Full track analysis with progressive updates
     if (msg.type === 'ANALYZE_TRACK' || msg.type === 'ANALYZETRACK') {
       if (!msg.url) {
@@ -152,13 +180,25 @@ async function handleMessage(
       }
 
       const tabId = sender?.tab?.id;
+      if (tabId !== undefined && tabId !== null) {
+        const existing = activeAnalysisByTab.get(tabId);
+        if (existing && existing.url !== msg.url) {
+          existing.controller.abort();
+          activeAnalysisByTab.delete(tabId);
+        }
+      }
 
       // Create update callback to send partial results back to content script
       let onUpdate: ProgressCallback | null = null;
+      let controller: AbortController | null = null;
 
       if (tabId !== undefined && tabId !== null) {
+        controller = new AbortController();
+        activeAnalysisByTab.set(tabId, { url: msg.url, controller });
+
         onUpdate = (partial: Partial<AnalysisResult>): void => {
           try {
+            if (controller?.signal.aborted) return;
             const message: AnalysisPartialMessage = {
               type: 'ANALYSIS_PARTIAL',
               url: msg.url,
@@ -175,13 +215,28 @@ async function handleMessage(
 
       // Start analysis with progress updates
       try {
-        const result = await analyzeUrl(msg.url, msg.beatMode, onUpdate);
+        const result = await analyzeUrl(msg.url, msg.beatMode, onUpdate, {
+          signal: controller?.signal || undefined,
+        });
         return result;
       } catch (e: any) {
+        if (isAbortError(e)) {
+          return {
+            cancelled: true,
+            ts: Date.now(),
+          };
+        }
         return {
           error: e?.message || String(e),
           ts: Date.now(),
         } as ErrorResponse;
+      } finally {
+        if (tabId !== undefined && tabId !== null) {
+          const active = activeAnalysisByTab.get(tabId);
+          if (active && active.controller === controller) {
+            activeAnalysisByTab.delete(tabId);
+          }
+        }
       }
     }
 

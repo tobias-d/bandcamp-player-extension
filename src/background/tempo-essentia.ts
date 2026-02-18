@@ -10,6 +10,7 @@
 
 let essentia: any = null;
 let essentiaModule: any = null;
+const preprocessedSignalCache = new WeakMap<AudioBuffer, Float32Array>();
 
 async function resolveEssentiaWasmModule(): Promise<any> {
   // Avoid aggregated `essentia.js` exports in Firefox because some getters
@@ -118,11 +119,49 @@ function classifyBeatType(bpm: number): string {
   return 'unknown';
 }
 
+function clamp01(x: number): number {
+  if (!Number.isFinite(x)) return 0;
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  return x;
+}
+
+function toNumber(x: unknown): number {
+  const n = Number(x);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function confidenceToPercent(confidence: unknown, max: number): number {
+  const raw = toNumber(confidence);
+  if (!Number.isFinite(raw) || max <= 0) return 0;
+  return Math.round(clamp01(raw / max) * 100);
+}
+
+function getPreprocessedSignal(audioBuffer: AudioBuffer): Float32Array {
+  const cached = preprocessedSignalCache.get(audioBuffer);
+  if (cached) return cached;
+
+  const mono = convertToMono(audioBuffer);
+  const downsampled = downsample(mono, audioBuffer.sampleRate, 16000);
+  preprocessedSignalCache.set(audioBuffer, downsampled);
+  return downsampled;
+}
+
 export interface EssentiaTempoResult {
   bpm: number;
   confidence: number;
   beatTypeAuto: string;
   method: 'essentia-percival' | 'essentia-rhythm2013';
+}
+
+export interface TempoEstimateOptions {
+  method?: 'percival' | 'rhythm2013';
+  minBpm?: number;
+  maxBpm?: number;
+  targetMinBpm?: number;
+  targetMaxBpm?: number;
+  preferFasterAmbiguous?: boolean;
+  includeConfidence?: boolean;
 }
 
 function normalizeBpmForElectronicProfile(
@@ -162,14 +201,7 @@ function normalizeBpmForElectronicProfile(
  */
 export async function estimateTempo(
   audioBuffer: AudioBuffer,
-  options: {
-    method?: 'percival' | 'rhythm2013';
-    minBpm?: number;
-    maxBpm?: number;
-    targetMinBpm?: number;
-    targetMaxBpm?: number;
-    preferFasterAmbiguous?: boolean;
-  } = {}
+  options: TempoEstimateOptions = {}
 ): Promise<EssentiaTempoResult> {
   // Ensure Essentia is initialized
   if (!essentia) {
@@ -183,19 +215,20 @@ export async function estimateTempo(
     targetMinBpm = minBpm,
     targetMaxBpm = maxBpm,
     preferFasterAmbiguous = false,
+    includeConfidence = true,
   } = options;
 
   console.log(`[Essentia] Starting tempo analysis (method: ${method})`);
   const startTime = performance.now();
 
   // Preprocess: convert to mono and downsample to 16kHz (Essentia's default)
-  const mono = convertToMono(audioBuffer);
-  const downsampled = downsample(mono, audioBuffer.sampleRate, 16000);
+  const downsampled = getPreprocessedSignal(audioBuffer);
 
   // Convert to Essentia vector
   const vectorSignal = essentiaModule.arrayToVector(downsampled);
 
   let bpm: number;
+  let confidence = 0;
 
   try {
     if (method === 'percival') {
@@ -211,6 +244,28 @@ export async function estimateTempo(
         16000    // sampleRate
       );
       bpm = result.bpm;
+
+      if (includeConfidence) {
+        // Use a track-level confidence source. LoopBpmConfidence is intended for
+        // constant-tempo loops and tends to report 0 on full songs.
+        try {
+          const rhythm = essentia.RhythmExtractor2013(
+            vectorSignal,
+            maxBpm,
+            'multifeature',
+            minBpm
+          );
+          confidence = confidenceToPercent(rhythm?.confidence, 5.32);
+        } catch {
+          // Fallback only if rhythm confidence is unavailable.
+          try {
+            const confResult = essentia.LoopBpmConfidence(vectorSignal, bpm, 16000);
+            confidence = confidenceToPercent(confResult?.confidence, 1);
+          } catch {
+            confidence = 0;
+          }
+        }
+      }
     } else {
       // RhythmExtractor2013: more accurate, slightly slower
       const result = essentia.RhythmExtractor2013(
@@ -220,6 +275,8 @@ export async function estimateTempo(
         minBpm
       );
       bpm = result.bpm;
+      // RhythmExtractor2013 confidence is documented on a [0, 5.32] scale.
+      confidence = confidenceToPercent(result?.confidence, 5.32);
     }
   } catch (error) {
     console.error('[Essentia] Analysis failed:', error);
@@ -243,15 +300,43 @@ export async function estimateTempo(
   }
   console.log(`[Essentia] Analysis complete: ${Math.round(normalizedBpm)} BPM (${elapsedTime.toFixed(0)}ms)`);
 
-  // Essentia doesn't provide confidence score, use a heuristic
-  const confidence = bpm > 0 ? 85 : 0;
-
   return {
     bpm: Math.round(normalizedBpm),
     confidence,
     beatTypeAuto: classifyBeatType(normalizedBpm),
     method: method === 'percival' ? 'essentia-percival' : 'essentia-rhythm2013'
   };
+}
+
+/**
+ * Compute confidence in a separate pass so BPM can be emitted first.
+ */
+export async function estimateTempoConfidence(
+  audioBuffer: AudioBuffer,
+  options: Pick<TempoEstimateOptions, 'minBpm' | 'maxBpm'> = {}
+): Promise<number> {
+  if (!essentia) {
+    await initEssentia();
+  }
+
+  const { minBpm = 50, maxBpm = 210 } = options;
+
+  const downsampled = getPreprocessedSignal(audioBuffer);
+  const vectorSignal = essentiaModule.arrayToVector(downsampled);
+
+  try {
+    const rhythm = essentia.RhythmExtractor2013(
+      vectorSignal,
+      maxBpm,
+      'multifeature',
+      minBpm
+    );
+    return confidenceToPercent(rhythm?.confidence, 5.32);
+  } catch {
+    return 0;
+  } finally {
+    vectorSignal.delete();
+  }
 }
 
 /**

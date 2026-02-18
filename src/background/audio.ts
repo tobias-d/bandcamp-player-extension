@@ -48,29 +48,36 @@ interface MonoAudioResult {
 // AUDIO DECODING
 // ============================================================================
 
+let sharedDecodeContext: AudioContext | null = null;
+
+function getSharedDecodeContext(): AudioContext {
+  if (sharedDecodeContext && sharedDecodeContext.state !== 'closed') {
+    return sharedDecodeContext;
+  }
+
+  const Ctor = (self as any).AudioContext || (self as any).webkitAudioContext;
+  if (!Ctor) throw new Error('AudioContext unavailable in background');
+  sharedDecodeContext = new Ctor();
+  return sharedDecodeContext;
+}
+
 /**
  * Decode audio from ArrayBuffer to AudioBuffer
- * Creates and immediately closes AudioContext to avoid resource leaks.
+ * Reuses a shared AudioContext to avoid repeated setup/teardown cost.
  * 
  * @param arrayBuffer - Raw audio file data
  * @returns Promise resolving to decoded audio with PCM samples
  * @throws {Error} If AudioContext is unavailable or decoding fails
  */
 export async function decodeAudio(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
-  const Ctor = (self as any).AudioContext || (self as any).webkitAudioContext;
-  if (!Ctor) throw new Error('AudioContext unavailable in background');
-  
-  const ctx: AudioContext = new Ctor();
+  let ctx: AudioContext = getSharedDecodeContext();
   try {
     return await ctx.decodeAudioData(arrayBuffer);
-  } finally {
-    if (typeof ctx.close === 'function') {
-      try {
-        await ctx.close();
-      } catch (_) {
-        // Ignore close errors
-      }
-    }
+  } catch (err) {
+    // Recover from browser-closing/invalidating the shared context.
+    sharedDecodeContext = null;
+    ctx = getSharedDecodeContext();
+    return await ctx.decodeAudioData(arrayBuffer);
   }
 }
 

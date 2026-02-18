@@ -75,6 +75,10 @@ function waveformCacheKey(url: string): string {
   return `${url}|${WAVEFORM_VERSION}|${WAVEFORM_BUCKETS}`;
 }
 
+function isFreshWaveform(cached: CachedWaveform | undefined): cached is CachedWaveform {
+  return Boolean(cached && (Date.now() - cached.ts) < 24 * 60 * 60 * 1000);
+}
+
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -354,7 +358,7 @@ export async function getWaveformForUrl(url: string): Promise<CachedWaveform> {
   
   // Check cache (24-hour TTL)
   const cached = waveformCache.get(key);
-  if (cached && (Date.now() - cached.ts) < 24 * 60 * 60 * 1000) {
+  if (isFreshWaveform(cached)) {
     return cached;
   }
 
@@ -374,6 +378,32 @@ export async function getWaveformForUrl(url: string): Promise<CachedWaveform> {
     const audioBuffer = await decodeAudio(arrayBuffer);
     const wf = await computeWaveformBands(audioBuffer, WAVEFORM_BUCKETS);
 
+    const out: CachedWaveform = { ...wf, ts: Date.now() };
+    waveformCache.set(key, out);
+    return out;
+  })().finally(() => waveformInFlight.delete(key));
+
+  waveformInFlight.set(key, p);
+  return p;
+}
+
+export async function computeAndCacheWaveformForUrlFromAudioBuffer(
+  url: string,
+  audioBuffer: AudioBuffer
+): Promise<CachedWaveform> {
+  const key = waveformCacheKey(url);
+
+  const cached = waveformCache.get(key);
+  if (isFreshWaveform(cached)) {
+    return cached;
+  }
+
+  if (waveformInFlight.has(key)) {
+    return waveformInFlight.get(key)!;
+  }
+
+  const p = (async (): Promise<CachedWaveform> => {
+    const wf = await computeWaveformBands(audioBuffer, WAVEFORM_BUCKETS);
     const out: CachedWaveform = { ...wf, ts: Date.now() };
     waveformCache.set(key, out);
     return out;

@@ -92,6 +92,8 @@ let activeAudio: HTMLAudioElement | null = null;
 let currentSrc = '';
 let lastAnalysis: AnalysisResult | null = null;
 let analysisInFlight = false;
+let analysisRunId = 0;
+let activeAnalysisSrc = '';
 let pendingSeekFraction: number | null = null;
 let renderScheduled = false;
 let rafId = 0;
@@ -150,6 +152,30 @@ function sendRuntimeMessage<T = any>(message: any): Promise<T> {
       rejectOnce(error);
     }
   });
+}
+
+async function cancelAnalysis(url?: string): Promise<void> {
+  if (!canMessage()) return;
+  try {
+    await sendRuntimeMessage({
+      type: 'CANCEL_ANALYSIS',
+      url,
+    });
+  } catch (_) {
+    // Ignore cancellation errors.
+  }
+}
+
+function onSourceChanged(nextSrc: string): void {
+  if (nextSrc === currentSrc) return;
+  if (activeAnalysisSrc && activeAnalysisSrc !== nextSrc) {
+    void cancelAnalysis(activeAnalysisSrc);
+  }
+  analysisRunId += 1;
+  activeAnalysisSrc = '';
+  analysisInFlight = false;
+  currentSrc = nextSrc;
+  lastAnalysis = null;
 }
 
 function pickActiveAudio(): HTMLAudioElement | null {
@@ -249,8 +275,7 @@ function ensureActiveAudio(): HTMLAudioElement | null {
 
     const src = getAudioSrc(activeAudio);
     if (src !== currentSrc) {
-      currentSrc = src;
-      lastAnalysis = null;
+      onSourceChanged(src);
       if (currentSrc) {
         void analyzeCurrentTrack();
       }
@@ -501,8 +526,14 @@ async function analyzeCurrentTrack(): Promise<void> {
   if (!el || !canMessage()) return;
 
   const src = getAudioSrc(el);
-  if (!src || analysisInFlight) return;
+  if (!src) return;
+  if (analysisInFlight && src === activeAnalysisSrc) return;
+  if (analysisInFlight && activeAnalysisSrc && activeAnalysisSrc !== src) {
+    void cancelAnalysis(activeAnalysisSrc);
+  }
 
+  const runId = ++analysisRunId;
+  activeAnalysisSrc = src;
   analysisInFlight = true;
   scheduleRender();
 
@@ -513,6 +544,8 @@ async function analyzeCurrentTrack(): Promise<void> {
       beatMode,
     });
 
+    if (runId !== analysisRunId || src !== currentSrc) return;
+    if ((result as any)?.cancelled) return;
     lastAnalysis = result || null;
 
     if (lastAnalysis && !lastAnalysis.waveform && !lastAnalysis.waveformStatus) {
@@ -526,6 +559,7 @@ async function analyzeCurrentTrack(): Promise<void> {
       const fallbackUrl = src;
       setTimeout(async () => {
         try {
+          if (runId !== analysisRunId) return;
           if (fallbackUrl !== currentSrc || lastAnalysis?.waveform) return;
 
           const waveform = await sendRuntimeMessage<WaveformData>({
@@ -534,6 +568,7 @@ async function analyzeCurrentTrack(): Promise<void> {
           });
 
           if (waveform && (waveform.peaksLow || waveform.peaks)) {
+            if (runId !== analysisRunId) return;
             lastAnalysis = {
               ...(lastAnalysis || {}),
               waveform,
@@ -547,14 +582,18 @@ async function analyzeCurrentTrack(): Promise<void> {
       }, 5000);
     }
   } catch (error) {
+    if (runId !== analysisRunId || src !== currentSrc) return;
     lastAnalysis = {
       error: String((error as Error)?.message || error),
       waveformStatus: 'Analysis failed',
       ts: Date.now(),
     };
   } finally {
-    analysisInFlight = false;
-    scheduleRender();
+    if (runId === analysisRunId) {
+      analysisInFlight = false;
+      activeAnalysisSrc = '';
+      scheduleRender();
+    }
   }
 }
 
@@ -571,8 +610,7 @@ function buildPanelState(): PanelState {
 
   const src = getAudioSrc(el);
   if (src && src !== currentSrc) {
-    currentSrc = src;
-    lastAnalysis = null;
+    onSourceChanged(src);
     void analyzeCurrentTrack();
   }
 
@@ -640,8 +678,7 @@ function listenForPlayEvents(): void {
 
       const src = getAudioSrc(activeAudio);
       if (src !== currentSrc) {
-        currentSrc = src;
-        lastAnalysis = null;
+        onSourceChanged(src);
         if (currentSrc) {
           void analyzeCurrentTrack();
         }
