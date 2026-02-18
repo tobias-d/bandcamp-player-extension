@@ -64,6 +64,8 @@ type IncomingMessage =
   | { type: 'SETBEATMODE'; beatMode: string }
   | { type: 'GETWAVEFORM' | 'GET_WAVEFORM'; url: string }
   | { type: 'ANALYZE_TRACK' | 'ANALYZETRACK'; url: string; beatMode?: BeatMode }
+  | { type: 'PRELOAD_ANALYSIS_BATCH'; urls: string[]; beatMode?: BeatMode }
+  | { type: 'PRELOAD_ANALYSIS'; url: string; beatMode?: BeatMode }
   | { type: 'CANCEL_ANALYSIS'; url?: string };
 
 /**
@@ -101,8 +103,31 @@ interface ActiveAnalysis {
 
 const activeAnalysisByTab = new Map<number, ActiveAnalysis>();
 
+interface PreloadJob {
+  url: string;
+  beatMode: BeatMode;
+}
+
+interface RunningPreload {
+  job: PreloadJob;
+  controller: AbortController;
+  rescheduled: boolean;
+}
+
+const preloadQueue: PreloadJob[] = [];
+const preloadQueuedUrls = new Set<string>();
+let preloadRunner: RunningPreload | null = null;
+
 function isAbortError(error: unknown): boolean {
   return (error as any)?.name === 'AbortError';
+}
+
+function normalizeBeatMode(input: unknown): BeatMode {
+  return input === 'straight' || input === 'breakbeat' || input === 'auto' ? input : 'auto';
+}
+
+function normalizeUrl(input: unknown): string {
+  return typeof input === 'string' ? input.trim() : '';
 }
 
 function cancelActiveAnalysisForTab(tabId: number | null | undefined, url?: string): boolean {
@@ -113,6 +138,83 @@ function cancelActiveAnalysisForTab(tabId: number | null | undefined, url?: stri
   active.controller.abort();
   activeAnalysisByTab.delete(tabId);
   return true;
+}
+
+function processPreloadQueue(): void {
+  if (preloadRunner) return;
+  if (activeAnalysisByTab.size > 0) return;
+  const job = preloadQueue.shift();
+  if (!job) return;
+
+  const controller = new AbortController();
+  const running: RunningPreload = {
+    job,
+    controller,
+    rescheduled: false,
+  };
+  preloadRunner = running;
+
+  void analyzeUrl(job.url, job.beatMode, null, {
+    signal: controller.signal,
+  })
+    .catch((error) => {
+      if (!isAbortError(error)) {
+        console.warn('[Messaging] Preload failed:', error);
+      }
+    })
+    .finally(() => {
+      if (preloadRunner === running) {
+        preloadRunner = null;
+      }
+      if (!running.rescheduled) {
+        preloadQueuedUrls.delete(job.url);
+      }
+      setTimeout(() => processPreloadQueue(), 0);
+    });
+}
+
+function pausePreloadsForPriority(): void {
+  if (!preloadRunner) return;
+  const running = preloadRunner;
+  preloadRunner = null;
+  if (!running.rescheduled) {
+    running.rescheduled = true;
+    preloadQueue.unshift(running.job);
+  }
+  running.controller.abort();
+}
+
+function enqueuePreloads(
+  urls: string[],
+  beatMode: BeatMode = 'auto',
+  replaceQueue = false
+): number {
+  if (replaceQueue) {
+    preloadQueue.length = 0;
+    preloadQueuedUrls.clear();
+    if (preloadRunner) {
+      preloadRunner.rescheduled = false;
+      preloadRunner.controller.abort();
+      preloadRunner = null;
+    }
+  }
+
+  let added = 0;
+  for (const rawUrl of urls) {
+    const url = normalizeUrl(rawUrl);
+    if (!url || preloadQueuedUrls.has(url)) continue;
+    preloadQueue.push({
+      url,
+      beatMode,
+    });
+    preloadQueuedUrls.add(url);
+    added += 1;
+  }
+
+  if (added > 0) {
+    processPreloadQueue();
+  }
+  return added;
 }
 
 /* ============================================================================
@@ -170,7 +272,25 @@ async function handleMessage(
     if (msg.type === 'CANCEL_ANALYSIS') {
       const tabId = sender?.tab?.id;
       const cancelled = cancelActiveAnalysisForTab(tabId, msg.url);
+      processPreloadQueue();
       return { cancelled, ts: Date.now() };
+    }
+
+    if (msg.type === 'PRELOAD_ANALYSIS') {
+      const url = normalizeUrl(msg.url);
+      if (!url) {
+        return { error: 'URL required', ts: Date.now() } as ErrorResponse;
+      }
+      const added = enqueuePreloads([url], normalizeBeatMode(msg.beatMode));
+      return { preloading: added > 0, queued: added, ts: Date.now() };
+    }
+
+    if (msg.type === 'PRELOAD_ANALYSIS_BATCH') {
+      if (!Array.isArray(msg.urls) || msg.urls.length === 0) {
+        return { error: 'URLs required', ts: Date.now() } as ErrorResponse;
+      }
+      const added = enqueuePreloads(msg.urls, normalizeBeatMode(msg.beatMode), true);
+      return { preloading: added > 0, queued: added, ts: Date.now() };
     }
 
     // Full track analysis with progressive updates
@@ -178,6 +298,7 @@ async function handleMessage(
       if (!msg.url) {
         return { error: 'URL required', ts: Date.now() } as ErrorResponse;
       }
+      pausePreloadsForPriority();
 
       const tabId = sender?.tab?.id;
       if (tabId !== undefined && tabId !== null) {
@@ -237,6 +358,7 @@ async function handleMessage(
             activeAnalysisByTab.delete(tabId);
           }
         }
+        processPreloadQueue();
       }
     }
 

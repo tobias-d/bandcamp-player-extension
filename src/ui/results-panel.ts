@@ -83,12 +83,19 @@ const TAP_LONG_PRESS_MS = 2000;
 const CLOSED_FLAG = '__BC_BPM_PANEL_CLOSED__';
 const POS_KEY = '__BC_BPM_PANEL_POS__';
 const SCALE_KEY = '__BC_BPM_PANEL_SCALE__';
+const PANEL_PREFS_STORAGE_KEY = '__BC_BPM_PANEL_PREFS__';
 const PANEL_MIN_SCALE = 0.6;
 const PANEL_MAX_SCALE = 1;
 const PANEL_DEFAULT_SCALE = 0.8;
 let panelScale = PANEL_MAX_SCALE;
+let savedPosMem: { left: number; top: number } | null = null;
+let savedScaleMem = PANEL_DEFAULT_SCALE;
+let prefsLoaded = false;
+let prefsLoadPromise: Promise<void> | null = null;
+let panelPrefsTouched = false;
 
 const win = window as unknown as Record<string, unknown>;
+seedPanelPrefsFromLegacy();
 
 function isPanelClosed(): boolean {
   try {
@@ -104,7 +111,7 @@ function setPanelClosed(v: boolean): void {
   } catch (_) {}
 }
 
-function getSavedPos(): { left: number; top: number } | null {
+function readLegacyPos(): { left: number; top: number } | null {
   try {
     const raw = sessionStorage.getItem(POS_KEY);
     if (!raw) return null;
@@ -116,13 +123,7 @@ function getSavedPos(): { left: number; top: number } | null {
   }
 }
 
-function savePos(left: number, top: number): void {
-  try {
-    sessionStorage.setItem(POS_KEY, JSON.stringify({ left, top }));
-  } catch (_) {}
-}
-
-function getSavedScale(): number {
+function readLegacyScale(): number {
   try {
     const fromLocal = localStorage.getItem(SCALE_KEY);
     const fromSession = sessionStorage.getItem(SCALE_KEY);
@@ -136,14 +137,165 @@ function getSavedScale(): number {
   }
 }
 
+function seedPanelPrefsFromLegacy(): void {
+  savedPosMem = readLegacyPos();
+  savedScaleMem = readLegacyScale();
+}
+
+function getExtensionStorageArea(): any | null {
+  try {
+    const g = globalThis as any;
+    if (g?.chrome?.storage?.local) return g.chrome.storage.local;
+    if (g?.browser?.storage?.local) return g.browser.storage.local;
+    if (g?.chrome?.storage?.sync) return g.chrome.storage.sync;
+    if (g?.browser?.storage?.sync) return g.browser.storage.sync;
+  } catch (_) {
+    // Ignore.
+  }
+  return null;
+}
+
+function storageGetPanelPrefs(): Promise<any | null> {
+  const area = getExtensionStorageArea();
+  if (!area) return Promise.resolve(null);
+
+  try {
+    const maybePromise = area.get(PANEL_PREFS_STORAGE_KEY);
+    if (maybePromise && typeof maybePromise.then === 'function') {
+      return maybePromise
+        .then((res: any) => res?.[PANEL_PREFS_STORAGE_KEY] ?? null)
+        .catch(() => null);
+    }
+  } catch (_) {
+    // Fallback to callback API.
+  }
+
+  return new Promise((resolve) => {
+    try {
+      area.get(PANEL_PREFS_STORAGE_KEY, (res: any) => {
+        resolve(res?.[PANEL_PREFS_STORAGE_KEY] ?? null);
+      });
+    } catch (_) {
+      resolve(null);
+    }
+  });
+}
+
+function storageSetPanelPrefs(value: any): Promise<void> {
+  const area = getExtensionStorageArea();
+  if (!area) return Promise.resolve();
+
+  try {
+    const maybePromise = area.set({ [PANEL_PREFS_STORAGE_KEY]: value });
+    if (maybePromise && typeof maybePromise.then === 'function') {
+      return maybePromise.then(() => undefined).catch(() => undefined);
+    }
+  } catch (_) {
+    // Fallback to callback API.
+  }
+
+  return new Promise((resolve) => {
+    try {
+      area.set({ [PANEL_PREFS_STORAGE_KEY]: value }, () => resolve());
+    } catch (_) {
+      resolve();
+    }
+  });
+}
+
+function normalizeSavedPos(input: any): { left: number; top: number } | null {
+  const left = Number(input?.left);
+  const top = Number(input?.top);
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+  return { left, top };
+}
+
+function normalizeSavedScale(input: any): number {
+  const raw = Number(input);
+  if (!Number.isFinite(raw)) return PANEL_DEFAULT_SCALE;
+  return clamp(raw, PANEL_MIN_SCALE, PANEL_MAX_SCALE);
+}
+
+function persistPanelPrefs(): void {
+  const payload = {
+    pos: savedPosMem ? { left: savedPosMem.left, top: savedPosMem.top } : null,
+    scale: savedScaleMem,
+  };
+  void storageSetPanelPrefs(payload);
+}
+
+function applySavedPosToPanel(): void {
+  if (!containerEl) return;
+  const pos = getSavedPos();
+  if (!pos) return;
+
+  const r = containerEl.getBoundingClientRect();
+  const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+  const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+  const left = clamp(pos.left, 0, Math.max(0, vw - r.width));
+  const top = clamp(pos.top, 0, Math.max(0, vh - r.height));
+  containerEl.style.left = `${Math.round(left)}px`;
+  containerEl.style.top = `${Math.round(top)}px`;
+  containerEl.style.right = 'auto';
+  containerEl.style.bottom = 'auto';
+}
+
+function applyStoredPrefsToPanel(): void {
+  if (!containerEl) return;
+  applyPanelScale(getSavedScale());
+  applySavedPosToPanel();
+}
+
+function ensurePanelPrefsLoaded(): void {
+  if (prefsLoaded || prefsLoadPromise) return;
+
+  prefsLoadPromise = (async () => {
+    let hadStoredPrefs = false;
+    try {
+      const stored = await storageGetPanelPrefs();
+      if (stored && typeof stored === 'object') {
+        hadStoredPrefs = true;
+        const pos = normalizeSavedPos((stored as any).pos);
+        const scale = normalizeSavedScale((stored as any).scale);
+        if (pos) savedPosMem = pos;
+        savedScaleMem = scale;
+      }
+    } catch (_) {
+      // Ignore storage read errors.
+    } finally {
+      prefsLoaded = true;
+      prefsLoadPromise = null;
+    }
+
+    if (!hadStoredPrefs) {
+      persistPanelPrefs();
+    }
+
+    if (containerEl && !panelPrefsTouched) {
+      applyStoredPrefsToPanel();
+      drawWaveform(currentWaveform, currentWaveformStatus, currentPlayheadFraction, currentIsAnalyzing);
+    }
+  })();
+}
+
+function getSavedPos(): { left: number; top: number } | null {
+  return savedPosMem ? { left: savedPosMem.left, top: savedPosMem.top } : null;
+}
+
+function savePos(left: number, top: number): void {
+  savedPosMem = { left, top };
+  panelPrefsTouched = true;
+  persistPanelPrefs();
+}
+
+function getSavedScale(): number {
+  return normalizeSavedScale(savedScaleMem);
+}
+
 function saveScale(scale: number): void {
-  const safe = String(clamp(scale, PANEL_MIN_SCALE, PANEL_MAX_SCALE));
-  try {
-    localStorage.setItem(SCALE_KEY, safe);
-  } catch (_) {}
-  try {
-    sessionStorage.setItem(SCALE_KEY, safe);
-  } catch (_) {}
+  savedScaleMem = normalizeSavedScale(scale);
+  panelPrefsTouched = true;
+  persistPanelPrefs();
 }
 
 function applyPanelScale(scale: number): void {
@@ -807,6 +959,7 @@ function bindRefsFromContainer() {
 
 function ensurePanel() {
   if (isPanelClosed()) return null;
+  ensurePanelPrefsLoaded();
 
   if (containerEl && document.contains(containerEl)) return containerEl;
 
@@ -819,7 +972,7 @@ function ensurePanel() {
         containerEl?.querySelector('[data-role="topRow"]') as HTMLDivElement | null,
       ]);
       ensurePanelResizable();
-      applyPanelScale(getSavedScale());
+      applyStoredPrefsToPanel();
       ensureWaveformSeeking();
       return containerEl;
     }
@@ -1644,20 +1797,7 @@ user-select:none;
   containerEl.style.right = 'auto';
   containerEl.style.bottom = 'auto';
 
-  const pos = getSavedPos();
-  if (pos) {
-    const r = containerEl.getBoundingClientRect();
-    const vw = window.innerWidth || document.documentElement.clientWidth || 0;
-    const vh = window.innerHeight || document.documentElement.clientHeight || 0;
-    const left = clamp(pos.left, 0, Math.max(0, vw - r.width));
-    const top = clamp(pos.top, 0, Math.max(0, vh - r.height));
-    containerEl.style.left = `${Math.round(left)}px`;
-    containerEl.style.top = `${Math.round(top)}px`;
-    containerEl.style.right = 'auto';
-    containerEl.style.bottom = 'auto';
-  }
-
-  applyPanelScale(getSavedScale());
+  applyStoredPrefsToPanel();
   ensurePanelDraggable([topRowEl]);
   ensurePanelResizable();
   ensureWaveformSeeking();
