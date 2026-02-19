@@ -10,6 +10,7 @@ type PanelInput = {
   title?: string;
   artistName?: string;
   trackTitle?: string;
+  trackKey?: string;
   bpm?: number;
   tempoScale?: number;
   confidence?: number;
@@ -76,6 +77,7 @@ let tapTimesMs: number[] = [];
 let tapBpm = NaN;
 let tapLongPressTimer: ReturnType<typeof setTimeout> | null = null;
 let tapLongPressed = false;
+let lastTapTrackKey = '';
 
 const PANEL_ID = 'bc-bpm-panel';
 const PANEL_UI_VERSION = 'alt-v34-edge-resize';
@@ -708,6 +710,25 @@ function clearTapLongPressTimer() {
   }
 }
 
+function computeTapTrackKey(
+  inputTrackKey: string,
+  artistName: string,
+  trackTitle: string,
+  fallbackTitle: string
+): string {
+  const explicit = norm(inputTrackKey);
+  if (explicit) return `k:${explicit}`;
+
+  const artist = norm(artistName);
+  const track = norm(trackTitle);
+  if (artist || track) return `m:${artist}|${track}`;
+
+  const title = norm(fallbackTitle);
+  if (title) return `t:${title}`;
+
+  return '';
+}
+
 function ensureWaveformSeeking() {
   if (!waveformCanvasEl) return;
   if (waveformCanvasEl.dataset.seekBound === '1') return;
@@ -958,6 +979,7 @@ function closePanel() {
 
   clearTapLongPressTimer();
   tapLongPressed = false;
+  lastTapTrackKey = '';
 }
 
 function bindRefsFromContainer() {
@@ -1873,6 +1895,14 @@ export default function showResultsPanel(input: PanelInput = {}, handlers: Panel
     const parsed = parseArtistTitleFallback(fallbackTitle);
     if (!artistName && parsed.artistName) artistName = parsed.artistName;
     if (!trackTitle && parsed.trackTitle) trackTitle = parsed.trackTitle;
+  }
+
+  const tapTrackKey = computeTapTrackKey(input?.trackKey || '', artistName, trackTitle, fallbackTitle);
+  if (tapTrackKey && tapTrackKey !== lastTapTrackKey) {
+    resetTapper();
+  }
+  if (tapTrackKey) {
+    lastTapTrackKey = tapTrackKey;
   }
 
   if (artistEl) artistEl.textContent = artistName || '---';

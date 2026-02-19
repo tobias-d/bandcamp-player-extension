@@ -11,6 +11,19 @@
 let essentia: any = null;
 let essentiaModule: any = null;
 const preprocessedSignalCache = new WeakMap<AudioBuffer, Float32Array>();
+const ANALYSIS_SKIP_SECONDS = 8;
+const ANALYSIS_MAX_SECONDS = 90;
+const ESSENTIA_TARGET_SAMPLE_RATE = 16000;
+const ANALYSIS_SEARCH_MAX_SECONDS = 240;
+const ANALYSIS_SCAN_PREVIEW_RATE = 200;
+const ANALYSIS_SCAN_CHUNK_SECONDS = 12;
+const ANALYSIS_SCAN_HOP_SECONDS = 4;
+const ANALYSIS_PREROLL_SECONDS = 4;
+const ANALYSIS_EARLY_ACCEPT_RATIO = 0.8;
+const ANALYSIS_MIN_MEAN_ENVELOPE = 1e-3;
+const ANALYSIS_MIN_MEAN_FLUX = 2e-4;
+const ANALYSIS_MIN_ADAPTIVE_SCORE = 3e-4;
+const ANALYSIS_MIN_ADAPTIVE_WINDOW_SECONDS = 20;
 
 async function resolveEssentiaWasmModule(): Promise<any> {
   // Avoid aggregated `essentia.js` exports in Firefox because some getters
@@ -60,52 +73,276 @@ export async function initEssentia(): Promise<void> {
   }
 }
 
-/**
- * Convert stereo AudioBuffer to mono Float32Array
- */
-function convertToMono(audioBuffer: AudioBuffer): Float32Array {
-  const numberOfChannels = audioBuffer.numberOfChannels;
-  const length = audioBuffer.length;
-  const mono = new Float32Array(length);
+function getDefaultAnalysisWindow(audioBuffer: AudioBuffer): { startSample: number; endSample: number } {
+  const sr = audioBuffer.sampleRate;
+  const startSample = Math.min(audioBuffer.length, Math.floor(sr * ANALYSIS_SKIP_SECONDS));
+  const maxWindowSamples = Math.max(0, Math.floor(sr * ANALYSIS_MAX_SECONDS));
+  const endSample = Math.min(audioBuffer.length, startSample + maxWindowSamples);
+  return { startSample, endSample };
+}
 
-  if (numberOfChannels === 1) {
-    return audioBuffer.getChannelData(0);
-  }
+function buildPreviewEnvelope(
+  channel: Float32Array,
+  startSample: number,
+  endSample: number,
+  bucketSize: number
+): Float32Array {
+  const safeBucketSize = Math.max(1, bucketSize);
+  const bucketCount = Math.max(0, Math.floor((endSample - startSample) / safeBucketSize));
+  const envelope = new Float32Array(bucketCount);
 
-  // Mix down to mono by averaging channels
-  for (let i = 0; i < length; i++) {
-    let sum = 0;
-    for (let ch = 0; ch < numberOfChannels; ch++) {
-      sum += audioBuffer.getChannelData(ch)[i];
+  let src = startSample;
+  for (let i = 0; i < bucketCount; i++) {
+    const bucketEnd = Math.min(endSample, src + safeBucketSize);
+    let peak = 0;
+    for (let j = src; j < bucketEnd; j++) {
+      const v = Math.abs(channel[j]);
+      if (v > peak) peak = v;
     }
-    mono[i] = sum / numberOfChannels;
+    envelope[i] = peak;
+    src = bucketEnd;
   }
 
-  return mono;
+  return envelope;
+}
+
+function buildPositiveFlux(envelope: Float32Array): Float32Array {
+  const flux = new Float32Array(envelope.length);
+  if (!envelope.length) return flux;
+
+  let prev = envelope[0];
+  for (let i = 1; i < envelope.length; i++) {
+    const current = envelope[i];
+    const delta = current - prev;
+    flux[i] = delta > 0 ? delta : 0;
+    prev = current;
+  }
+  return flux;
+}
+
+function buildPrefixSum(values: Float32Array): Float64Array {
+  const prefix = new Float64Array(values.length + 1);
+  for (let i = 0; i < values.length; i++) {
+    prefix[i + 1] = prefix[i] + values[i];
+  }
+  return prefix;
+}
+
+function sumRange(prefix: Float64Array, start: number, end: number): number {
+  return prefix[end] - prefix[start];
+}
+
+function estimateRhythmicPeriodicity(
+  flux: Float32Array,
+  start: number,
+  end: number,
+  minLag: number,
+  maxLag: number
+): number {
+  if ((end - start) <= (maxLag + 2)) return 0;
+
+  let energy = 0;
+  for (let i = start; i < end; i++) {
+    const v = flux[i];
+    energy += v * v;
+  }
+  if (energy <= 1e-12) return 0;
+
+  let best = 0;
+  for (let lag = minLag; lag <= maxLag; lag += 2) {
+    let corr = 0;
+    for (let i = start + lag; i < end; i++) {
+      corr += flux[i] * flux[i - lag];
+    }
+    const normalized = corr / energy;
+    if (normalized > best) best = normalized;
+  }
+
+  return best;
+}
+
+function findAdaptiveAnalysisStartSample(audioBuffer: AudioBuffer): number | null {
+  const sr = audioBuffer.sampleRate;
+  if (!Number.isFinite(sr) || sr <= 0 || audioBuffer.length <= 0 || audioBuffer.numberOfChannels <= 0) {
+    return null;
+  }
+
+  const searchEndSample = Math.min(audioBuffer.length, Math.floor(sr * ANALYSIS_SEARCH_MAX_SECONDS));
+  if (searchEndSample <= 0) return null;
+
+  const bucketSize = Math.max(1, Math.floor(sr / ANALYSIS_SCAN_PREVIEW_RATE));
+  const previewRate = sr / bucketSize;
+
+  const channel0 = audioBuffer.getChannelData(0);
+  const envelope = buildPreviewEnvelope(channel0, 0, searchEndSample, bucketSize);
+  if (envelope.length < 8) return null;
+
+  const flux = buildPositiveFlux(envelope);
+  const envelopePrefix = buildPrefixSum(envelope);
+  const fluxPrefix = buildPrefixSum(flux);
+
+  const chunkSize = Math.max(1, Math.floor(ANALYSIS_SCAN_CHUNK_SECONDS * previewRate));
+  const hopSize = Math.max(1, Math.floor(ANALYSIS_SCAN_HOP_SECONDS * previewRate));
+  if (chunkSize >= envelope.length) return null;
+
+  const minLag = Math.max(1, Math.floor((60 * previewRate) / 170));
+  const maxLag = Math.min(
+    Math.max(minLag + 1, Math.floor((60 * previewRate) / 70)),
+    Math.max(minLag + 1, chunkSize - 2)
+  );
+  if (maxLag <= minLag) return null;
+
+  type Candidate = {
+    start: number;
+    meanEnvelope: number;
+    meanFlux: number;
+    periodicity: number;
+    score: number;
+  };
+
+  const candidates: Candidate[] = [];
+  let best: Candidate | null = null;
+
+  for (let start = 0; (start + chunkSize) <= envelope.length; start += hopSize) {
+    const end = start + chunkSize;
+    const meanEnvelope = sumRange(envelopePrefix, start, end) / chunkSize;
+    const meanFlux = sumRange(fluxPrefix, start, end) / chunkSize;
+    if (meanEnvelope < ANALYSIS_MIN_MEAN_ENVELOPE && meanFlux < ANALYSIS_MIN_MEAN_FLUX) {
+      continue;
+    }
+
+    const periodicity = estimateRhythmicPeriodicity(flux, start, end, minLag, maxLag);
+    const score = meanFlux * (0.5 + periodicity);
+
+    const candidate: Candidate = { start, meanEnvelope, meanFlux, periodicity, score };
+    candidates.push(candidate);
+    if (!best || score > best.score) {
+      best = candidate;
+    }
+  }
+
+  if (!best || !Number.isFinite(best.score) || best.score < ANALYSIS_MIN_ADAPTIVE_SCORE) {
+    return null;
+  }
+
+  const scoreGate = best.score * ANALYSIS_EARLY_ACCEPT_RATIO;
+  const fluxGate = Math.max(ANALYSIS_MIN_MEAN_FLUX, best.meanFlux * 0.55);
+  const periodicityGate = Math.max(0.05, best.periodicity * 0.5);
+
+  let selected = best;
+  for (const candidate of candidates) {
+    if (candidate.score < scoreGate) continue;
+    if (candidate.meanFlux < fluxGate) continue;
+    if (candidate.periodicity < periodicityGate) continue;
+    selected = candidate;
+    break;
+  }
+
+  const startSeconds = Math.max(0, (selected.start / previewRate) - ANALYSIS_PREROLL_SECONDS);
+  return Math.floor(startSeconds * sr);
+}
+
+function getAnalysisWindow(audioBuffer: AudioBuffer): { startSample: number; endSample: number } {
+  const fallback = getDefaultAnalysisWindow(audioBuffer);
+  const adaptiveStart = findAdaptiveAnalysisStartSample(audioBuffer);
+  if (adaptiveStart === null) return fallback;
+
+  const sr = audioBuffer.sampleRate;
+  const maxWindowSamples = Math.max(0, Math.floor(sr * ANALYSIS_MAX_SECONDS));
+  const safeStart = Math.min(Math.max(0, adaptiveStart), Math.max(0, audioBuffer.length - 1));
+  const endSample = Math.min(audioBuffer.length, safeStart + maxWindowSamples);
+  const adaptiveLength = endSample - safeStart;
+  const minAdaptiveLength = Math.floor(sr * ANALYSIS_MIN_ADAPTIVE_WINDOW_SECONDS);
+  if (adaptiveLength < Math.min(minAdaptiveLength, fallback.endSample - fallback.startSample)) {
+    return fallback;
+  }
+
+  return { startSample: safeStart, endSample };
 }
 
 /**
- * Downsample audio to target sample rate
+ * Mix to mono and resample in one pass over the selected window.
+ * This avoids allocating a full-length mono buffer for long tracks.
  */
-function downsample(
-  audio: Float32Array,
-  originalSampleRate: number,
+function mixAndResampleWindow(
+  audioBuffer: AudioBuffer,
+  startSample: number,
+  endSample: number,
   targetSampleRate: number
 ): Float32Array {
-  if (originalSampleRate === targetSampleRate) {
-    return audio;
+  const numberOfChannels = audioBuffer.numberOfChannels;
+  const windowLength = Math.max(0, endSample - startSample);
+  if (windowLength === 0 || numberOfChannels <= 0) return new Float32Array(0);
+
+  const sampleRate = audioBuffer.sampleRate;
+  const ratio = sampleRate / targetSampleRate;
+  const outputLength = sampleRate === targetSampleRate
+    ? windowLength
+    : Math.floor(windowLength / ratio);
+  if (outputLength <= 0) return new Float32Array(0);
+
+  const ch0 = audioBuffer.getChannelData(0);
+
+  if (numberOfChannels === 1) {
+    if (sampleRate === targetSampleRate) {
+      return ch0.subarray(startSample, endSample);
+    }
+
+    const out = new Float32Array(outputLength);
+    for (let i = 0; i < outputLength; i++) {
+      const srcIndex = startSample + Math.floor(i * ratio);
+      out[i] = ch0[srcIndex];
+    }
+    return out;
   }
 
-  const ratio = originalSampleRate / targetSampleRate;
-  const newLength = Math.floor(audio.length / ratio);
-  const downsampled = new Float32Array(newLength);
+  const out = new Float32Array(outputLength);
+  const invChannels = 1 / numberOfChannels;
 
-  for (let i = 0; i < newLength; i++) {
-    const srcIndex = Math.floor(i * ratio);
-    downsampled[i] = audio[srcIndex];
+  if (numberOfChannels === 2) {
+    const ch1 = audioBuffer.getChannelData(1);
+
+    if (sampleRate === targetSampleRate) {
+      for (let i = 0; i < outputLength; i++) {
+        const srcIndex = startSample + i;
+        out[i] = (ch0[srcIndex] + ch1[srcIndex]) * 0.5;
+      }
+    } else {
+      for (let i = 0; i < outputLength; i++) {
+        const srcIndex = startSample + Math.floor(i * ratio);
+        out[i] = (ch0[srcIndex] + ch1[srcIndex]) * 0.5;
+      }
+    }
+
+    return out;
   }
 
-  return downsampled;
+  const channels: Float32Array[] = [ch0];
+  for (let ch = 1; ch < numberOfChannels; ch++) {
+    channels.push(audioBuffer.getChannelData(ch));
+  }
+
+  if (sampleRate === targetSampleRate) {
+    for (let i = 0; i < outputLength; i++) {
+      const srcIndex = startSample + i;
+      let sum = 0;
+      for (let ch = 0; ch < numberOfChannels; ch++) {
+        sum += channels[ch][srcIndex];
+      }
+      out[i] = sum * invChannels;
+    }
+  } else {
+    for (let i = 0; i < outputLength; i++) {
+      const srcIndex = startSample + Math.floor(i * ratio);
+      let sum = 0;
+      for (let ch = 0; ch < numberOfChannels; ch++) {
+        sum += channels[ch][srcIndex];
+      }
+      out[i] = sum * invChannels;
+    }
+  }
+
+  return out;
 }
 
 /**
@@ -141,8 +378,13 @@ function getPreprocessedSignal(audioBuffer: AudioBuffer): Float32Array {
   const cached = preprocessedSignalCache.get(audioBuffer);
   if (cached) return cached;
 
-  const mono = convertToMono(audioBuffer);
-  const downsampled = downsample(mono, audioBuffer.sampleRate, 16000);
+  const { startSample, endSample } = getAnalysisWindow(audioBuffer);
+  const downsampled = mixAndResampleWindow(
+    audioBuffer,
+    startSample,
+    endSample,
+    ESSENTIA_TARGET_SAMPLE_RATE
+  );
   preprocessedSignalCache.set(audioBuffer, downsampled);
   return downsampled;
 }

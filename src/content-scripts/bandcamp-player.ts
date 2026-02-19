@@ -49,6 +49,7 @@ interface PanelState {
   title: string;
   artistName: string;
   trackTitle: string;
+  trackKey: string;
   tempoScale: number;
   beatMode: BeatMode;
   isPlaying: boolean;
@@ -868,6 +869,7 @@ function buildPanelState(): PanelState {
     title,
     artistName: meta.artistName,
     trackTitle: meta.trackTitle,
+    trackKey: getTrackStableCacheKey(src) || src || `${norm(meta.artistName)}|${norm(meta.trackTitle)}|${title}`,
     tempoScale,
     beatMode,
     isPlaying,
