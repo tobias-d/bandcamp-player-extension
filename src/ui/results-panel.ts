@@ -1319,6 +1319,7 @@ width:7px;
 height:7px;
 flex:0 0 auto;
 margin-left:8px;
+transform:translateY(-1px);
 }
 
 #${PANEL_ID} .confLabel::before{

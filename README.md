@@ -27,11 +27,9 @@ This extension uses `essentia.js` (the WebAssembly/JavaScript port of Essentia) 
 
 ![Screenshot](image.png)
 
-## Latest Change (v2.4)
+## Latest Change (v2.4.1)
 
-- Optimized tempo preprocessing to analyze a focused audio window instead of full-track buffers for faster analysis
-- Added adaptive analysis window selection so tracks with long beatless intros are less likely to miss BPM detection
-- Reset Manual BPM automatically whenever playback switches to a new track
+- smaller UI adjustments.
 
 ## Previous Change (v2.3)
 
