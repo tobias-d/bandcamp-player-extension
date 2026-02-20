@@ -172,10 +172,136 @@ function getAudioTrackId(): string | null {
   const audio = document.querySelector('audio');
   if (!audio?.currentSrc) return null;
 
-  // Extract track_id from URL like:
-  // https://t4.bcbits.com/stream/.../mp3-v0/997163773?p=1&ts=...
-  const match = audio.currentSrc.match(/\/(\d+)(?:\?|$)/);
-  return match?.[1] || null;
+  const value = String(audio.currentSrc || '');
+  const pathMatch = value.match(/\/(\d+)(?:\?|$)/);
+  if (pathMatch?.[1]) return pathMatch[1];
+
+  const queryMatch = value.match(/[?&](?:track_id|id)=(\d+)(?:&|$)/i);
+  return queryMatch?.[1] || null;
+}
+
+function normalizeCmpText(s: string | null | undefined): string {
+  return norm(s)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function getPlayingRecommendationRoot(): Element | null {
+  const selectors = [
+    '#recommendations_container .album-art-container.playing',
+    '.recs-section .album-art-container.playing',
+    '.recommended-album .album-art-container.playing',
+    '.recommended_items .playing',
+    '.recommended-items .playing',
+    '.recommended_grid .playing',
+    '.recommendations .playing',
+    '.you-may-also-like .playing',
+    '.track_play_waypoint.playing',
+    '.waypoint.track_play_waypoint.playing',
+    '.waypoint.playing',
+    '[class*="recommend"] .playing',
+    '[class*="related"] .playing',
+    '[class*="recommend"][class*="playing"]',
+    '[class*="related"][class*="playing"]',
+  ];
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    if (el) return el;
+  }
+  return null;
+}
+
+function getRecommendationItemRoot(root: Element): Element {
+  const li = root.closest('li.recommended-album, li[class*="recommended"]');
+  if (li) return li;
+  const section = root.closest('.recs-section, #recommendations_container, .recommendations-container');
+  if (section) return section;
+  return root;
+}
+
+function parseRecommendationText(text: string): { title: string; artist: string } {
+  const raw = norm(text);
+  if (!raw) return { title: '', artist: '' };
+
+  const cut = raw.replace(/\s+supported by[\s\S]*$/i, '').replace(/\s+go to album[\s\S]*$/i, '').trim();
+  let m = cut.match(/^(.+?)\s+by\s+(.+)$/i);
+  if (!m) {
+    // Handle Bandcamp rec DOM where title and "by" are concatenated: "Black Bloodby Ketch"
+    m = cut.match(/^(.+?)by\s+(.+)$/i);
+  }
+  if (!m) return { title: '', artist: '' };
+  return { title: norm(m[1]), artist: stripLeadingBy(m[2]) };
+}
+
+function isGenericRecommendationTitle(value: string): boolean {
+  const v = normalizeCmpText(value);
+  if (!v) return true;
+  return v === 'go to album' || v === 'go to track' || v === 'buy now' || v === 'wishlist';
+}
+
+function isExternalRecommendationPlayback(): boolean {
+  // When a recommendation card is explicitly marked as playing, trust that
+  // context for metadata extraction. This avoids stale local tralbum metadata
+  // overriding the actually playing recommendation track.
+  return Boolean(getPlayingRecommendationRoot());
+}
+
+function getRecommendationNowPlayingMeta(): { title: string; artist: string } | null {
+  const root = getPlayingRecommendationRoot();
+  if (!root) return null;
+  const itemRoot = getRecommendationItemRoot(root);
+
+  const titleSelectors = [
+    '.collection-item-title',
+    '.recommended-item-title',
+    '.item-title',
+    '.title',
+    '.waypoint-item-title',
+    '.track-title',
+    'a.item-link',
+    'a[href*="/album/"]',
+    'a[href*="/track/"]',
+  ];
+  const artistSelectors = [
+    '.collection-item-artist',
+    '.recommended-item-artist',
+    '.item-artist',
+    '.artist',
+    '.by',
+    '.waypoint-artist-title',
+  ];
+
+  let title = '';
+  for (const selector of titleSelectors) {
+    const el = itemRoot.querySelector(selector);
+    const text = norm(el?.textContent);
+    if (text && !isGenericRecommendationTitle(text)) {
+      title = text;
+      break;
+    }
+  }
+
+  let artist = '';
+  for (const selector of artistSelectors) {
+    const el = itemRoot.querySelector(selector);
+    const text = stripLeadingBy(el?.textContent);
+    if (text) {
+      artist = text;
+      break;
+    }
+  }
+
+  if (!title || !artist) {
+    const parsed = parseRecommendationText(itemRoot.textContent || '');
+    if ((!title || isGenericRecommendationTitle(title)) && parsed.title) title = parsed.title;
+    if (!artist && parsed.artist) artist = parsed.artist;
+  }
+
+  if (!title && !artist) return null;
+  return { title, artist };
 }
 
 
@@ -237,6 +363,19 @@ function extractDataAttribute(selector: string, attr: string): any | null {
  * @returns {ExtractionResult|null} Title extraction result
  */
 function extractTrackTitle(): ExtractionResult | null {
+  // METHOD 0: External recommendation playback on release pages.
+  // When audio track_id is not part of local data-tralbum, prefer active recommendation card metadata.
+  if (isExternalRecommendationPlayback()) {
+    const meta = getRecommendationNowPlayingMeta();
+    if (meta?.title) {
+      return {
+        title: meta.title,
+        source: 'recommendation:playing',
+        confidence: 'high',
+      };
+    }
+  }
+
   // METHOD 0A: Feed page waypoint (HIGHEST PRIORITY for feed pages)
   // The waypoint shows the currently playing track, not just any track in the feed
   const waypointTitle = document.querySelector('.waypoint-item-title, #track_play_waypoint .waypoint-item-title');
@@ -416,6 +555,18 @@ function extractTrackTitle(): ExtractionResult | null {
  * @returns {ExtractionResult|null} Artist extraction result
  */
 function extractArtistName(): ExtractionResult | null {
+  // METHOD 0: External recommendation playback on release pages.
+  if (isExternalRecommendationPlayback()) {
+    const meta = getRecommendationNowPlayingMeta();
+    if (meta?.artist) {
+      return {
+        artist: meta.artist,
+        source: 'recommendation:playing',
+        confidence: 'high',
+      };
+    }
+  }
+
   // METHOD 0A: Feed page waypoint (HIGHEST PRIORITY for feed pages)
   const waypointArtist = document.querySelector('.waypoint-artist-title, #track_play_waypoint .waypoint-artist-title');
   if (waypointArtist) {

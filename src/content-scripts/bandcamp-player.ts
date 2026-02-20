@@ -117,6 +117,7 @@ let beatMode: BeatMode = 'auto';
 let tempoScale = 1.0;
 let activeAudio: HTMLAudioElement | null = null;
 let currentSrc = '';
+let hasPlaybackStarted = false;
 let lastAnalysis: AnalysisResult | null = null;
 let analysisInFlight = false;
 let analysisRunId = 0;
@@ -129,6 +130,57 @@ let pendingSeekFraction: number | null = null;
 let renderScheduled = false;
 let rafId = 0;
 const audioBound = new WeakSet<HTMLAudioElement>();
+const META_REFRESH_INTERVAL_MS = 350;
+const PLAYLIST_REFRESH_INTERVAL_MS = 350;
+let cachedMeta = {
+  artistName: '',
+  trackTitle: '',
+  combined: '---',
+};
+let lastMetaSourceKey = '';
+let lastMetaAt = 0;
+let lastPlaylistRefreshSrc = '';
+let lastPlaylistRefreshLocation = '';
+let lastPlaylistRefreshAt = 0;
+
+function getCachedMeta(sourceKey: string): { artistName: string; trackTitle: string; combined: string } {
+  const now = Date.now();
+  if (sourceKey !== lastMetaSourceKey || now - lastMetaAt >= META_REFRESH_INTERVAL_MS) {
+    const next = getTrackMeta();
+    cachedMeta = {
+      artistName: norm(next?.artistName),
+      trackTitle: norm(next?.trackTitle),
+      combined: norm(next?.combined) || '---',
+    };
+    lastMetaSourceKey = sourceKey;
+    lastMetaAt = now;
+  }
+  return cachedMeta;
+}
+
+function pauseAudioSafe(el: HTMLAudioElement | null): void {
+  if (!el) return;
+  try {
+    if (!el.paused) {
+      el.pause();
+    }
+  } catch (_) {
+    // Ignore pause errors.
+  }
+}
+
+function getAllAudios(): HTMLAudioElement[] {
+  return Array.from(document.querySelectorAll('audio'));
+}
+
+function pauseOtherAudios(active: HTMLAudioElement | null): void {
+  if (!active) return;
+  const audios = getAllAudios();
+  for (const el of audios) {
+    if (el === active) continue;
+    pauseAudioSafe(el);
+  }
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -496,7 +548,12 @@ function bindAudio(el: HTMLAudioElement): void {
   audioBound.add(el);
 
   const onAny = () => scheduleRender();
-  el.addEventListener('play', onAny);
+  el.addEventListener('play', () => {
+    // Always follow the most recent playback source initiated on the page.
+    activeAudio = el;
+    pauseOtherAudios(el);
+    scheduleRender();
+  });
   el.addEventListener('pause', onAny);
   el.addEventListener('ended', onAny);
   el.addEventListener('timeupdate', onAny);
@@ -857,34 +914,57 @@ async function analyzeCurrentTrack(): Promise<void> {
 
 function buildPanelState(): PanelState {
   const el = ensureActiveAudio();
-  const meta = getTrackMeta();
-
-  const title = meta.combined || norm(document.title) || '---';
   const isPlaying = isPlayingNow(el);
+  if (isPlaying) {
+    hasPlaybackStarted = true;
+  }
+  const shouldExtractData = hasPlaybackStarted;
+  const src = shouldExtractData ? getAudioSrc(el) : '';
+  const meta = shouldExtractData ? getCachedMeta(src || `loc:${window.location.href}`) : { artistName: '', trackTitle: '', combined: '---' };
+
   const playheadFraction = getPlayheadFraction(el);
 
   if (isPlaying) startRafPlayheadLoop();
   else stopRafPlayheadLoop();
 
-  const src = getAudioSrc(el);
-  if (src && src !== currentSrc) {
+  if (shouldExtractData && src && src !== currentSrc) {
     onSourceChanged(src);
     void analyzeCurrentTrack();
-  } else if (isPlaying) {
+  } else if (shouldExtractData && isPlaying) {
     maybeKickoffPreload();
   } else {
     stopPreloadWorker();
   }
 
-  const waveformStatus = analysisInFlight ? 'Analyzing…' : lastAnalysis?.waveformStatus || '';
-  playlistController.refresh(src, lastAnalysis?.bpm, meta.trackTitle, meta.artistName);
+  const waveformStatus = shouldExtractData ? (analysisInFlight ? 'Analyzing…' : lastAnalysis?.waveformStatus || '') : '';
+  const now = Date.now();
+  const locationHref = window.location.href;
+  const playlistStateBeforeRefresh = playlistController.getState();
+  const shouldRefreshPlaylist =
+    shouldExtractData &&
+    (src !== lastPlaylistRefreshSrc ||
+      locationHref !== lastPlaylistRefreshLocation ||
+      now - lastPlaylistRefreshAt >= PLAYLIST_REFRESH_INTERVAL_MS ||
+      playlistStateBeforeRefresh.loading);
+  if (shouldRefreshPlaylist) {
+    playlistController.refresh(src, lastAnalysis?.bpm, meta.trackTitle, meta.artistName);
+    lastPlaylistRefreshSrc = src;
+    lastPlaylistRefreshLocation = locationHref;
+    lastPlaylistRefreshAt = now;
+  }
   const playlistState = playlistController.getState();
+  const playlistMeta = shouldExtractData ? playlistController.getDisplayMetadata() : null;
+  const displayArtist = norm(playlistMeta?.artistName || meta.artistName);
+  const displayTrack = norm(playlistMeta?.trackTitle || meta.trackTitle);
+  const displayTitle =
+    playlistMeta?.combined ||
+    (displayArtist && displayTrack ? `${displayArtist} — ${displayTrack}` : displayTrack || displayArtist || meta.combined || '---');
 
   return {
-    title,
-    artistName: meta.artistName,
-    trackTitle: meta.trackTitle,
-    trackKey: getTrackStableCacheKey(src) || src || `${norm(meta.artistName)}|${norm(meta.trackTitle)}|${title}`,
+    title: displayTitle,
+    artistName: displayArtist,
+    trackTitle: displayTrack,
+    trackKey: getTrackStableCacheKey(src) || src || `${displayArtist}|${displayTrack}|${displayTitle}`,
     tempoScale,
     beatMode,
     isPlaying,

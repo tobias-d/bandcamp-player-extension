@@ -13,6 +13,7 @@ interface BandcampTrackInfo {
   track_id?: number;
   id?: number;
   title?: string;
+  artist?: string;
   duration?: number;
   is_playing?: boolean;
   file?: Record<string, string>;
@@ -58,9 +59,16 @@ interface PlaylistControllerOptions {
   getBeatMode?: (() => BeatMode) | null;
 }
 
+interface CachedLinkedPlaylist {
+  trackinfo: BandcampTrackInfo[];
+  artist: string;
+  ts: number;
+}
+
 interface InternalPlaylistTrack {
   index: number;
   title: string;
+  artist: string;
   durationSec: number;
   trackId: string;
   streamUrl: string;
@@ -70,6 +78,10 @@ interface InternalPlaylistTrack {
 }
 
 const EXTERNAL_PLAYLIST_AUDIO_ID = '__bc_playlist_external_audio__';
+const LINKED_PLAYLIST_CACHE_TTL_MS = 15 * 60 * 1000;
+const LINKED_PLAYLIST_MIN_FETCH_INTERVAL_MS = 2500;
+const LINKED_PLAYLIST_MAX_FETCHES_PER_MIN = 8;
+const LINKED_PLAYLIST_BACKOFF_MS = 10 * 60 * 1000;
 
 function norm(input: string | null | undefined): string {
   return String(input || '').replace(/\s+/g, ' ').trim();
@@ -96,9 +108,24 @@ function normalizePath(raw: string): string {
   }
 }
 
+function canonicalReleaseUrl(raw: string): string {
+  const normalized = normalizeUrl(raw);
+  if (!normalized) return '';
+  try {
+    const u = new URL(normalized);
+    return `${u.origin}${u.pathname}`.replace(/\/+$/, '').toLowerCase();
+  } catch {
+    return normalized;
+  }
+}
+
 function extractTrackIdFromSrc(src: string): string {
-  const match = String(src || '').match(/\/(\d+)(?:\?|$)/);
-  return match?.[1] || '';
+  const value = String(src || '');
+  const pathMatch = value.match(/\/(\d+)(?:\?|$)/);
+  if (pathMatch?.[1]) return pathMatch[1];
+
+  const queryMatch = value.match(/[?&](?:track_id|id)=(\d+)(?:&|$)/i);
+  return queryMatch?.[1] || '';
 }
 
 function pickTrackFileUrl(file?: Record<string, string>): string {
@@ -456,6 +483,26 @@ function anchorMatchesNowTitle(anchor: HTMLAnchorElement, nowTitleNorm: string, 
 }
 
 function getCollectionPlayerLinkedUrl(nowPlayingTitle = '', nowPlayingArtist = ''): string {
+  const directCollectionNowPlayingSelectors = [
+    '.collection-item-container.playing a.item-link[href]',
+    '.collection-item-container.track_play_hilite.playing a.item-link[href]',
+    '.collection-item-container.track_play_hilite a.item-link[href]',
+    '.collection-item-container.playing a[href*="/album/"]',
+    '.collection-item-container.track_play_hilite.playing a[href*="/album/"]',
+    '.collection-item-container.track_play_hilite a[href*="/album/"]',
+    '.collection-item-container.playing a[href*="/track/"]',
+    '.collection-item-container.track_play_hilite.playing a[href*="/track/"]',
+    '.collection-item-container.track_play_hilite a[href*="/track/"]',
+  ];
+  for (const selector of directCollectionNowPlayingSelectors) {
+    const anchor = document.querySelector(selector) as HTMLAnchorElement | null;
+    if (!anchor) continue;
+    const href = anchor.getAttribute('href') || '';
+    if (!isBandcampTrackOrAlbumUrl(href)) continue;
+    const normalized = normalizeUrl(href);
+    if (normalized) return normalized;
+  }
+
   const nowTitleNorm = normalizeCmpText(nowPlayingTitle);
   const artistHints = [slugifyBandcampName(nowPlayingArtist)].filter(Boolean);
   const directSelectors = [
@@ -524,6 +571,33 @@ function getCollectionPlayerLinkedUrl(nowPlayingTitle = '', nowPlayingArtist = '
     }
   }
 
+  const activeRoots = Array.from(
+    document.querySelectorAll(
+      [
+        '.track_play_waypoint.playing',
+        '.waypoint.track_play_waypoint.playing',
+        '.waypoint.playing',
+        '.track_play_hilite.playing',
+        '.story.playing',
+        '.story-innards.playing',
+        '[class*="recommend"][class*="playing"]',
+        '[class*="recommend"] .playing',
+        '[class*="related"] .playing',
+      ].join(', ')
+    )
+  ) as HTMLElement[];
+
+  for (const root of activeRoots) {
+    const anchors = Array.from(root.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+    for (const anchor of anchors) {
+      const href = anchor.getAttribute('href') || '';
+      if (!isBandcampTrackOrAlbumUrl(href)) continue;
+      if (!anchorMatchesNowTitle(anchor, nowTitleNorm, artistHints)) continue;
+      const normalized = normalizeUrl(href);
+      if (normalized) return normalized;
+    }
+  }
+
   return getBestGlobalBandcampLink(nowPlayingTitle, nowPlayingArtist);
 }
 
@@ -532,6 +606,7 @@ function toInternalTracks(trackinfo: BandcampTrackInfo[]): InternalPlaylistTrack
   for (let i = 0; i < trackinfo.length; i += 1) {
     const track = trackinfo[i] || {};
     const trackId = norm(String(track?.track_id ?? track?.id ?? ''));
+    const artist = norm(track?.artist || '');
     const streamUrl = pickTrackFileUrl(track?.file);
     const pageUrl = getTrackPageUrl(track);
     const durationSec = Number(track?.duration);
@@ -540,6 +615,7 @@ function toInternalTracks(trackinfo: BandcampTrackInfo[]): InternalPlaylistTrack
     out.push({
       index: i,
       title,
+      artist,
       durationSec: Number.isFinite(durationSec) && durationSec > 0 ? durationSec : NaN,
       trackId,
       streamUrl,
@@ -550,6 +626,141 @@ function toInternalTracks(trackinfo: BandcampTrackInfo[]): InternalPlaylistTrack
   }
 
   return out;
+}
+
+function trackinfoContainsCurrentSource(trackinfo: BandcampTrackInfo[], currentAudioSrc: string): boolean {
+  if (!Array.isArray(trackinfo) || !trackinfo.length) return false;
+  const currentTrackId = extractTrackIdFromSrc(currentAudioSrc);
+  const normalizedCurrent = normalizeUrl(currentAudioSrc);
+
+  if (currentTrackId) {
+    const byId = trackinfo.some((track) => {
+      const trackId = norm(String(track?.track_id ?? track?.id ?? ''));
+      return Boolean(trackId) && trackId === currentTrackId;
+    });
+    if (byId) return true;
+  }
+
+  if (normalizedCurrent) {
+    const byUrl = trackinfo.some((track) => {
+      const streamUrl = pickTrackFileUrl(track?.file);
+      return Boolean(streamUrl) && streamUrl === normalizedCurrent;
+    });
+    if (byUrl) return true;
+  }
+
+  return false;
+}
+
+function hasActiveRecommendationPlaybackContext(): boolean {
+  const selectors = [
+    '#recommendations_container .album-art-container.playing',
+    '.recs-section .album-art-container.playing',
+    '.recommended-album .album-art-container.playing',
+    '.story.playing',
+    '.story-innards.playing',
+    '.track_play_hilite.playing',
+    '.track_play_waypoint.playing',
+    '.waypoint.track_play_waypoint.playing',
+    '.waypoint.playing',
+    '[class*="recommend"][class*="playing"]',
+    '[class*="related"][class*="playing"]',
+  ];
+  return selectors.some((selector) => Boolean(document.querySelector(selector)));
+}
+
+function hasRecommendationSectionContext(): boolean {
+  const selectors = ['#recommendations_container', '.recs-section', '.recommendations-container', '.bc-recs'];
+  return selectors.some((selector) => Boolean(document.querySelector(selector)));
+}
+
+function isElementInIfYouLikeSection(element: Element | null): boolean {
+  let node: Element | null = element;
+  let depth = 0;
+  while (node && depth < 8) {
+    const text = normalizeCmpText(node.textContent || '');
+    if (text.includes('you may also like') || text.includes('if you like')) {
+      return true;
+    }
+    node = node.parentElement;
+    depth += 1;
+  }
+  return false;
+}
+
+function getPlayingRecommendationListItem(): HTMLElement | null {
+  const active = document.querySelector(
+    '#recommendations_container .album-art-container.playing, .recs-section .album-art-container.playing, .recommended-album .album-art-container.playing'
+  ) as HTMLElement | null;
+  if (!active) return null;
+  return active.closest('li.recommended-album, li[class*="recommended"]') as HTMLElement | null;
+}
+
+function getBandcampLinkFromRecommendationItem(item: Element | null): string {
+  if (!item) return '';
+  const selectors = ['a[href*="/album/"]', 'a[href*="/track/"]', 'a[href]'];
+  for (const selector of selectors) {
+    const anchors = Array.from(item.querySelectorAll(selector)) as HTMLAnchorElement[];
+    for (const anchor of anchors) {
+      const href = anchor.getAttribute('href') || '';
+      if (!isBandcampTrackOrAlbumUrl(href)) continue;
+      const normalized = normalizeUrl(href);
+      if (normalized) return normalized;
+    }
+  }
+  return '';
+}
+
+function getLinkedUrlFromIfYouLikeSection(nowPlayingTitle = '', nowPlayingArtist = ''): string {
+  const titleNorm = normalizeCmpText(nowPlayingTitle);
+  const artistNorm = normalizeCmpText(nowPlayingArtist);
+  const activeItem = getPlayingRecommendationListItem();
+  const activeUrl = getBandcampLinkFromRecommendationItem(activeItem);
+  if (activeUrl) return activeUrl;
+  if (!titleNorm && !artistNorm) return '';
+
+  const recommendedItems = Array.from(
+    document.querySelectorAll('#recommendations_container li.recommended-album, .recs-section li.recommended-album, li.recommended-album')
+  ) as HTMLElement[];
+  for (const item of recommendedItems) {
+    if (!isElementInIfYouLikeSection(item)) continue;
+    const itemText = normalizeCmpText(item.textContent || '');
+    if (!itemText) continue;
+    const titleMatches = titleNorm && (itemText.includes(titleNorm) || titleNorm.includes(itemText));
+    const artistMatches = artistNorm && (itemText.includes(artistNorm) || artistNorm.includes(itemText));
+    if (!titleMatches && !artistMatches) continue;
+    const url = getBandcampLinkFromRecommendationItem(item);
+    if (url) return url;
+  }
+
+  const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+  for (const anchor of anchors) {
+    const href = anchor.getAttribute('href') || '';
+    if (!isBandcampTrackOrAlbumUrl(href)) continue;
+    if (!isElementInIfYouLikeSection(anchor)) continue;
+
+    const textNorm = normalizeCmpText(anchor.textContent || '');
+    if (!textNorm) continue;
+
+    const titleMatches = titleNorm && (textNorm.includes(titleNorm) || titleNorm.includes(textNorm));
+    const artistMatches = artistNorm && (textNorm.includes(artistNorm) || artistNorm.includes(textNorm));
+    if (!titleMatches && !artistMatches) continue;
+
+    const normalized = normalizeUrl(href);
+    if (normalized) return normalized;
+  }
+
+  return '';
+}
+
+function shouldResolveLinkedPlaylist(localTrackinfo: BandcampTrackInfo[], currentAudioSrc: string): boolean {
+  if (localTrackinfo.length <= 1) return true;
+  const normalizedSrc = normalizeUrl(currentAudioSrc);
+  if (!normalizedSrc) return false;
+  if (trackinfoContainsCurrentSource(localTrackinfo, normalizedSrc)) return false;
+  if (hasActiveRecommendationPlaybackContext()) return true;
+  if (hasRecommendationSectionContext()) return true;
+  return false;
 }
 
 function selectPlaylistRows(): HTMLElement[] {
@@ -987,6 +1198,30 @@ function playViaExternalAudioSource(streamUrl: string): boolean {
   return true;
 }
 
+function syncBandcampUiPausedState(): void {
+  const playingIndicators = [
+    '.track_play_waypoint.playing',
+    '.waypoint.track_play_waypoint.playing',
+    '.track_row.playing',
+    '.trackrow.playing',
+    'tr.track_row_view.playing',
+    '.playbutton.playing',
+    '.playbutton.pause',
+    '.play_status.playing',
+  ];
+
+  for (const selector of playingIndicators) {
+    const el = document.querySelector(selector) as HTMLElement | null;
+    if (!el) continue;
+    const pauseTarget =
+      (el.closest('.story, .story-innards, .track_row, .trackrow, tr.track_row_view') as HTMLElement | null) || el;
+    if (clickTrackContainer(pauseTarget)) return;
+  }
+
+  // Last resort: global play button toggle if present.
+  clickGlobalPrevNext(0);
+}
+
 class PlaylistController {
   private readonly sendRuntimeMessage: <T = any>(message: any) => Promise<T>;
   private readonly onChange: (() => void) | null;
@@ -1006,10 +1241,16 @@ class PlaylistController {
   private currentTrackTitleHint = '';
   private currentArtistHint = '';
   private externalPlaylistMode = false;
+  private externalPlaylistArtistHint = '';
   private nativeTrackId = '';
   private lastLocationHref = '';
   private resolveRunId = 0;
   private resolveInFlight = false;
+  private lastRetryResolveAt = 0;
+  private linkedPlaylistCache = new Map<string, CachedLinkedPlaylist>();
+  private linkedFetchTimestamps: number[] = [];
+  private linkedFetchBackoffUntil = 0;
+  private lastLinkedFetchAt = 0;
   private bpmRunId = 0;
   private bpmInFlight = false;
 
@@ -1021,6 +1262,22 @@ class PlaylistController {
 
   getState(): PlaylistState {
     return this.viewState;
+  }
+
+  getDisplayMetadata(): { artistName: string; trackTitle: string; combined: string } | null {
+    if (!this.externalPlaylistMode || !this.tracks.length) return null;
+    const index = getCurrentTrackIndex(this.tracks, this.currentAudioSrc);
+    if (index < 0) return null;
+    const track = this.tracks[index];
+    if (!track) return null;
+
+    const trackTitle = norm(track.title);
+    const artistName = norm(track.artist || this.externalPlaylistArtistHint || this.currentArtistHint);
+    if (!trackTitle && !artistName) return null;
+
+    const combined =
+      artistName && trackTitle ? `${artistName} — ${trackTitle}` : trackTitle || artistName || this.currentTrackTitleHint || '---';
+    return { artistName, trackTitle, combined };
   }
 
   refresh(currentAudioSrc: string, currentTrackBpm?: number, currentTrackTitle?: string, currentArtist?: string): void {
@@ -1065,10 +1322,51 @@ class PlaylistController {
 
     if (!srcChanged && !locationChanged && this.tracks.length) {
       this.syncViewState(indexChanged);
+      if (currentIndex < 0 && this.currentAudioSrc) {
+        // Current source is outside the loaded playlist: clear stale rows immediately.
+        this.tracks = [];
+        this.viewState = {
+          ...this.viewState,
+          tracks: [],
+          currentIndex: -1,
+          loading: true,
+        };
+        this.notifyChange();
+
+        const now = Date.now();
+        if (now - this.lastRetryResolveAt >= 1500) {
+          this.lastRetryResolveAt = now;
+          if (this.resolveInFlight) {
+            // Invalidate the previous run so only the newest source can populate the list.
+            this.resolveRunId += 1;
+            this.resolveInFlight = false;
+          }
+          void this.resolvePlaylist();
+        }
+      }
       return;
     }
 
-    if (this.resolveInFlight) return;
+    if (this.resolveInFlight) {
+      // Only invalidate an in-flight run if the source context actually changed.
+      // Otherwise let the active resolve finish to avoid loading loops.
+      if (srcChanged || locationChanged) {
+        this.resolveRunId += 1;
+        this.resolveInFlight = false;
+      } else {
+        return;
+      }
+    }
+    // Clear stale rows immediately when switching to a source that requires
+    // playlist re-resolution, so old playlist content is not shown while loading.
+    this.tracks = [];
+    this.viewState = {
+      ...this.viewState,
+      tracks: [],
+      currentIndex: -1,
+      loading: true,
+    };
+    this.notifyChange();
     void this.resolvePlaylist();
   }
 
@@ -1093,15 +1391,13 @@ class PlaylistController {
     const total = this.tracks.length;
 
     if (this.externalPlaylistMode) {
-      const isNativeTarget = Boolean(this.nativeTrackId && track.trackId && track.trackId === this.nativeTrackId);
-      if (!isNativeTarget) {
-        const played = playViaExternalAudioSource(track.streamUrl);
-        if (played) {
-          return true;
-        }
-        return false;
+      // In external playlist mode we fully decouple from page controls.
+      // Always route track selection through the dedicated external audio.
+      const played = playViaExternalAudioSource(track.streamUrl);
+      if (played) {
+        return true;
       }
-      stopExternalPlaylistAudio();
+      return false;
     }
 
     if (jumpViaPrevNext(currentIndex, index, total)) {
@@ -1150,6 +1446,77 @@ class PlaylistController {
     }
   }
 
+  private canFetchLinkedPlaylist(now: number): boolean {
+    if (now < this.linkedFetchBackoffUntil) return false;
+    if (now - this.lastLinkedFetchAt < LINKED_PLAYLIST_MIN_FETCH_INTERVAL_MS) return false;
+    this.linkedFetchTimestamps = this.linkedFetchTimestamps.filter((ts) => now - ts <= 60_000);
+    if (this.linkedFetchTimestamps.length >= LINKED_PLAYLIST_MAX_FETCHES_PER_MIN) return false;
+    return true;
+  }
+
+  private async fetchLinkedPlaylistWithGuards(
+    linkedUrl: string
+  ): Promise<{ trackinfo: BandcampTrackInfo[]; artist: string } | null> {
+    const now = Date.now();
+    const cacheKey = canonicalReleaseUrl(linkedUrl) || normalizeUrl(linkedUrl);
+    if (!cacheKey) return null;
+
+    const cached = this.linkedPlaylistCache.get(cacheKey);
+    if (cached && now - cached.ts <= LINKED_PLAYLIST_CACHE_TTL_MS) {
+      return {
+        trackinfo: cached.trackinfo,
+        artist: cached.artist,
+      };
+    }
+
+    if (!this.canFetchLinkedPlaylist(now)) {
+      return null;
+    }
+
+    this.lastLinkedFetchAt = now;
+    this.linkedFetchTimestamps.push(now);
+
+    try {
+      const response = await this.sendRuntimeMessage<FetchTralbumResponse>({
+        type: 'FETCH_TRALBUM',
+        url: linkedUrl,
+      });
+
+      const fetchedTrackinfo = Array.isArray(response?.tralbum?.trackinfo)
+        ? response!.tralbum!.trackinfo!
+        : Array.isArray(response?.trackinfo)
+        ? response!.trackinfo!
+        : [];
+      const fetchedArtist = norm(response?.tralbum?.artist);
+
+      if (fetchedTrackinfo.length > 0) {
+        this.linkedPlaylistCache.set(cacheKey, {
+          trackinfo: fetchedTrackinfo,
+          artist: fetchedArtist,
+          ts: Date.now(),
+        });
+        return {
+          trackinfo: fetchedTrackinfo,
+          artist: fetchedArtist,
+        };
+      }
+
+      // Short negative cache to avoid hammering same URL.
+      this.linkedPlaylistCache.set(cacheKey, {
+        trackinfo: [],
+        artist: fetchedArtist,
+        ts: Date.now() - (LINKED_PLAYLIST_CACHE_TTL_MS - 60_000),
+      });
+      return null;
+    } catch (error: any) {
+      const msg = String(error?.message || error || '');
+      if (/429|403|fetch failed:\s*(429|403)/i.test(msg)) {
+        this.linkedFetchBackoffUntil = Date.now() + LINKED_PLAYLIST_BACKOFF_MS;
+      }
+      return null;
+    }
+  }
+
   private syncViewState(emitChange: boolean): void {
     const currentIndex = getCurrentTrackIndex(this.tracks, this.currentAudioSrc);
     const tracks: PlaylistTrack[] = this.tracks.map((track, idx) => ({
@@ -1182,48 +1549,50 @@ class PlaylistController {
 
     try {
       const localTralbum = getLocalTralbumData();
-      let trackinfo = Array.isArray(localTralbum?.trackinfo) ? localTralbum!.trackinfo! : [];
+      const localTrackinfo = Array.isArray(localTralbum?.trackinfo) ? localTralbum!.trackinfo! : [];
+      let trackinfo = localTrackinfo;
+      let resolvedFromLinkedSource = false;
+      let resolvedArtistHint = this.currentArtistHint || norm(localTralbum?.artist);
 
-      if (trackinfo.length <= 1) {
-        const nowPlayingTitle =
-          getNowPlayingTitleFromDom() ||
-          this.currentTrackTitleHint ||
-          norm(localTralbum?.current?.title) ||
-          norm(localTralbum?.trackinfo?.[0]?.title);
-        const nowPlayingArtist = getNowPlayingArtistFromDom() || this.currentArtistHint || norm(localTralbum?.artist);
-        const linkedUrl =
-          getLinkedUrlFromLocalTralbum(localTralbum, nowPlayingTitle) ||
-          getCollectionPlayerLinkedUrl(nowPlayingTitle, nowPlayingArtist) ||
-          getLinkedUrlFromEmbedIframes(nowPlayingTitle, nowPlayingArtist);
+      const nowPlayingTitle =
+        getNowPlayingTitleFromDom() ||
+        this.currentTrackTitleHint ||
+        norm(localTralbum?.current?.title) ||
+        norm(localTralbum?.trackinfo?.[0]?.title);
+      const nowPlayingArtist = getNowPlayingArtistFromDom() || this.currentArtistHint || norm(localTralbum?.artist);
+      const shouldTryLinked =
+        shouldResolveLinkedPlaylist(localTrackinfo, this.currentAudioSrc) ||
+        (!trackinfoContainsCurrentSource(localTrackinfo, this.currentAudioSrc) &&
+          Boolean(getLinkedUrlFromIfYouLikeSection(nowPlayingTitle, nowPlayingArtist)));
+
+      if (shouldTryLinked) {
+        const recommendationContext = hasActiveRecommendationPlaybackContext();
+        const linkedUrl = recommendationContext
+          ? getLinkedUrlFromIfYouLikeSection(nowPlayingTitle, nowPlayingArtist) ||
+            getCollectionPlayerLinkedUrl(nowPlayingTitle, nowPlayingArtist) ||
+            getLinkedUrlFromEmbedIframes(nowPlayingTitle, nowPlayingArtist) ||
+            getLinkedUrlFromLocalTralbum(localTralbum, nowPlayingTitle)
+          : getLinkedUrlFromLocalTralbum(localTralbum, nowPlayingTitle) ||
+            getLinkedUrlFromIfYouLikeSection(nowPlayingTitle, nowPlayingArtist) ||
+            getCollectionPlayerLinkedUrl(nowPlayingTitle, nowPlayingArtist) ||
+            getLinkedUrlFromEmbedIframes(nowPlayingTitle, nowPlayingArtist);
         if (linkedUrl) {
-          try {
-            const response = await this.sendRuntimeMessage<FetchTralbumResponse>({
-              type: 'FETCH_TRALBUM',
-              url: linkedUrl,
-            });
-
-            const fetchedTrackinfo = Array.isArray(response?.tralbum?.trackinfo)
-              ? response!.tralbum!.trackinfo!
-              : Array.isArray(response?.trackinfo)
-              ? response!.trackinfo!
-              : [];
-
-            if (fetchedTrackinfo.length > 0) {
-              trackinfo = fetchedTrackinfo;
-            }
-          } catch (error) {
-            console.warn('[Playlist] FETCH_TRALBUM fallback failed:', error);
+          const fetched = await this.fetchLinkedPlaylistWithGuards(linkedUrl);
+          if (fetched?.trackinfo?.length) {
+            trackinfo = fetched.trackinfo;
+            resolvedFromLinkedSource = true;
+            resolvedArtistHint = fetched.artist || resolvedArtistHint;
           }
         }
       }
 
       if (runId !== this.resolveRunId) return;
 
-      const localTrackinfoLen = Array.isArray(localTralbum?.trackinfo) ? localTralbum!.trackinfo!.length : 0;
-      this.externalPlaylistMode = localTrackinfoLen <= 1 && trackinfo.length > 1;
+      this.externalPlaylistMode = resolvedFromLinkedSource;
+      this.externalPlaylistArtistHint = resolvedFromLinkedSource ? resolvedArtistHint : '';
       this.nativeTrackId =
-        norm(String(localTralbum?.trackinfo?.[0]?.track_id ?? localTralbum?.trackinfo?.[0]?.id ?? '')) ||
-        extractTrackIdFromSrc(this.currentAudioSrc);
+        extractTrackIdFromSrc(this.currentAudioSrc) ||
+        norm(String(localTralbum?.trackinfo?.[0]?.track_id ?? localTralbum?.trackinfo?.[0]?.id ?? ''));
 
       this.tracks = toInternalTracks(trackinfo);
       this.bpmRunId += 1;
