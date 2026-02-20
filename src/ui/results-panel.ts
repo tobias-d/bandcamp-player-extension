@@ -76,6 +76,11 @@ let timeBtnEl: HTMLButtonElement | null = null;
 let nextTrackBtnEl: HTMLButtonElement | null = null;
 let playlistBtnEl: HTMLButtonElement | null = null;
 let playlistBtnLabelEl: HTMLSpanElement | null = null;
+let tapToggleBtnEl: HTMLButtonElement | null = null;
+let tapInlineBpmEl: HTMLDivElement | null = null;
+let tapInlineBpmValueEl: HTMLSpanElement | null = null;
+let tapInlineConfEl: HTMLDivElement | null = null;
+let bpmSectionEl: HTMLDivElement | null = null;
 let playlistWrapEl: HTMLDivElement | null = null;
 let playlistScrollEl: HTMLDivElement | null = null;
 let playlistBodyEl: HTMLDivElement | null = null;
@@ -107,9 +112,12 @@ let currentIsAnalyzing = false;
 let revealedWaveformKey = '';
 let tapTimesMs: number[] = [];
 let tapBpm = NaN;
+let currentTrackShownBpm = NaN;
+let currentTrackBpmConfidence = NaN;
 let tapLongPressTimer: ReturnType<typeof setTimeout> | null = null;
 let tapLongPressed = false;
 let lastTapTrackKey = '';
+let tapperBoxVisible = false;
 let currentPlaylistRows: PlaylistRowInput[] = [];
 let currentPlaylistIndex = -1;
 let currentPlaylistExpanded = false;
@@ -122,7 +130,7 @@ let skipNextAutoCenterFromPlaylistClick = false;
 let playlistClickTargetIndex = -1;
 
 const PANEL_ID = 'bc-bpm-panel';
-const PANEL_UI_VERSION = 'alt-v40-welcome-overlay';
+const PANEL_UI_VERSION = 'alt-v41-minimized-tapper-toggle';
 const PLAYED_BLUE = '#5aa7ff';
 const TAP_LONG_PRESS_MS = 2000;
 const CLOSED_FLAG = '__BC_BPM_PANEL_CLOSED__';
@@ -141,6 +149,7 @@ let savedScaleMem = PANEL_DEFAULT_SCALE;
 let prefsLoaded = false;
 let prefsLoadPromise: Promise<void> | null = null;
 let panelPrefsTouched = false;
+let tapperPrefsTouched = false;
 let infoGlobalListenersAttached = false;
 let infoNudgeLoaded = false;
 let infoNudgeLoadPromise: Promise<void> | null = null;
@@ -208,6 +217,40 @@ function readLegacyScale(): number {
     return clamp(raw, PANEL_MIN_SCALE, PANEL_MAX_SCALE);
   } catch (_) {
     return PANEL_DEFAULT_SCALE;
+  }
+}
+
+function getExtensionAssetUrl(path: string): string {
+  try {
+    const g = globalThis as any;
+    const runtime = g?.chrome?.runtime || g?.browser?.runtime;
+    if (runtime && typeof runtime.getURL === 'function') return runtime.getURL(path);
+  } catch (_) {
+    // Ignore and fall back.
+  }
+  return path;
+}
+
+function imageIsSolidDark(img: HTMLImageElement): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    const w = Math.max(1, Math.min(32, img.naturalWidth || 32));
+    const h = Math.max(1, Math.min(32, img.naturalHeight || 32));
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+    ctx.drawImage(img, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let brightPixels = 0;
+    const pixelCount = w * h;
+    for (let i = 0; i < data.length; i += 4) {
+      const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      if (lum > 18) brightPixels++;
+    }
+    return brightPixels <= Math.max(2, Math.floor(pixelCount * 0.01));
+  } catch (_) {
+    return false;
   }
 }
 
@@ -465,6 +508,7 @@ function persistPanelPrefs(): void {
   const payload = {
     pos: savedPosMem ? { left: savedPosMem.left, top: savedPosMem.top } : null,
     scale: savedScaleMem,
+    tapperVisible: Boolean(tapperBoxVisible),
   };
   void storageSetPanelPrefs(payload);
 }
@@ -502,8 +546,12 @@ function ensurePanelPrefsLoaded(): void {
         hadStoredPrefs = true;
         const pos = normalizeSavedPos((stored as any).pos);
         const scale = normalizeSavedScale((stored as any).scale);
+        const tapperVisible = Boolean((stored as any).tapperVisible);
         if (pos) savedPosMem = pos;
         savedScaleMem = scale;
+        if (!tapperPrefsTouched) {
+          tapperBoxVisible = tapperVisible;
+        }
       }
     } catch (_) {
       // Ignore storage read errors.
@@ -516,9 +564,12 @@ function ensurePanelPrefsLoaded(): void {
       persistPanelPrefs();
     }
 
-    if (containerEl && !panelPrefsTouched) {
-      applyStoredPrefsToPanel();
-      drawWaveform(currentWaveform, currentWaveformStatus, currentPlayheadFraction, currentIsAnalyzing);
+    if (containerEl) {
+      if (!panelPrefsTouched) {
+        applyStoredPrefsToPanel();
+        drawWaveform(currentWaveform, currentWaveformStatus, currentPlayheadFraction, currentIsAnalyzing);
+      }
+      refreshTransportUI();
     }
   })();
 }
@@ -1218,6 +1269,33 @@ function refreshTransportUI() {
     }
   }
 
+  if (tapToggleBtnEl) {
+    tapToggleBtnEl.classList.toggle('active', tapperBoxVisible);
+    tapToggleBtnEl.setAttribute('aria-pressed', tapperBoxVisible ? 'true' : 'false');
+    tapToggleBtnEl.setAttribute('aria-label', tapperBoxVisible ? 'Hide BPM tapper' : 'Show BPM tapper');
+    tapToggleBtnEl.title = tapperBoxVisible ? 'Hide BPM tapper' : 'Show BPM tapper';
+  }
+
+  if (bpmSectionEl) {
+    bpmSectionEl.style.display = tapperBoxVisible ? 'grid' : 'none';
+  }
+
+  if (tapInlineBpmEl) {
+    tapInlineBpmEl.style.display = tapperBoxVisible ? 'none' : 'inline-flex';
+  }
+
+  if (tapInlineBpmValueEl) {
+    tapInlineBpmValueEl.textContent = `${Number.isFinite(currentTrackShownBpm) ? Math.round(currentTrackShownBpm) : '---'} BPM`;
+  }
+
+  if (tapInlineConfEl) {
+    const label = confLevelLabel(currentTrackBpmConfidence);
+    tapInlineConfEl.title = label;
+    tapInlineConfEl.setAttribute('aria-label', label);
+    tapInlineConfEl.classList.remove('level-low', 'level-medium', 'level-high', 'level-unknown');
+    tapInlineConfEl.classList.add('confLabel', 'tapInlineConf', confLevelClassForState(currentTrackBpmConfidence, currentIsAnalyzing));
+  }
+
   renderPlaylistUI();
 }
 
@@ -1543,6 +1621,11 @@ function closePanel() {
   nextTrackBtnEl = null;
   playlistBtnEl = null;
   playlistBtnLabelEl = null;
+  tapToggleBtnEl = null;
+  tapInlineBpmEl = null;
+  tapInlineBpmValueEl = null;
+  tapInlineConfEl = null;
+  bpmSectionEl = null;
   playlistWrapEl = null;
   playlistScrollEl = null;
   playlistBodyEl = null;
@@ -1566,6 +1649,7 @@ function closePanel() {
   clearTapLongPressTimer();
   tapLongPressed = false;
   lastTapTrackKey = '';
+  tapperBoxVisible = false;
   currentPlaylistRows = [];
   currentPlaylistIndex = -1;
   currentPlaylistExpanded = false;
@@ -1598,6 +1682,11 @@ function bindRefsFromContainer() {
   nextTrackBtnEl = byRole<HTMLButtonElement>('nextTrack');
   playlistBtnEl = byRole<HTMLButtonElement>('playlistToggle');
   playlistBtnLabelEl = byRole<HTMLSpanElement>('playlistToggleLabel');
+  tapToggleBtnEl = byRole<HTMLButtonElement>('tapToggle');
+  tapInlineBpmEl = byRole<HTMLDivElement>('tapInlineBpm');
+  tapInlineBpmValueEl = byRole<HTMLSpanElement>('tapInlineBpmValue');
+  tapInlineConfEl = byRole<HTMLDivElement>('tapInlineConf');
+  bpmSectionEl = byRole<HTMLDivElement>('bpmSection');
   playlistWrapEl = byRole<HTMLDivElement>('playlistWrap');
   playlistScrollEl = byRole<HTMLDivElement>('playlistScroll');
   playlistBodyEl = byRole<HTMLDivElement>('playlistBody');
@@ -2084,7 +2173,7 @@ position:relative;
 display:flex;
 align-items:center;
 justify-content:flex-start;
-gap:10px;
+gap:6px;
 margin-top:10px;
 min-height:38px;
 padding:2px 0;
@@ -2092,6 +2181,44 @@ padding:2px 0;
 
 #${PANEL_ID} .transportRow > *{
 margin:0 !important;
+}
+
+#${PANEL_ID} .tapInlineBpm{
+display:inline-flex;
+align-items:center;
+gap:10px;
+height:36px;
+min-width:86px;
+padding:0 6px;
+margin-left:auto !important;
+border:1px solid rgba(0,0,0,0.14);
+border-radius:12px;
+background:rgba(255,255,255,0.16);
+font-size:14px;
+font-weight:760;
+letter-spacing:0.01em;
+font-variant-numeric:tabular-nums;
+white-space:nowrap;
+color:#111;
+line-height:1;
+box-shadow:none;
+transition:background 0.15s ease, border-color 0.15s ease;
+}
+
+#${PANEL_ID} .tapInlineBpm:hover{
+background:rgba(255,255,255,0.24);
+border-color:rgba(0,0,0,0.18);
+}
+
+#${PANEL_ID} .tapInlineBpmValue{
+line-height:1;
+}
+
+#${PANEL_ID} .tapInlineConf.confLabel{
+margin-left:0;
+transform:none;
+width:8px;
+height:8px;
 }
 
 #${PANEL_ID} .lower{
@@ -2417,7 +2544,7 @@ height:36px;
 display:flex;
 align-items:center;
 justify-content:center;
-padding:0 14px;
+padding:0 12px;
 font-size:12px;
 font-weight:720;
 letter-spacing:0.01em;
@@ -2427,7 +2554,7 @@ white-space:nowrap;
 user-select:none;
 background:rgba(255,255,255,0.16);
 border:1px solid rgba(0,0,0,0.14);
-min-width:108px;
+min-width:102px;
 line-height:1.1;
 color:#111;
 z-index:0;
@@ -2458,13 +2585,13 @@ transform:none;
 background:rgba(255,255,255,0.16);
 border:1px solid rgba(0,0,0,0.14);
 border-radius:12px;
-padding:0 12px;
+padding:0 10px;
 margin:0;
 display:inline-flex;
 align-items:center;
 justify-content:center;
 gap:6px;
-min-width:40px;
+min-width:38px;
 height:36px;
 line-height:1.2;
 color:#111;
@@ -2527,6 +2654,64 @@ height:2px;
 
 #${PANEL_ID} .playlistToggleLabel{
 display:none;
+}
+
+#${PANEL_ID} .tapToggleIcon{
+display:block;
+width:16px;
+height:16px;
+object-fit:contain;
+image-rendering:auto;
+}
+
+#${PANEL_ID} .tapToggleGlyph{
+position:relative;
+display:none;
+width:16px;
+height:16px;
+flex:0 0 auto;
+}
+
+#${PANEL_ID} .tapToggleGlyph .palm{
+position:absolute;
+left:4px;
+top:6px;
+width:8px;
+height:8px;
+border:1px solid currentColor;
+border-radius:3px 3px 2px 2px;
+background:linear-gradient(135deg, #111 0 48%, #fff 48% 100%);
+box-sizing:border-box;
+}
+
+#${PANEL_ID} .tapToggleGlyph .finger{
+position:absolute;
+top:1px;
+width:2px;
+height:7px;
+border:1px solid currentColor;
+border-bottom:none;
+border-radius:2px 2px 0 0;
+background:#fff;
+box-sizing:border-box;
+}
+
+#${PANEL_ID} .tapToggleGlyph .f1{ left:3px; }
+#${PANEL_ID} .tapToggleGlyph .f2{ left:6px; }
+#${PANEL_ID} .tapToggleGlyph .f3{ left:9px; }
+#${PANEL_ID} .tapToggleGlyph .f4{ left:12px; }
+
+#${PANEL_ID} .tapToggleGlyph .thumb{
+position:absolute;
+left:1px;
+top:8px;
+width:4px;
+height:2px;
+border:1px solid currentColor;
+border-right:none;
+border-radius:2px 0 0 2px;
+background:#111;
+box-sizing:border-box;
 }
 
 #${PANEL_ID} .playlistWrap{
@@ -2992,6 +3177,82 @@ justify-self:start;
     true
   );
 
+  tapToggleBtnEl = document.createElement('button');
+  tapToggleBtnEl.type = 'button';
+  tapToggleBtnEl.className = 'playlistToggle tapToggle';
+  tapToggleBtnEl.setAttribute('data-role', 'tapToggle');
+  tapToggleBtnEl.setAttribute('aria-label', 'Show BPM tapper');
+  tapToggleBtnEl.setAttribute('aria-pressed', 'false');
+  tapToggleBtnEl.title = 'Show BPM tapper';
+
+  const tapToggleIconEl = document.createElement('img');
+  tapToggleIconEl.className = 'tapToggleIcon';
+  tapToggleIconEl.alt = '';
+  tapToggleIconEl.setAttribute('aria-hidden', 'true');
+  const tapToggleGlyphEl = document.createElement('span');
+  tapToggleGlyphEl.className = 'tapToggleGlyph';
+  const palmEl = document.createElement('span');
+  palmEl.className = 'palm';
+  const f1El = document.createElement('span');
+  f1El.className = 'finger f1';
+  const f2El = document.createElement('span');
+  f2El.className = 'finger f2';
+  const f3El = document.createElement('span');
+  f3El.className = 'finger f3';
+  const f4El = document.createElement('span');
+  f4El.className = 'finger f4';
+  const thumbEl = document.createElement('span');
+  thumbEl.className = 'thumb';
+  tapToggleGlyphEl.appendChild(f1El);
+  tapToggleGlyphEl.appendChild(f2El);
+  tapToggleGlyphEl.appendChild(f3El);
+  tapToggleGlyphEl.appendChild(f4El);
+  tapToggleGlyphEl.appendChild(palmEl);
+  tapToggleGlyphEl.appendChild(thumbEl);
+
+  tapToggleIconEl.addEventListener(
+    'load',
+    () => {
+      if (imageIsSolidDark(tapToggleIconEl)) {
+        tapToggleIconEl.style.display = 'none';
+        tapToggleGlyphEl.style.display = 'inline-block';
+      }
+    },
+    true
+  );
+
+  tapToggleIconEl.src = getExtensionAssetUrl('public/hand_icon.jpg');
+  tapToggleBtnEl.appendChild(tapToggleIconEl);
+  tapToggleBtnEl.appendChild(tapToggleGlyphEl);
+  tapToggleBtnEl.addEventListener(
+    'click',
+    (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      tapperBoxVisible = !tapperBoxVisible;
+      tapperPrefsTouched = true;
+      persistPanelPrefs();
+      refreshTransportUI();
+    },
+    true
+  );
+
+  tapInlineBpmEl = document.createElement('div');
+  tapInlineBpmEl.className = 'tapInlineBpm';
+  tapInlineBpmEl.setAttribute('data-role', 'tapInlineBpm');
+  tapInlineBpmValueEl = document.createElement('span');
+  tapInlineBpmValueEl.className = 'tapInlineBpmValue';
+  tapInlineBpmValueEl.setAttribute('data-role', 'tapInlineBpmValue');
+  tapInlineBpmValueEl.textContent = '--- BPM';
+  tapInlineConfEl = document.createElement('div');
+  tapInlineConfEl.className = 'confLabel tapInlineConf level-unknown';
+  tapInlineConfEl.setAttribute('data-role', 'tapInlineConf');
+  tapInlineConfEl.textContent = '';
+  tapInlineConfEl.title = 'Confidence: Unknown';
+  tapInlineConfEl.setAttribute('aria-label', 'Confidence: Unknown');
+  tapInlineBpmEl.appendChild(tapInlineBpmValueEl);
+  tapInlineBpmEl.appendChild(tapInlineConfEl);
+
   // Create unified transport controls container
   const transportControlsEl = document.createElement('div');
   transportControlsEl.className = 'transportControls';
@@ -3003,9 +3264,12 @@ justify-self:start;
   transportRowEl.appendChild(transportControlsEl);
   transportRowEl.appendChild(timeBtnEl);
   transportRowEl.appendChild(playlistBtnEl);
+  transportRowEl.appendChild(tapToggleBtnEl);
+  transportRowEl.appendChild(tapInlineBpmEl);
 
-  const lower = document.createElement('div');
-  lower.className = 'lower';
+  bpmSectionEl = document.createElement('div');
+  bpmSectionEl.className = 'lower';
+  bpmSectionEl.setAttribute('data-role', 'bpmSection');
 
   const bpmCard = document.createElement('div');
   bpmCard.className = 'card';
@@ -3133,7 +3397,7 @@ justify-self:start;
 
   bpmCard.appendChild(bpmBox);
 
-  lower.appendChild(bpmCard);
+  bpmSectionEl.appendChild(bpmCard);
 
   playlistWrapEl = document.createElement('div');
   playlistWrapEl.className = 'playlistWrap';
@@ -3274,7 +3538,7 @@ justify-self:start;
   inner.appendChild(trackTitleEl);
   inner.appendChild(waveformWrapEl);
   inner.appendChild(transportRowEl);
-  inner.appendChild(lower);
+  inner.appendChild(bpmSectionEl);
   inner.appendChild(playlistWrapEl);
   inner.appendChild(noteEl);
   inner.appendChild(welcomeOverlayEl);
@@ -3339,6 +3603,7 @@ export default function showResultsPanel(input: PanelInput = {}, handlers: Panel
   const bpm = input?.bpm;
   const tempoScale = Number.isFinite(input?.tempoScale) ? input.tempoScale : 1;
   const bpmConfidence = input?.confidence ?? NaN;
+  currentTrackBpmConfidence = bpmConfidence;
   currentWaveform = input?.waveform || null;
   currentWaveformStatus = input?.waveformStatus || '';
   currentIsAnalyzing = Boolean(input?.isAnalyzing);
@@ -3374,6 +3639,7 @@ export default function showResultsPanel(input: PanelInput = {}, handlers: Panel
   }
 
   const shownBpm = Number.isFinite(bpm) ? bpm * tempoScale : NaN;
+  currentTrackShownBpm = shownBpm;
 
   if (bpmMainEl) bpmMainEl.textContent = Number.isFinite(shownBpm) ? String(Math.round(shownBpm)) : '---';
   if (bpmConfLabelEl) {

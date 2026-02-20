@@ -78,6 +78,7 @@ interface InternalPlaylistTrack {
 }
 
 const EXTERNAL_PLAYLIST_AUDIO_ID = '__bc_playlist_external_audio__';
+const PLAYLIST_EXPANDED_PREF_KEY = '__BC_BPM_PLAYLIST_EXPANDED__';
 const LINKED_PLAYLIST_CACHE_TTL_MS = 15 * 60 * 1000;
 const LINKED_PLAYLIST_MIN_FETCH_INTERVAL_MS = 2500;
 const LINKED_PLAYLIST_MAX_FETCHES_PER_MIN = 8;
@@ -155,6 +156,24 @@ function getTrackCacheKey(trackId: string, streamUrl: string): string {
   if (trackId) return `bandcamp-track-id:${trackId}`;
   if (streamUrl) return `bandcamp-track-url:${streamUrl}`;
   return '';
+}
+
+function readPlaylistExpandedPref(): boolean {
+  try {
+    const raw = localStorage.getItem(PLAYLIST_EXPANDED_PREF_KEY);
+    if (raw == null) return true;
+    return raw === '1';
+  } catch (_) {
+    return true;
+  }
+}
+
+function writePlaylistExpandedPref(expanded: boolean): void {
+  try {
+    localStorage.setItem(PLAYLIST_EXPANDED_PREF_KEY, expanded ? '1' : '0');
+  } catch (_) {
+    // Ignore storage write failures.
+  }
 }
 
 function getCurrentTrackIndex(tracks: InternalPlaylistTrack[], currentAudioSrc: string): number {
@@ -1231,7 +1250,7 @@ class PlaylistController {
   private viewState: PlaylistState = {
     tracks: [],
     currentIndex: -1,
-    expanded: false,
+    expanded: readPlaylistExpandedPref(),
     loading: false,
   };
 
@@ -1289,14 +1308,6 @@ class PlaylistController {
     this.currentTrackTitleHint = norm(currentTrackTitle || '');
     this.currentArtistHint = norm(currentArtist || '');
     this.lastLocationHref = locationHref;
-
-    if (locationChanged && this.viewState.expanded) {
-      this.viewState = {
-        ...this.viewState,
-        expanded: false,
-      };
-      this.notifyChange();
-    }
 
     if (Number.isFinite(currentTrackBpm) && this.tracks.length) {
       const idx = getCurrentTrackIndex(this.tracks, this.currentAudioSrc);
@@ -1371,10 +1382,12 @@ class PlaylistController {
   }
 
   toggleExpanded(): void {
+    const nextExpanded = !this.viewState.expanded;
     this.viewState = {
       ...this.viewState,
-      expanded: !this.viewState.expanded,
+      expanded: nextExpanded,
     };
+    writePlaylistExpandedPref(nextExpanded);
     this.notifyChange();
     if (this.viewState.expanded) {
       this.ensureBpmQueue();
@@ -1432,10 +1445,11 @@ class PlaylistController {
   }
 
   jumpRelative(direction: number): boolean {
-    if (!this.externalPlaylistMode) return false;
     if (!this.tracks.length) return false;
+    if (this.tracks.length < 2) return false;
     const currentIndex = getCurrentTrackIndex(this.tracks, this.currentAudioSrc);
-    const base = currentIndex >= 0 ? currentIndex : 0;
+    if (currentIndex < 0) return false;
+    const base = currentIndex;
     const nextIndex = (base + (direction > 0 ? 1 : -1) + this.tracks.length) % this.tracks.length;
     return this.jumpToTrack(nextIndex);
   }
