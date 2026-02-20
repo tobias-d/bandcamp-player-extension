@@ -122,7 +122,7 @@ let skipNextAutoCenterFromPlaylistClick = false;
 let playlistClickTargetIndex = -1;
 
 const PANEL_ID = 'bc-bpm-panel';
-const PANEL_UI_VERSION = 'alt-v39-playlist-glyph-center';
+const PANEL_UI_VERSION = 'alt-v40-welcome-overlay';
 const PLAYED_BLUE = '#5aa7ff';
 const TAP_LONG_PRESS_MS = 2000;
 const CLOSED_FLAG = '__BC_BPM_PANEL_CLOSED__';
@@ -130,6 +130,7 @@ const POS_KEY = '__BC_BPM_PANEL_POS__';
 const SCALE_KEY = '__BC_BPM_PANEL_SCALE__';
 const PANEL_PREFS_STORAGE_KEY = '__BC_BPM_PANEL_PREFS__';
 const INFO_NUDGE_STORAGE_KEY = '__BC_BPM_INFO_NUDGE__';
+const WELCOME_OVERLAY_STORAGE_KEY = '__BC_BPM_WELCOME_OVERLAY__';
 const INFO_NUDGE_AFTER_ACTIVE_DAYS = 7;
 const PANEL_MIN_SCALE = 0.6;
 const PANEL_MAX_SCALE = 1;
@@ -143,15 +144,27 @@ let panelPrefsTouched = false;
 let infoGlobalListenersAttached = false;
 let infoNudgeLoaded = false;
 let infoNudgeLoadPromise: Promise<void> | null = null;
+let welcomeOverlayLoaded = false;
+let welcomeOverlayLoadPromise: Promise<void> | null = null;
 let lastInfoUsageDay = '';
+let welcomeOverlayEl: HTMLDivElement | null = null;
+let welcomeOverlayCtaEl: HTMLButtonElement | null = null;
 
 type InfoNudgeState = {
   activeDays: string[];
   dismissed: boolean;
 };
 
+type WelcomeOverlayState = {
+  dismissed: boolean;
+};
+
 let infoNudgeState: InfoNudgeState = {
   activeDays: [],
+  dismissed: false,
+};
+
+let welcomeOverlayState: WelcomeOverlayState = {
   dismissed: false,
 };
 
@@ -325,6 +338,12 @@ function normalizeInfoNudgeState(input: any): InfoNudgeState {
   };
 }
 
+function normalizeWelcomeOverlayState(input: any): WelcomeOverlayState {
+  return {
+    dismissed: Boolean(input?.dismissed),
+  };
+}
+
 function isInfoNudgeActive(): boolean {
   return !infoNudgeState.dismissed && infoNudgeState.activeDays.length >= INFO_NUDGE_AFTER_ACTIVE_DAYS;
 }
@@ -390,6 +409,43 @@ function dismissInfoNudge(): void {
   infoNudgeState.dismissed = true;
   persistInfoNudgeState();
   applyInfoNudgeClass();
+}
+
+function applyWelcomeOverlayVisibility(): void {
+  if (!welcomeOverlayEl) return;
+  const shouldShow = !welcomeOverlayState.dismissed;
+  welcomeOverlayEl.style.display = shouldShow ? 'flex' : 'none';
+}
+
+function persistWelcomeOverlayState(): void {
+  void storageSetKey(WELCOME_OVERLAY_STORAGE_KEY, welcomeOverlayState);
+}
+
+function ensureWelcomeOverlayLoaded(): void {
+  if (welcomeOverlayLoaded || welcomeOverlayLoadPromise) {
+    if (welcomeOverlayLoaded) applyWelcomeOverlayVisibility();
+    return;
+  }
+
+  welcomeOverlayLoadPromise = (async () => {
+    try {
+      const stored = await storageGetKey(WELCOME_OVERLAY_STORAGE_KEY);
+      welcomeOverlayState = normalizeWelcomeOverlayState(stored);
+    } catch (_) {
+      welcomeOverlayState = normalizeWelcomeOverlayState(null);
+    } finally {
+      welcomeOverlayLoaded = true;
+      welcomeOverlayLoadPromise = null;
+      applyWelcomeOverlayVisibility();
+    }
+  })();
+}
+
+function dismissWelcomeOverlayForever(): void {
+  if (welcomeOverlayState.dismissed) return;
+  welcomeOverlayState.dismissed = true;
+  applyWelcomeOverlayVisibility();
+  persistWelcomeOverlayState();
 }
 
 function normalizeSavedPos(input: any): { left: number; top: number } | null {
@@ -1495,6 +1551,8 @@ function closePanel() {
   playlistHeadBpmBtnEl = null;
   infoBtnEl = null;
   infoPanelEl = null;
+  welcomeOverlayEl = null;
+  welcomeOverlayCtaEl = null;
   closeBtnEl = null;
   bpmMainEl = null;
   bpmConfLabelEl = null;
@@ -1548,6 +1606,8 @@ function bindRefsFromContainer() {
   playlistHeadBpmBtnEl = byRole<HTMLButtonElement>('playlistHeadBpmSort');
   infoBtnEl = byRole<HTMLButtonElement>('infoBtn');
   infoPanelEl = byRole<HTMLDivElement>('infoPanel');
+  welcomeOverlayEl = byRole<HTMLDivElement>('welcomeOverlay');
+  welcomeOverlayCtaEl = byRole<HTMLButtonElement>('welcomeOverlayCta');
   closeBtnEl = byRole<HTMLButtonElement>('closeX');
   bpmMainEl = byRole<HTMLDivElement>('bpmMain');
   bpmConfLabelEl = byRole<HTMLDivElement>('bpmConfLabel');
@@ -1576,6 +1636,7 @@ function ensurePanel() {
       ensurePanelResizable();
       applyStoredPrefsToPanel();
       ensureWaveformSeeking();
+      ensureWelcomeOverlayLoaded();
       return containerEl;
     }
     containerEl.remove();
@@ -1642,7 +1703,7 @@ border:1px solid rgba(0,0,0,0.14);
 background:rgba(255,255,255,0.24);
 border-radius:999px;
 overflow:hidden;
-z-index:10;
+z-index:40;
 }
 
 #${PANEL_ID} .topActions button{
@@ -1791,6 +1852,105 @@ background:rgba(245,245,245,0.95);
 backdrop-filter:blur(8px);
 box-shadow:0 8px 18px rgba(0,0,0,0.16);
 z-index:20;
+}
+
+#${PANEL_ID} .welcomeOverlay{
+position:absolute;
+left:0;
+right:0;
+top:28px;
+bottom:0;
+display:flex;
+flex-direction:column;
+justify-content:space-between;
+gap:16px;
+padding:18px 14px 14px 14px;
+border-radius:10px;
+background:linear-gradient(
+  to bottom,
+  rgba(162,162,162,0.56) 0%,
+  rgba(232,232,232,0.62) 100%
+);
+backdrop-filter:blur(6px);
+z-index:30;
+}
+
+#${PANEL_ID} .welcomeOverlayTitle{
+margin:0;
+font-size:24px;
+line-height:1.2;
+font-weight:780;
+letter-spacing:-0.01em;
+}
+
+#${PANEL_ID} .welcomeOverlayText{
+margin:8px 0 0 0;
+font-size:16px;
+line-height:1.4;
+opacity:0.92;
+}
+
+#${PANEL_ID} .welcomeOverlayGoals{
+margin:12px 0 0 0;
+padding-left:0;
+list-style:none;
+display:flex;
+flex-direction:column;
+gap:8px;
+font-size:15px;
+line-height:1.35;
+}
+
+#${PANEL_ID} .welcomeOverlayGoals li{
+margin:0;
+display:flex;
+align-items:flex-start;
+gap:8px;
+}
+
+#${PANEL_ID} .welcomeOverlayGoals li::before{
+content:attr(data-icon);
+flex:0 0 auto;
+line-height:1.1;
+opacity:0.95;
+}
+
+#${PANEL_ID} .welcomeOverlayCta{
+appearance:none;
+width:82%;
+align-self:center;
+min-height:56px;
+border:none;
+border-radius:10px;
+background:linear-gradient(120deg,#6a2fff 0%,#9a3bff 34%,#c84dff 68%,#a239ff 100%);
+background-size:220% 220%;
+color:#fff;
+font-size:24px;
+font-weight:780;
+letter-spacing:0.01em;
+text-shadow:0 1px 2px rgba(0,0,0,0.25);
+box-shadow:0 8px 18px rgba(111,53,255,0.35);
+cursor:pointer;
+position:relative;
+isolation:isolate;
+overflow:visible;
+transition:transform 140ms ease, opacity 140ms ease, box-shadow 180ms ease;
+}
+
+#${PANEL_ID} .welcomeOverlayCta:hover{
+opacity:1;
+box-shadow:0 8px 18px rgba(111,53,255,0.35);
+background:linear-gradient(120deg,#6a2fff 0%,#9a3bff 34%,#c84dff 68%,#a239ff 100%);
+border:none;
+}
+
+#${PANEL_ID} .welcomeOverlayCta:active{
+transform:translateY(1px);
+}
+
+#${PANEL_ID} .welcomeOverlayCta:focus-visible{
+outline:2px solid rgba(0,0,0,0.32);
+outline-offset:2px;
 }
 
 #${PANEL_ID} .infoPanel a{
@@ -3048,6 +3208,66 @@ justify-self:start;
   noteEl.textContent = '';
   noteEl.style.display = 'none';
 
+  welcomeOverlayEl = document.createElement('div');
+  welcomeOverlayEl.className = 'welcomeOverlay';
+  welcomeOverlayEl.setAttribute('data-role', 'welcomeOverlay');
+  welcomeOverlayEl.style.display = 'none';
+
+  const welcomeCopyWrapEl = document.createElement('div');
+
+  const welcomeTitleEl = document.createElement('h3');
+  welcomeTitleEl.className = 'welcomeOverlayTitle';
+  welcomeTitleEl.textContent = 'Welcome to Bandcamp DJ Player';
+
+  const welcomeIntroEl = document.createElement('p');
+  welcomeIntroEl.className = 'welcomeOverlayText';
+  welcomeIntroEl.textContent =
+    'This extension was built with two goals: highly accurate BPM readings and a more intuitive, fun music-digging flow.';
+
+  const welcomeGoalsEl = document.createElement('ul');
+  welcomeGoalsEl.className = 'welcomeOverlayGoals';
+
+  const welcomeGoalAccuracyEl = document.createElement('li');
+  welcomeGoalAccuracyEl.setAttribute('data-icon', '◆');
+  welcomeGoalAccuracyEl.textContent = 'Powered by the Essentia algorithm, it delivers BPM reads you can trust.';
+  const welcomeGoalDiggingEl = document.createElement('li');
+  welcomeGoalDiggingEl.setAttribute('data-icon', '▲');
+  welcomeGoalDiggingEl.textContent = 'The analysis is tuned for fast techno and breakbeat tracks.';
+  const welcomeFeedbackEl = document.createElement('li');
+  welcomeFeedbackEl.setAttribute('data-icon', '♪');
+  welcomeFeedbackEl.textContent =
+    'Use the playlist from any Bandcamp subpage to move through tracks more intuitively.';
+  const welcomeResizeEl = document.createElement('li');
+  welcomeResizeEl.setAttribute('data-icon', '↔');
+  welcomeResizeEl.textContent = 'Drag any edge to resize the panel exactly how you like it.';
+
+  welcomeGoalsEl.appendChild(welcomeGoalAccuracyEl);
+  welcomeGoalsEl.appendChild(welcomeGoalDiggingEl);
+  welcomeGoalsEl.appendChild(welcomeFeedbackEl);
+  welcomeGoalsEl.appendChild(welcomeResizeEl);
+
+  welcomeCopyWrapEl.appendChild(welcomeTitleEl);
+  welcomeCopyWrapEl.appendChild(welcomeIntroEl);
+  welcomeCopyWrapEl.appendChild(welcomeGoalsEl);
+
+  welcomeOverlayCtaEl = document.createElement('button');
+  welcomeOverlayCtaEl.type = 'button';
+  welcomeOverlayCtaEl.className = 'welcomeOverlayCta';
+  welcomeOverlayCtaEl.setAttribute('data-role', 'welcomeOverlayCta');
+  welcomeOverlayCtaEl.textContent = "Let's go";
+  welcomeOverlayCtaEl.addEventListener(
+    'click',
+    (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      dismissWelcomeOverlayForever();
+    },
+    true
+  );
+
+  welcomeOverlayEl.appendChild(welcomeCopyWrapEl);
+  welcomeOverlayEl.appendChild(welcomeOverlayCtaEl);
+
   inner.appendChild(topActionsEl);
   inner.appendChild(infoPanelEl);
   inner.appendChild(topRowEl);
@@ -3057,6 +3277,7 @@ justify-self:start;
   inner.appendChild(lower);
   inner.appendChild(playlistWrapEl);
   inner.appendChild(noteEl);
+  inner.appendChild(welcomeOverlayEl);
 
   containerEl.appendChild(inner);
   document.documentElement.appendChild(containerEl);
@@ -3075,6 +3296,7 @@ justify-self:start;
   drawWaveform(null, '', NaN, false);
   resetTapper();
   ensureInfoNudgeLoaded();
+  ensureWelcomeOverlayLoaded();
 
   return containerEl;
 }
