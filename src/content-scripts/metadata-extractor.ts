@@ -1,62 +1,7 @@
 /**
- * ============================================================================
- * ROBUST BANDCAMP METADATA EXTRACTION
- * ============================================================================
- * 
- * VERSION: 1.5 (2026-02-15)
- * 
- * EXTRACTION STRATEGY (in priority order):
- * 1. Feed pages: Waypoint elements (.waypoint-item-title, .waypoint-artist-title)
- * 2. Collection pages: Knockout.js data-bind attributes
- * 3. Album pages: Match audio track_id against trackinfo array
- * 4. JSON-LD structured data (<script type="application/ld+json">)
- * 5. Data attributes (data-tralbum, data-band) - Bandcamp's internal data
- * 6. DOM selectors - Multiple fallbacks
- * 7. Meta tags (og:title)
- * 8. Document title parsing
- * 
- * CONFIDENCE LEVELS:
- * - high: JSON-LD, data attributes, waypoint, or data-bind
- * - medium: DOM selectors
- * - low: Meta/title parsing
- * 
- * CHANGELOG v1.5:
- * - Fixed Feed page track extraction (bandcamp.com/username/feed)
- * - Prioritizes .waypoint-item-title and .waypoint-artist-title
- * - These contain the CURRENTLY PLAYING track, not just any feed item
- * - Correctly shows "Mas Kiki Que Couba" by "DJ Fitness" on feed pages
- * 
- * CHANGELOG v1.4:
- * - Fixed album page track extraction by matching audio track_id
- * - Extracts track_id from audio.currentSrc URL
- * - Matches against trackinfo[].track_id to find playing track
- * - Now correctly shows "Guided by Light" on album pages
- * 
- * CHANGELOG v1.3:
- * - Fixed album page track extraction priority
- * - Now checks trackinfo.is_playing BEFORE using current.title
- * - Shows "Guided by Light" instead of album title when playing
- * 
- * CHANGELOG v1.2:
- * - Added collection page support (bandcamp.com/username)
- * - Extracts from Knockout.js data-bind attributes
- * - Fixed track title showing collection title on fan pages
- * 
- * CHANGELOG v1.1:
- * - Fixed artist extraction priority for label pages
- * - Now prioritizes data-tralbum.artist over data-band.name
- * - Correctly handles tracks published on label pages
- * 
- * @module content-scripts/metadata-extractor
+ * Extracts current Bandcamp playback metadata (artist/title/album) across
+ * album, track, collection, feed, and recommendation contexts.
  */
-
-
-
-/* ============================================================================
- * TYPE DEFINITIONS
- * ============================================================================ */
-
-
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low';
 
@@ -129,13 +74,6 @@ interface JsonLdData {
     };
   };
 }
-
-
-
-/* ============================================================================
- * UTILITY FUNCTIONS
- * ============================================================================ */
-
 
 
 function norm(s: string | null | undefined): string {
@@ -358,9 +296,7 @@ function extractDataAttribute(selector: string, attr: string): any | null {
 
 
 /**
- * Extract track title using multiple methods
- * FIXED v1.5: Added waypoint support for Feed pages (now playing track)
- * @returns {ExtractionResult|null} Title extraction result
+ * Extract track title using prioritized metadata sources.
  */
 function extractTrackTitle(): ExtractionResult | null {
   // METHOD 0: External recommendation playback on release pages.
@@ -550,9 +486,7 @@ function extractTrackTitle(): ExtractionResult | null {
 
 
 /**
- * Extract artist name using multiple methods
- * FIXED v1.5: Added waypoint support for Feed pages (now playing track)
- * @returns {ExtractionResult|null} Artist extraction result
+ * Extract artist name using prioritized metadata sources.
  */
 function extractArtistName(): ExtractionResult | null {
   // METHOD 0: External recommendation playback on release pages.

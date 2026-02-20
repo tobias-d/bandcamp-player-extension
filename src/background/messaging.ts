@@ -1,40 +1,11 @@
 /**
- * ============================================================================
- * MESSAGE HANDLER REGISTRY
- * ============================================================================
- * 
- * VERSION: 1.1 (2026-02-15)
- * 
- * Central message routing for browser extension communication.
- * Handles messages from content scripts and dispatches to appropriate services.
- * 
- * MESSAGE TYPES:
- * - GETBEATMODE: Retrieve stored beat mode preference
- * - SETBEATMODE: Update beat mode preference
- * - GETWAVEFORM/GET_WAVEFORM: Fetch waveform data for URL
- * - ANALYZE_TRACK/ANALYZETRACK: Start full track analysis
- * 
- * COMMUNICATION FLOW:
- * Content Script → Background Service → Storage/Analyzer → Response
- *                  ↓ (during analysis)
- *                  ANALYSIS_PARTIAL messages sent back to content script
- * 
- * PROGRESSIVE UPDATES:
- * During analysis, sends partial updates back to the requesting tab
- * via ANALYSIS_PARTIAL messages for real-time UI feedback.
- * 
- * @module background/messaging
- * @version 2026-02-15-v1.1
+ * Background message router for analysis, waveform, playlist fetch, and settings.
  */
 
 import type { BeatMode, AnalysisResult } from '../shared/index';
 import { analyzeUrl } from './analyzer';
 import { getBeatModeStored, setBeatModeStored } from './storage';
 import { getWaveformForUrl } from './waveform';
-
-/* ============================================================================
- * TYPE DEFINITIONS
- * ============================================================================ */
 
 /**
  * Browser API object (chrome or browser namespace)
@@ -62,7 +33,7 @@ interface BrowserAPI {
 type IncomingMessage =
   | { type: 'GETBEATMODE' }
   | { type: 'SETBEATMODE'; beatMode: string }
-  | { type: 'GETWAVEFORM' | 'GET_WAVEFORM'; url: string }
+  | { type: 'GETWAVEFORM' | 'GET_WAVEFORM'; url: string; cacheKey?: string }
   | { type: 'ANALYZE_TRACK' | 'ANALYZETRACK'; url: string; beatMode?: BeatMode; cacheKey?: string }
   | { type: 'ANALYZE_TRACK_SILENT'; url: string; beatMode?: BeatMode; cacheKey?: string }
   | { type: 'FETCH_TRALBUM'; url: string }
@@ -151,10 +122,6 @@ function cancelActiveAnalysisForTab(tabId: number | null | undefined, url?: stri
   return true;
 }
 
-/* ============================================================================
- * MESSAGE HANDLER
- * ============================================================================ */
-
 /**
  * Handle a single incoming message and return appropriate response
  * 
@@ -193,7 +160,10 @@ async function handleMessage(
       }
 
       try {
-        const waveform = await getWaveformForUrl(msg.url);
+        const waveform = await getWaveformForUrl(
+          msg.url,
+          typeof (msg as any).cacheKey === 'string' ? (msg as any).cacheKey : undefined
+        );
         return waveform;
       } catch (e: any) {
         return {

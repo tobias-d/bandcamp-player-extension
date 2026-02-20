@@ -1,18 +1,6 @@
 /**
- * ============================================================================
- * WAVEFORM GENERATION - FAST WITH CORRECT VISUAL BALANCE
- * ============================================================================
- * 
- * VERSION: 2.4.2-visual-fix (2026-02-15)
- * 
- * RESTORED:
- * - Shared normalization (like original) so HIGH_WEIGHT boost is visible
- * - Proper 3-band separation
- * - Clean frequency band isolation
- * - Fast but correct appearance
- * 
- * @module background/waveform
- * @version 2026-02-15-v2.4.2-visual-fix
+ * Generates and caches 3-band waveform envelopes (low/mid/high) for the UI.
+ * Uses OfflineAudioContext band filtering with a fallback path when unavailable.
  */
 
 
@@ -24,7 +12,7 @@ import { decodeAudio } from './audio';
 // ============================================================================
 
 
-const WAVEFORM_VERSION = '2026-02-15-waveform-v2.4.2-visual-fix';
+const WAVEFORM_VERSION = 'waveform-v2.5';
 const WAVEFORM_BUCKETS = 300; // Reduced for speed
 const LOW_CUTOFF_HZ = 200;
 const HIGH_CUTOFF_HZ = 2000;
@@ -71,8 +59,9 @@ const waveformCache = new Map<string, CachedWaveform>();
 const waveformInFlight = new Map<string, Promise<CachedWaveform>>();
 
 
-function waveformCacheKey(url: string): string {
-  return `${url}|${WAVEFORM_VERSION}|${WAVEFORM_BUCKETS}`;
+function waveformCacheKey(url: string, cacheIdentity?: string | null): string {
+  const identity = String(cacheIdentity || '').trim() || String(url || '').trim();
+  return `${identity}|${WAVEFORM_VERSION}|${WAVEFORM_BUCKETS}`;
 }
 
 function isFreshWaveform(cached: CachedWaveform | undefined): cached is CachedWaveform {
@@ -94,7 +83,7 @@ function clamp01(v: number | null | undefined): number {
 
 
 /**
- * RESTORED: Shared normalization so weights affect relative visibility
+ * Shared normalization keeps relative visibility across low/mid/high bands.
  */
 function sharedNormalize(
   low: Float32Array,
@@ -162,8 +151,7 @@ function bucketRms(samples: Float32Array, buckets: number): Float32Array {
 
 
 /**
- * RESTORED: Use OfflineAudioContext with biquad filters (original method)
- * This gives the cleanest frequency separation.
+ * Uses OfflineAudioContext + biquad filters for clean frequency separation.
  */
 async function render3BandOffline(audioBuffer: AudioBuffer): Promise<Rendered3Band> {
   const Offline = (globalThis as any).OfflineAudioContext || (globalThis as any).webkitOfflineAudioContext;
@@ -353,8 +341,8 @@ export async function computeWaveformBands(
 // ============================================================================
 
 
-export async function getWaveformForUrl(url: string): Promise<CachedWaveform> {
-  const key = waveformCacheKey(url);
+export async function getWaveformForUrl(url: string, cacheIdentity?: string | null): Promise<CachedWaveform> {
+  const key = waveformCacheKey(url, cacheIdentity);
   
   // Check cache (24-hour TTL)
   const cached = waveformCache.get(key);
@@ -389,9 +377,10 @@ export async function getWaveformForUrl(url: string): Promise<CachedWaveform> {
 
 export async function computeAndCacheWaveformForUrlFromAudioBuffer(
   url: string,
-  audioBuffer: AudioBuffer
+  audioBuffer: AudioBuffer,
+  cacheIdentity?: string | null
 ): Promise<CachedWaveform> {
-  const key = waveformCacheKey(url);
+  const key = waveformCacheKey(url, cacheIdentity);
 
   const cached = waveformCache.get(key);
   if (isFreshWaveform(cached)) {

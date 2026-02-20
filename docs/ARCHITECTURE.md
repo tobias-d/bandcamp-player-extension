@@ -2,45 +2,20 @@
 
 ## Runtime Flow
 
-1. `src/content-scripts/bandcamp-player.ts` runs on Bandcamp pages.
-2. It detects the active `<audio>` element and sends `ANALYZE_TRACK` to background.
-3. `src/background/messaging.ts` routes requests to `src/background/analyzer.ts`.
-4. `src/background/analyzer.ts`:
-   - fetches/decode audio
-   - runs BPM estimation via `src/background/tempo-essentia.ts`
-   - computes waveform via `src/background/waveform.ts`
-   - sends `ANALYSIS_PARTIAL` updates back to content script
-5. UI updates are rendered by `src/ui/results-panel.ts`.
-
-## Latest Change (v2.1): Scalable UI
-
-- `src/ui/results-panel.ts` now supports full edge/corner resize interactions.
-- Panel scale is persisted via local/session storage and restored on load.
-- Dragging remains header-driven while resize is handled by hit-testing panel edges.
-- UI rendering remains single-source through `showResultsPanel(...)`.
+1. `src/content-scripts/bandcamp-player.ts` observes Bandcamp playback state and drives panel updates.
+2. It requests analysis via `ANALYZE_TRACK`/`GETWAVEFORM` to background.
+3. `src/background/messaging.ts` routes requests to analyzer, waveform, storage, and playlist-fetch handlers.
+4. `src/background/analyzer.ts` fetches/decodes audio, runs Essentia BPM detection, and emits partial/final results.
+5. `src/ui/results-panel.ts` renders the floating player, waveform, BPM section, transport controls, and playlist UI.
 
 ## Key Modules
 
-- `src/background/tempo-essentia.ts`
-  - Loads `essentia-wasm.umd.js` directly to avoid problematic cross-module getters in Firefox.
-  - Produces BPM + confidence + beat type classification.
-
-- `src/background/analyzer.ts`
-  - Orchestrates end-to-end analysis.
-  - Handles progress updates and error propagation.
-
-- `src/content-scripts/bandcamp-player.ts`
-  - Tracks playback state, transport controls, and panel rendering schedule.
-  - Handles background message updates and waveform fallback requests.
+- `src/content-scripts/playlist.ts`: playlist resolution, sorting, selection, and track-jump behavior
+- `src/content-scripts/metadata-extractor.ts`: now-playing metadata extraction across Bandcamp page contexts
+- `src/background/waveform.ts`: multi-band waveform generation + caching
+- `src/background/storage.ts`: persisted preferences and cached analysis values
 
 ## Build Targets
 
-- Firefox:
-  - Manifest source: `src/manifest.firefox.json`
-  - Command: `npm run build:firefox`
-
-- Chrome/Chromium:
-  - Manifest source: `src/manifest.json`
-  - Command: `npm run build:chrome`
-
-Webpack selects the manifest via `--env target=<firefox|chrome>`.
+- Firefox: `src/manifest.firefox.json` (`npm run build:firefox`)
+- Chromium: `src/manifest.json` (`npm run build:chrome`)

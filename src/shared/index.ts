@@ -1,12 +1,5 @@
 /**
- * ============================================================================
- * SHARED TYPESCRIPT TYPES
- * ============================================================================
- * 
- * Centralized type definitions for the Bandcamp Player Extension.
- * 
- * @module types
- * @version 2026-02-17-v2.1
+ * Shared type definitions used by content scripts, background, and UI.
  */
 
 // ============================================================================
@@ -35,7 +28,7 @@ export interface TempoResult {
   beatTypeAuto: BeatType;
   breakbeatScore: number;
   beatMode: BeatMode;
-  _support?: number;  // Internal field
+  _support?: number;
 }
 
 // ============================================================================

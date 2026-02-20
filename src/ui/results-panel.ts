@@ -75,12 +75,15 @@ let prevTrackBtnEl: HTMLButtonElement | null = null;
 let timeBtnEl: HTMLButtonElement | null = null;
 let nextTrackBtnEl: HTMLButtonElement | null = null;
 let playlistBtnEl: HTMLButtonElement | null = null;
+let playlistBtnLabelEl: HTMLSpanElement | null = null;
 let playlistWrapEl: HTMLDivElement | null = null;
 let playlistScrollEl: HTMLDivElement | null = null;
 let playlistBodyEl: HTMLDivElement | null = null;
 let playlistStatusEl: HTMLDivElement | null = null;
 let playlistHeadTrackBtnEl: HTMLButtonElement | null = null;
 let playlistHeadBpmBtnEl: HTMLButtonElement | null = null;
+let infoBtnEl: HTMLButtonElement | null = null;
+let infoPanelEl: HTMLDivElement | null = null;
 let closeBtnEl: HTMLButtonElement | null = null;
 let bpmMainEl: HTMLDivElement | null = null;
 let bpmConfLabelEl: HTMLDivElement | null = null;
@@ -135,6 +138,7 @@ let savedScaleMem = PANEL_DEFAULT_SCALE;
 let prefsLoaded = false;
 let prefsLoadPromise: Promise<void> | null = null;
 let panelPrefsTouched = false;
+let infoGlobalListenersAttached = false;
 
 const win = window as unknown as Record<string, unknown>;
 seedPanelPrefsFromLegacy();
@@ -384,6 +388,56 @@ function confLevelClassForState(x: number, isAnalyzing: boolean): string {
 
 function norm(s?: string): string {
   return String(s || '').replace(/\s+/g, ' ').trim();
+}
+
+function closeInfoPanel(): void {
+  if (!infoPanelEl) return;
+  infoPanelEl.style.display = 'none';
+  if (infoBtnEl) {
+    infoBtnEl.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function toggleInfoPanel(): void {
+  if (!infoPanelEl || !infoBtnEl) return;
+  const isOpen = infoPanelEl.style.display === 'block';
+  if (isOpen) {
+    closeInfoPanel();
+    return;
+  }
+  infoPanelEl.style.display = 'block';
+  infoBtnEl.setAttribute('aria-expanded', 'true');
+}
+
+function ensureInfoPanelGlobalListeners(): void {
+  if (infoGlobalListenersAttached) return;
+  infoGlobalListenersAttached = true;
+
+  document.addEventListener(
+    'pointerdown',
+    (ev) => {
+      if (!infoPanelEl || infoPanelEl.style.display !== 'block') return;
+      const target = ev.target as Node | null;
+      if (!target) {
+        closeInfoPanel();
+        return;
+      }
+      if (infoPanelEl.contains(target)) return;
+      if (infoBtnEl && infoBtnEl.contains(target)) return;
+      closeInfoPanel();
+    },
+    true
+  );
+
+  window.addEventListener(
+    'keydown',
+    (ev) => {
+      if ((ev as KeyboardEvent).key === 'Escape') {
+        closeInfoPanel();
+      }
+    },
+    true
+  );
 }
 
 function parseArtistTitleFallback(title?: string): { artistName: string; trackTitle: string } {
@@ -948,6 +1002,7 @@ function refreshTransportUI() {
     const hasTracks = currentPlaylistRows.length > 0;
     const enabled = hasTracks || currentPlaylistLoading;
     playlistBtnEl.disabled = !enabled;
+    playlistBtnEl.classList.toggle('noPlaylist', !enabled);
     playlistBtnEl.classList.toggle('active', currentPlaylistExpanded && enabled);
     playlistBtnEl.setAttribute('aria-pressed', currentPlaylistExpanded && enabled ? 'true' : 'false');
     playlistBtnEl.setAttribute(
@@ -959,6 +1014,9 @@ function refreshTransportUI() {
         ? 'Hide playlist'
         : 'Show playlist'
       : 'Playlist unavailable';
+    if (playlistBtnLabelEl) {
+      playlistBtnLabelEl.textContent = '';
+    }
   }
 
   renderPlaylistUI();
@@ -1285,12 +1343,15 @@ function closePanel() {
   timeBtnEl = null;
   nextTrackBtnEl = null;
   playlistBtnEl = null;
+  playlistBtnLabelEl = null;
   playlistWrapEl = null;
   playlistScrollEl = null;
   playlistBodyEl = null;
   playlistStatusEl = null;
   playlistHeadTrackBtnEl = null;
   playlistHeadBpmBtnEl = null;
+  infoBtnEl = null;
+  infoPanelEl = null;
   closeBtnEl = null;
   bpmMainEl = null;
   bpmConfLabelEl = null;
@@ -1335,12 +1396,15 @@ function bindRefsFromContainer() {
   timeBtnEl = byRole<HTMLButtonElement>('timeBox');
   nextTrackBtnEl = byRole<HTMLButtonElement>('nextTrack');
   playlistBtnEl = byRole<HTMLButtonElement>('playlistToggle');
+  playlistBtnLabelEl = byRole<HTMLSpanElement>('playlistToggleLabel');
   playlistWrapEl = byRole<HTMLDivElement>('playlistWrap');
   playlistScrollEl = byRole<HTMLDivElement>('playlistScroll');
   playlistBodyEl = byRole<HTMLDivElement>('playlistBody');
   playlistStatusEl = byRole<HTMLDivElement>('playlistStatus');
   playlistHeadTrackBtnEl = byRole<HTMLButtonElement>('playlistHeadTrackSort');
   playlistHeadBpmBtnEl = byRole<HTMLButtonElement>('playlistHeadBpmSort');
+  infoBtnEl = byRole<HTMLButtonElement>('infoBtn');
+  infoPanelEl = byRole<HTMLDivElement>('infoPanel');
   closeBtnEl = byRole<HTMLButtonElement>('closeX');
   bpmMainEl = byRole<HTMLDivElement>('bpmMain');
   bpmConfLabelEl = byRole<HTMLDivElement>('bpmConfLabel');
@@ -1423,45 +1487,179 @@ background:rgba(0,0,0,0.30);
 background:rgba(0,0,0,0.40);
 }
 
-/* macOS close button */
-#${PANEL_ID} .closeX{
+/* Top-right compact actions: [ i | x ] */
+#${PANEL_ID} .topActions{
 position:absolute;
 top:4px;
 right:4px;
-width:16px;
-height:16px;
 display:flex;
-align-items:center;
-justify-content:center;
-padding:0;
-border-radius:6px;
-font-size:12px;
-line-height:1;
-font-weight:500;
-background:transparent;
-border:none;
-user-select:none;
-cursor:pointer;
-color:rgba(0,0,0,0.45);
-transition:background 0.15s ease, color 0.15s ease;
+align-items:stretch;
+height:18px;
+border:1px solid rgba(0,0,0,0.14);
+background:rgba(255,255,255,0.24);
+border-radius:999px;
 overflow:hidden;
 z-index:10;
 }
 
-#${PANEL_ID} .closeX::before{
-content:'×';
-font-size:12px;
-color:currentColor;
+#${PANEL_ID} .topActions button{
+appearance:none;
+width:20px;
+height:18px;
+padding:0;
+margin:0;
+border:none;
+background:transparent;
+position:relative;
+display:flex;
+align-items:center;
+justify-content:center;
+cursor:pointer;
+color:rgba(0,0,0,0.64);
+transition:background 0.15s ease, color 0.15s ease;
 }
 
-#${PANEL_ID} .closeX:hover{
-background:rgba(0,0,0,0.08);
-color:rgba(0,0,0,0.72);
-}
-
-#${PANEL_ID} .closeX:active{
+#${PANEL_ID} .topActions button:not(:last-child)::after{
+content:'';
+position:absolute;
+right:0;
+top:3px;
+bottom:3px;
+width:1px;
 background:rgba(0,0,0,0.14);
-color:rgba(0,0,0,0.82);
+}
+
+#${PANEL_ID} .topActions button:hover{
+background:rgba(255,255,255,0.42);
+color:rgba(0,0,0,0.86);
+}
+
+#${PANEL_ID} .topActions button:active{
+background:rgba(255,255,255,0.16);
+}
+
+@keyframes infoEdgeSpin{
+0%{ transform:rotate(0deg); }
+100%{ transform:rotate(360deg); }
+}
+
+#${PANEL_ID} .topActions .infoBtn::before{
+content:'';
+position:absolute;
+inset:0;
+border-radius:999px 0 0 999px;
+padding:1px;
+background:conic-gradient(
+  from 0deg,
+  rgba(203,112,255,0.96) 0deg,
+  rgba(242,96,194,0.96) 120deg,
+  rgba(203,112,255,0.96) 240deg,
+  rgba(242,96,194,0.96) 360deg
+);
+opacity:0;
+transition:opacity 160ms ease;
+pointer-events:none;
+z-index:0;
+-webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+-webkit-mask-composite:xor;
+mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+mask-composite:exclude;
+}
+
+#${PANEL_ID} .topActions .infoBtn:hover{
+background:rgba(255,255,255,0.30);
+color:rgba(64,18,86,0.96);
+}
+
+#${PANEL_ID} .topActions .infoBtn:hover::before{
+opacity:1;
+animation:infoEdgeSpin 1.2s linear infinite;
+}
+
+#${PANEL_ID} .topActions .infoBtn:active{
+background:rgba(255,255,255,0.16);
+}
+
+#${PANEL_ID} .closeX .closeIcon,
+#${PANEL_ID} .infoBtn .infoIcon{
+position:relative;
+display:block;
+width:10px;
+height:10px;
+}
+
+#${PANEL_ID} .closeX .closeIcon::before,
+#${PANEL_ID} .closeX .closeIcon::after{
+content:'';
+position:absolute;
+left:4px;
+top:0;
+width:1.5px;
+height:10px;
+background:currentColor;
+border-radius:999px;
+}
+
+#${PANEL_ID} .closeX .closeIcon::before{ transform:rotate(45deg); }
+#${PANEL_ID} .closeX .closeIcon::after{ transform:rotate(-45deg); }
+
+#${PANEL_ID} .infoBtn .infoIcon::before{
+content:'';
+position:absolute;
+left:4px;
+top:3px;
+width:1.5px;
+height:6px;
+background:currentColor;
+border-radius:999px;
+}
+
+#${PANEL_ID} .infoBtn .infoIcon::after{
+content:'';
+position:absolute;
+left:4px;
+top:1px;
+width:1.5px;
+height:1.5px;
+background:currentColor;
+border-radius:999px;
+}
+
+#${PANEL_ID} .infoPanel{
+position:absolute;
+top:24px;
+right:4px;
+display:none;
+min-width:170px;
+padding:8px;
+border-radius:10px;
+border:1px solid rgba(0,0,0,0.14);
+background:rgba(245,245,245,0.95);
+backdrop-filter:blur(8px);
+box-shadow:0 8px 18px rgba(0,0,0,0.16);
+z-index:20;
+}
+
+#${PANEL_ID} .infoPanel a{
+display:block;
+padding:6px 8px;
+border-radius:7px;
+font-size:12px;
+font-weight:600;
+line-height:1.2;
+color:#111;
+text-decoration:none;
+}
+
+#${PANEL_ID} .infoPanel a:hover{
+background:rgba(0,0,0,0.08);
+text-decoration:none;
+}
+
+#${PANEL_ID} .closeX:focus-visible,
+#${PANEL_ID} .infoBtn:focus-visible{
+outline:2px solid rgba(0,0,0,0.20);
+outline-offset:1px;
 }
 
 #${PANEL_ID} .topRow{
@@ -1470,7 +1668,7 @@ justify-content:flex-start;
 align-items:center;
 margin-bottom:6px;
 min-height:32px;
-padding-right:24px;
+padding-right:44px;
 cursor:move;
 user-select:none;
 touch-action:none;
@@ -1499,7 +1697,7 @@ text-overflow:ellipsis;
 line-height:1.15;
 }
 
-/* FIXED HEIGHT: Waveform wrapper */
+/* Waveform container */
 #${PANEL_ID} .waveWrap{
 margin:2px 0 0 0;
 padding:6px 8px 2px 8px;
@@ -1573,9 +1771,14 @@ position:relative;
 display:flex;
 align-items:center;
 justify-content:flex-start;
-gap:8px;
+gap:10px;
 margin-top:10px;
-min-height:34px;
+min-height:38px;
+padding:2px 0;
+}
+
+#${PANEL_ID} .transportRow > *{
+margin:0 !important;
 }
 
 #${PANEL_ID} .lower{
@@ -1585,7 +1788,7 @@ grid-template-columns: 1fr;
 gap:10px;
 }
 
-/* FIXED HEIGHT: Card */
+/* Shared card surface */
 #${PANEL_ID} .card{
 border-radius:14px;
 background:var(--surface-soft);
@@ -1594,7 +1797,7 @@ padding:10px;
 min-height:156px;
 }
 
-/* Layout: EQUAL columns (50/50) with centered divider */
+/* Two-column BPM/tap layout with centered divider */
 #${PANEL_ID} .bpmBox{
 display:grid;
 grid-template-columns: 1fr 1fr;
@@ -1603,7 +1806,7 @@ align-items:stretch;
 position:relative;
 }
 
-/* Centered vertical divider - FIXED for true vertical centering */
+/* Centered divider */
 #${PANEL_ID} .bpmBox::after{
 content:'';
 position:absolute;
@@ -1617,7 +1820,7 @@ background:rgba(120,120,120,0.50);
 z-index:1;
 }
 
-/* FIXED HEIGHT: BPM values container */
+/* BPM values column wrapper */
 #${PANEL_ID} .bpmValues{
 display:flex;
 flex-direction:column;
@@ -1626,7 +1829,7 @@ min-height:136px;
 padding:14px 16px 0 10px;
 }
 
-/* FIXED HEIGHT: BPM column */
+/* Individual BPM column */
 #${PANEL_ID} .bpmColumn{
 display:flex;
 flex-direction:column;
@@ -1635,7 +1838,7 @@ min-width:0;
 min-height:60px;
 }
 
-/* FIXED HEIGHT: Label line */
+/* Label row */
 #${PANEL_ID} .labelLine{
 display:flex;
 align-items:baseline;
@@ -1700,7 +1903,7 @@ filter:saturate(1.05);
 background:#12b76a;
 }
 
-/* FIXED HEIGHT: Value */
+/* Value row */
 #${PANEL_ID} .value{
 font-size:26px;
 font-weight:750;
@@ -1711,7 +1914,7 @@ min-height:28px;
 
 #${PANEL_ID} .value.mono{ font-variant-numeric:tabular-nums; }
 
-/* BPM value pulsing animation during analysis */
+/* BPM pulsing animation during analysis */
 #${PANEL_ID} .value.analyzing{
 animation:bpmPulsing 1.5s ease-in-out infinite;
 }
@@ -1721,7 +1924,7 @@ animation:bpmPulsing 1.5s ease-in-out infinite;
 50%{ opacity:1; }
 }
 
-/* Tapper button - SEAMLESS, entire right column clickable, NO HOVER EFFECT */
+/* Full-column tap target */
 #${PANEL_ID} .tapperButton{
 width:100%;
 height:100%;
@@ -1826,11 +2029,12 @@ cursor:default;
 #${PANEL_ID} .transportControls{
 display:flex;
 align-items:stretch;
-height:34px;
-border:1px solid rgba(0,0,0,0.16);
-background:rgba(255,255,255,0.28);
-border-radius:10px;
+height:36px;
+border:1px solid rgba(0,0,0,0.14);
+background:rgba(255,255,255,0.16);
+border-radius:12px;
 overflow:hidden;
+justify-self:start;
 }
 
 #${PANEL_ID} .transportControls button{
@@ -1846,26 +2050,27 @@ background:transparent;
 position:relative;
 user-select:none;
 min-width:42px;
+color:#111;
 }
 
 /* Rounded hover effect - only around symbol */
 #${PANEL_ID} .transportControls button::before{
 content:'';
 position:absolute;
-width:28px;
-height:28px;
-border-radius:8px;
+width:30px;
+height:30px;
+border-radius:9px;
 background:transparent;
 transition:background 0.15s ease;
 z-index:-1;
 }
 
 #${PANEL_ID} .transportControls button:hover::before{
-background:rgba(0,0,0,0.12);
+background:rgba(0,0,0,0.09);
 }
 
 #${PANEL_ID} .transportControls button:active::before{
-background:rgba(0,0,0,0.18);
+background:rgba(0,0,0,0.14);
 }
 
 #${PANEL_ID} .transportControls button.play{
@@ -1887,152 +2092,128 @@ top:50%;
 transform:translateY(-50%);
 width:1px;
 height:60%;
-background:rgba(0,0,0,0.16);
+background:rgba(0,0,0,0.12);
 }
 
 #${PANEL_ID} button.timebox{
-position:absolute;
-left:50%;
-transform:translateX(-50%);
-height:auto;
+position:relative;
+left:auto;
+top:auto;
+transform:none;
+height:36px;
 display:flex;
 align-items:center;
 justify-content:center;
-padding:0;
+padding:0 14px;
 font-size:12px;
-font-weight:750;
-border-radius:0;
+font-weight:720;
+letter-spacing:0.01em;
+border-radius:12px;
 font-variant-numeric:tabular-nums;
 white-space:nowrap;
 user-select:none;
-background:transparent;
-border:none;
-min-width:0;
+background:rgba(255,255,255,0.16);
+border:1px solid rgba(0,0,0,0.14);
+min-width:108px;
 line-height:1.1;
+color:#111;
+z-index:0;
+box-shadow:none;
+transition:background 0.15s ease, border-color 0.15s ease;
 }
 
 #${PANEL_ID} button.timebox:hover{
-background:transparent;
-border-color:transparent;
+background:rgba(255,255,255,0.24);
+border-color:rgba(0,0,0,0.18);
 }
 
 #${PANEL_ID} button.timebox:active{
-background:transparent;
+background:rgba(255,255,255,0.12);
 }
 
 #${PANEL_ID} button.timebox:focus-visible{
-outline:1px solid rgba(0,0,0,0.20);
-outline-offset:2px;
+outline:2px solid rgba(0,0,0,0.22);
+outline-offset:1px;
 }
 
 #${PANEL_ID} button.playlistToggle{
 appearance:none;
-position:absolute;
-right:0;
-top:50%;
-transform:translateY(-50%);
-background:transparent;
-border:none;
-padding:4px 8px;
+position:relative;
+right:auto;
+top:auto;
+transform:none;
+background:rgba(255,255,255,0.16);
+border:1px solid rgba(0,0,0,0.14);
+border-radius:12px;
+padding:0 12px;
 margin:0;
 display:inline-flex;
 align-items:center;
 justify-content:center;
 gap:6px;
-min-width:0;
-height:auto;
+min-width:40px;
+height:36px;
 line-height:1.2;
-color:rgba(0,0,0,0.72);
+color:#111;
 cursor:pointer;
 overflow:hidden;
 flex-direction:row-reverse;
+z-index:0;
+box-shadow:none;
+transition:background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 #${PANEL_ID} button.playlistToggle.active{
-color:rgba(0,0,0,0.92);
+color:#111;
 }
 
 #${PANEL_ID} button.playlistToggle:hover{
-background:transparent;
-border-color:transparent;
-color:rgba(96,96,96,0.96);
+background:rgba(255,255,255,0.24);
+border-color:rgba(0,0,0,0.18);
+color:rgba(64,64,64,0.96);
 }
 
 #${PANEL_ID} button.playlistToggle:active{
-background:transparent;
+background:rgba(255,255,255,0.12);
 }
 
 #${PANEL_ID} .playlistToggleGlyph{
 position:relative;
 display:inline-block;
-width:22px;
-height:14px;
+width:12px;
+height:12px;
 overflow:visible;
 flex:0 0 auto;
 }
 
-#${PANEL_ID} .playlistToggleGlyph .bar{
+#${PANEL_ID} .playlistToggleGlyph .line{
 position:absolute;
 left:0;
-width:13px;
-height:2px;
 background:currentColor;
 border-radius:999px;
 transform:translateZ(0);
 }
 
-#${PANEL_ID} .playlistToggleGlyph .bar.bar1{
+#${PANEL_ID} .playlistToggleGlyph .line.line1{
 top:0;
+width:10px;
+height:1.5px;
 }
 
-#${PANEL_ID} .playlistToggleGlyph .bar.bar2{
-top:6px;
+#${PANEL_ID} .playlistToggleGlyph .line.line2{
+top:5px;
+width:10px;
+height:1.5px;
 }
 
-#${PANEL_ID} .playlistToggleGlyph .bar.bar3{
-top:12px;
-}
-
-#${PANEL_ID} .playlistToggleGlyph::after{
-content:'';
-position:absolute;
-right:0;
-top:50%;
-transform:translateY(-50%);
-width:0;
-height:0;
-border-top:4px solid transparent;
-border-bottom:4px solid transparent;
-border-left:6px solid currentColor;
+#${PANEL_ID} .playlistToggleGlyph .line.line3{
+top:10px;
+width:10px;
+height:1.5px;
 }
 
 #${PANEL_ID} .playlistToggleLabel{
-display:inline-block;
-font-size:10px;
-font-weight:700;
-letter-spacing:0.08em;
-text-transform:uppercase;
-white-space:nowrap;
-color:currentColor;
-opacity:0;
-max-width:0;
-transform:translateX(6px);
-transition:
-  max-width 220ms ease,
-  opacity 180ms ease,
-  transform 220ms ease;
-}
-
-#${PANEL_ID} button.playlistToggle:hover .playlistToggleLabel{
-opacity:0.95;
-max-width:72px;
-transform:translateX(0);
-}
-
-#${PANEL_ID} button.playlistToggle:focus-visible .playlistToggleLabel{
-opacity:0.95;
-max-width:72px;
-transform:translateX(0);
+display:none;
 }
 
 #${PANEL_ID} .playlistWrap{
@@ -2272,7 +2453,9 @@ justify-self:start;
   closeBtnEl.type = 'button';
   closeBtnEl.className = 'closeX';
   closeBtnEl.setAttribute('data-role', 'closeX');
-  closeBtnEl.textContent = '';
+  const closeIconEl = document.createElement('span');
+  closeIconEl.className = 'closeIcon';
+  closeBtnEl.appendChild(closeIconEl);
   closeBtnEl.setAttribute('aria-label', 'Close');
   closeBtnEl.title = 'Close panel';
   closeBtnEl.addEventListener(
@@ -2284,6 +2467,52 @@ justify-self:start;
     },
     true
   );
+
+  infoBtnEl = document.createElement('button');
+  infoBtnEl.type = 'button';
+  infoBtnEl.className = 'infoBtn';
+  infoBtnEl.setAttribute('data-role', 'infoBtn');
+  const infoIconEl = document.createElement('span');
+  infoIconEl.className = 'infoIcon';
+  infoBtnEl.appendChild(infoIconEl);
+  infoBtnEl.setAttribute('aria-label', 'Information');
+  infoBtnEl.setAttribute('aria-expanded', 'false');
+  infoBtnEl.title = 'Information';
+  infoBtnEl.addEventListener(
+    'click',
+    (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      toggleInfoPanel();
+    },
+    true
+  );
+
+  infoPanelEl = document.createElement('div');
+  infoPanelEl.className = 'infoPanel';
+  infoPanelEl.setAttribute('data-role', 'infoPanel');
+
+  const feedbackLinkEl = document.createElement('a');
+  feedbackLinkEl.href = 'https://forms.gle/CMyrodpNPThdr5Aw8';
+  feedbackLinkEl.target = '_blank';
+  feedbackLinkEl.rel = 'noopener noreferrer';
+  feedbackLinkEl.textContent = 'Send feedback 💬';
+
+  const coffeeLinkEl = document.createElement('a');
+  coffeeLinkEl.href = 'https://ko-fi.com/lany_';
+  coffeeLinkEl.target = '_blank';
+  coffeeLinkEl.rel = 'noopener noreferrer';
+  coffeeLinkEl.textContent = 'Buy me a coffee ☕';
+
+  infoPanelEl.appendChild(feedbackLinkEl);
+  infoPanelEl.appendChild(coffeeLinkEl);
+  ensureInfoPanelGlobalListeners();
+
+  const topActionsEl = document.createElement('div');
+  topActionsEl.className = 'topActions';
+  topActionsEl.setAttribute('data-role', 'topActions');
+  topActionsEl.appendChild(infoBtnEl);
+  topActionsEl.appendChild(closeBtnEl);
 
   dragHandleEl = document.createElement('div');
   dragHandleEl.className = 'dragHandle';
@@ -2411,19 +2640,20 @@ justify-self:start;
 
   const playlistGlyphEl = document.createElement('span');
   playlistGlyphEl.className = 'playlistToggleGlyph';
-  const playlistGlyphBar1El = document.createElement('span');
-  playlistGlyphBar1El.className = 'bar bar1';
-  const playlistGlyphBar2El = document.createElement('span');
-  playlistGlyphBar2El.className = 'bar bar2';
-  const playlistGlyphBar3El = document.createElement('span');
-  playlistGlyphBar3El.className = 'bar bar3';
-  playlistGlyphEl.appendChild(playlistGlyphBar1El);
-  playlistGlyphEl.appendChild(playlistGlyphBar2El);
-  playlistGlyphEl.appendChild(playlistGlyphBar3El);
+  const playlistGlyphLine1El = document.createElement('span');
+  playlistGlyphLine1El.className = 'line line1';
+  const playlistGlyphLine2El = document.createElement('span');
+  playlistGlyphLine2El.className = 'line line2';
+  const playlistGlyphLine3El = document.createElement('span');
+  playlistGlyphLine3El.className = 'line line3';
+  playlistGlyphEl.appendChild(playlistGlyphLine1El);
+  playlistGlyphEl.appendChild(playlistGlyphLine2El);
+  playlistGlyphEl.appendChild(playlistGlyphLine3El);
 
   const playlistLabelEl = document.createElement('span');
   playlistLabelEl.className = 'playlistToggleLabel';
-  playlistLabelEl.textContent = 'PLAYLIST';
+  playlistLabelEl.setAttribute('data-role', 'playlistToggleLabel');
+  playlistLabelEl.textContent = '';
 
   playlistBtnEl.appendChild(playlistGlyphEl);
   playlistBtnEl.appendChild(playlistLabelEl);
@@ -2655,7 +2885,8 @@ justify-self:start;
   noteEl.textContent = '';
   noteEl.style.display = 'none';
 
-  inner.appendChild(closeBtnEl);
+  inner.appendChild(topActionsEl);
+  inner.appendChild(infoPanelEl);
   inner.appendChild(topRowEl);
   inner.appendChild(trackTitleEl);
   inner.appendChild(waveformWrapEl);
