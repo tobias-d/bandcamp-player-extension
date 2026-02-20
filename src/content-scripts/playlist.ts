@@ -69,6 +69,8 @@ interface InternalPlaylistTrack {
   isPlayingHint: boolean;
 }
 
+const EXTERNAL_PLAYLIST_AUDIO_ID = '__bc_playlist_external_audio__';
+
 function norm(input: string | null | undefined): string {
   return String(input || '').replace(/\s+/g, ' ').trim();
 }
@@ -232,34 +234,6 @@ function getLocalTralbumData(): BandcampTralbumData | null {
   return extractDataAttribute('script[data-tralbum]', 'data-tralbum') as BandcampTralbumData | null;
 }
 
-function isCollectionPage(): boolean {
-  const host = window.location.hostname.toLowerCase();
-  if (host !== 'bandcamp.com' && host !== 'www.bandcamp.com') return false;
-
-  const path = window.location.pathname.replace(/\/+$/, '');
-  if (!path || path === '/') return false;
-  if (path.includes('/album/') || path.includes('/track/')) return false;
-
-  const firstSegment = path.split('/').filter(Boolean)[0] || '';
-  const reserved = new Set([
-    'about',
-    'api',
-    'blog',
-    'discover',
-    'feed',
-    'help',
-    'search',
-    'tag',
-    'terms_of_use',
-    'privacy',
-    'tour',
-    'music',
-  ]);
-  if (reserved.has(firstSegment)) return false;
-
-  return true;
-}
-
 function isBandcampTrackOrAlbumUrl(raw: string): boolean {
   const url = normalizeUrl(raw);
   if (!url) return false;
@@ -274,7 +248,216 @@ function isBandcampTrackOrAlbumUrl(raw: string): boolean {
   }
 }
 
-function getCollectionPlayerLinkedUrl(): string {
+function getNowPlayingTitleFromDom(): string {
+  const selectors = [
+    '.play_status .track-title',
+    '.play_status .title',
+    '#footer-player .track-title',
+    '#footer-player .title',
+    '.playing_track .track-title',
+    '.playing_track .title',
+    '.playback-controls .track-title',
+    '.playback-controls .title',
+    '.bc-player .track-title',
+    '.bc-player .title',
+    '.player .track-title',
+    '.player .title',
+  ];
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    const title = norm(el?.textContent || '');
+    if (title) return title;
+  }
+  return '';
+}
+
+function getNowPlayingArtistFromDom(): string {
+  const selectors = [
+    '.play_status .artist',
+    '.play_status .by',
+    '#footer-player .artist',
+    '#footer-player .by',
+    '.playing_track .artist',
+    '.playing_track .by',
+    '.playback-controls .artist',
+    '.playback-controls .by',
+    '.bc-player .artist',
+    '.bc-player .by',
+    '.player .artist',
+    '.player .by',
+  ];
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    const artist = norm(el?.textContent || '').replace(/^by\s+/i, '');
+    if (artist) return artist;
+  }
+  return '';
+}
+
+function slugifyBandcampName(input: string): string {
+  return norm(input)
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function parseArtistTitle(rawTitle: string): { artist: string; title: string } {
+  const v = norm(rawTitle);
+  if (!v) return { artist: '', title: '' };
+  const sep = v.match(/^(.+?)\s+[—–-]\s+(.+)$/);
+  if (sep) {
+    return { artist: norm(sep[1]), title: norm(sep[2]) };
+  }
+  return { artist: '', title: v };
+}
+
+function hostMatchesArtistHint(rawUrl: string, artistHints: string[]): boolean {
+  if (!artistHints.length) return false;
+  const url = normalizeUrl(rawUrl);
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    const sub = host.split('.')[0] || '';
+    if (!sub) return false;
+    return artistHints.some((hint) => hint && (sub === hint || sub.includes(hint) || hint.includes(sub)));
+  } catch {
+    return false;
+  }
+}
+
+function getBestGlobalBandcampLink(nowPlayingTitle: string, nowPlayingArtist: string): string {
+  const parsed = parseArtistTitle(nowPlayingTitle);
+  const effectiveTitle = norm(parsed.title || nowPlayingTitle);
+  const effectiveArtist = norm(nowPlayingArtist || parsed.artist);
+  const titleSlug = slugifyBandcampName(effectiveTitle);
+  const titleNorm = normalizeCmpText(effectiveTitle);
+  const artistHints = [slugifyBandcampName(effectiveArtist)].filter(Boolean);
+  if (!titleSlug && !titleNorm && !artistHints.length) return '';
+
+  const anchors = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+  let bestUrl = '';
+  let bestScore = -1;
+
+  for (const anchor of anchors) {
+    const href = anchor.getAttribute('href') || '';
+    if (!isBandcampTrackOrAlbumUrl(href)) continue;
+    const absolute = normalizeUrl(href);
+    if (!absolute) continue;
+
+    let score = 0;
+    try {
+      const parsedUrl = new URL(absolute);
+      const pathLower = parsedUrl.pathname.toLowerCase();
+      if (titleSlug && pathLower.includes(titleSlug)) score += 6;
+      if (artistHints.length && hostMatchesArtistHint(absolute, artistHints)) score += 4;
+    } catch {
+      // Ignore URL parse errors.
+    }
+
+    const anchorText = normalizeCmpText(anchor.textContent || '');
+    const containerText = normalizeCmpText(
+      anchor.closest('article, li, .collection-item, .track_row, .trackrow, tr.track_row_view, .playing_track')?.textContent || ''
+    );
+    if (titleNorm) {
+      if (anchorText && (anchorText === titleNorm || anchorText.includes(titleNorm) || titleNorm.includes(anchorText))) {
+        score += 3;
+      }
+      if (
+        containerText &&
+        (containerText === titleNorm || containerText.includes(titleNorm) || titleNorm.includes(containerText))
+      ) {
+        score += 2;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestUrl = absolute;
+    }
+  }
+
+  return bestScore >= 5 ? bestUrl : '';
+}
+
+function getLinkedUrlFromEmbedIframes(nowPlayingTitle: string, nowPlayingArtist: string): string {
+  const titleSlug = slugifyBandcampName(nowPlayingTitle);
+  const artistHints = [slugifyBandcampName(nowPlayingArtist)].filter(Boolean);
+  const frames = Array.from(document.querySelectorAll('iframe[src]')) as HTMLIFrameElement[];
+  for (const frame of frames) {
+    const rawSrc = frame.getAttribute('src') || '';
+    const src = normalizeUrl(rawSrc);
+    if (!src) continue;
+    const lower = src.toLowerCase();
+    if (!lower.includes('bandcamp.com')) continue;
+    if (!/embeddedplayer|player/.test(lower)) continue;
+
+    const decoded = decodeURIComponent(src);
+    const directMatch = decoded.match(/https?:\/\/[^"'\s]+\/(?:album|track)\/[^"'\s?]+/i);
+    if (directMatch?.[0]) {
+      const candidate = normalizeUrl(directMatch[0]);
+      if (candidate && isBandcampTrackOrAlbumUrl(candidate)) {
+        if (!artistHints.length || hostMatchesArtistHint(candidate, artistHints)) {
+          if (!titleSlug || candidate.toLowerCase().includes(titleSlug)) return candidate;
+        }
+      }
+    }
+  }
+  return '';
+}
+
+function getLinkedUrlFromLocalTralbum(tralbum: BandcampTralbumData | null, nowPlayingTitle: string): string {
+  const trackinfo = Array.isArray(tralbum?.trackinfo) ? tralbum!.trackinfo! : [];
+  if (!trackinfo.length) return '';
+
+  const nowTitle = normalizeCmpText(nowPlayingTitle || tralbum?.current?.title || '');
+  let candidate: BandcampTrackInfo | null = null;
+
+  if (nowTitle) {
+    candidate =
+      trackinfo.find((track) => normalizeCmpText(track?.title || '') === nowTitle) ||
+      trackinfo.find((track) => {
+        const title = normalizeCmpText(track?.title || '');
+        return Boolean(title) && (title.includes(nowTitle) || nowTitle.includes(title));
+      }) ||
+      null;
+  }
+
+  if (!candidate) {
+    candidate = trackinfo.find((track) => Boolean(track?.is_playing)) || trackinfo[0] || null;
+  }
+
+  const pageUrl = candidate ? getTrackPageUrl(candidate) : '';
+  if (!isBandcampTrackOrAlbumUrl(pageUrl)) return '';
+  return normalizeUrl(pageUrl);
+}
+
+function anchorMatchesNowTitle(anchor: HTMLAnchorElement, nowTitleNorm: string, artistHints: string[]): boolean {
+  const href = anchor.getAttribute('href') || anchor.href || '';
+  if (!nowTitleNorm) {
+    return hostMatchesArtistHint(href, artistHints);
+  }
+  const textCandidates = [
+    norm(anchor.textContent || ''),
+    norm(anchor.getAttribute('title') || ''),
+    norm(anchor.closest('.track_row, .trackrow, tr.track_row_view, .playing_track, .collection-item, article, li')?.textContent || ''),
+  ];
+  for (const text of textCandidates) {
+    const cmp = normalizeCmpText(text);
+    if (!cmp) continue;
+    if (cmp === nowTitleNorm || cmp.includes(nowTitleNorm) || nowTitleNorm.includes(cmp)) {
+      if (!artistHints.length || hostMatchesArtistHint(href, artistHints)) return true;
+    }
+  }
+  // Title not found near anchor text; allow host-based artist hint as fallback.
+  return hostMatchesArtistHint(href, artistHints);
+}
+
+function getCollectionPlayerLinkedUrl(nowPlayingTitle = '', nowPlayingArtist = ''): string {
+  const nowTitleNorm = normalizeCmpText(nowPlayingTitle);
+  const artistHints = [slugifyBandcampName(nowPlayingArtist)].filter(Boolean);
   const directSelectors = [
     '.play_status .track-title a[href]',
     '.play_status .title a[href]',
@@ -284,23 +467,56 @@ function getCollectionPlayerLinkedUrl(): string {
     '#collection-player .track-title a[href]',
     '#collection-player .fromAlbum a[href]',
     '#track_play_waypoint a[href]',
+    '#footer-player a[href*="/album/"]',
+    '#footer-player a[href*="/track/"]',
+    '.playing_track a[href*="/album/"]',
+    '.playing_track a[href*="/track/"]',
+    '.playback-controls a[href*="/album/"]',
+    '.playback-controls a[href*="/track/"]',
+    '.bc-player a[href*="/album/"]',
+    '.bc-player a[href*="/track/"]',
+    '.story.playing a.item-link[href*="/album/"]',
+    '.story.playing a.item-link[href*="/track/"]',
+    '.story-innards.playing a.item-link[href*="/album/"]',
+    '.story-innards.playing a.item-link[href*="/track/"]',
+    '.track_play_hilite.playing a.item-link[href*="/album/"]',
+    '.track_play_hilite.playing a.item-link[href*="/track/"]',
+    '.track_play_hilite a.item-link[href*="/album/"]',
+    '.track_play_hilite a.item-link[href*="/track/"]',
   ];
 
   for (const selector of directSelectors) {
     const anchor = document.querySelector(selector) as HTMLAnchorElement | null;
     if (!anchor) continue;
+    if (!anchorMatchesNowTitle(anchor, nowTitleNorm, artistHints)) continue;
     const href = anchor.getAttribute('href') || '';
     if (!isBandcampTrackOrAlbumUrl(href)) continue;
     const normalized = normalizeUrl(href);
     if (normalized) return normalized;
   }
 
-  const roots = ['.play_status', '.collection-player', '#collection-player', '#track_play_waypoint'];
+  const roots = [
+    '.play_status',
+    '.collection-player',
+    '#collection-player',
+    '#track_play_waypoint',
+    '#footer-player',
+    '.playing_track',
+    '.playback-controls',
+    '.bc-player',
+    '.player',
+    '.story.playing',
+    '.story-innards.playing',
+    '.track_play_hilite.playing',
+    '.story-list',
+    'li.story.fp',
+  ];
   for (const rootSelector of roots) {
     const root = document.querySelector(rootSelector);
     if (!root) continue;
     const anchors = Array.from(root.querySelectorAll('a[href]')) as HTMLAnchorElement[];
     for (const anchor of anchors) {
+      if (!anchorMatchesNowTitle(anchor, nowTitleNorm, artistHints)) continue;
       const href = anchor.getAttribute('href') || '';
       if (!isBandcampTrackOrAlbumUrl(href)) continue;
       const normalized = normalizeUrl(href);
@@ -308,7 +524,7 @@ function getCollectionPlayerLinkedUrl(): string {
     }
   }
 
-  return '';
+  return getBestGlobalBandcampLink(nowPlayingTitle, nowPlayingArtist);
 }
 
 function toInternalTracks(trackinfo: BandcampTrackInfo[]): InternalPlaylistTrack[] {
@@ -575,6 +791,30 @@ function getAudioElements(): HTMLAudioElement[] {
   return Array.from(document.querySelectorAll('audio'));
 }
 
+function getExternalPlaylistAudio(): HTMLAudioElement | null {
+  const el = document.getElementById(EXTERNAL_PLAYLIST_AUDIO_ID);
+  return el instanceof HTMLAudioElement ? el : null;
+}
+
+function ensureExternalPlaylistAudio(): HTMLAudioElement {
+  const existing = getExternalPlaylistAudio();
+  if (existing) return existing;
+
+  const audio = document.createElement('audio');
+  audio.id = EXTERNAL_PLAYLIST_AUDIO_ID;
+  audio.preload = 'auto';
+  audio.style.display = 'none';
+  audio.setAttribute('data-bc-playlist-external', '1');
+  (document.body || document.documentElement).appendChild(audio);
+  return audio;
+}
+
+function stopExternalPlaylistAudio(): void {
+  const audio = getExternalPlaylistAudio();
+  if (!audio) return;
+  pauseAudioSafe(audio);
+}
+
 function pauseAudioSafe(audio: HTMLAudioElement): void {
   try {
     if (!audio.paused) {
@@ -720,6 +960,33 @@ function jumpByAudioSource(streamUrl: string): boolean {
   return true;
 }
 
+function playViaExternalAudioSource(streamUrl: string): boolean {
+  const normalized = normalizeUrl(streamUrl);
+  if (!normalized) return false;
+
+  const audio = ensureExternalPlaylistAudio();
+  if (!audio) return false;
+
+  const audios = getAudioElements();
+  for (const el of audios) {
+    if (el === audio) continue;
+    pauseAudioSafe(el);
+  }
+
+  const currentSrc = normalizeUrl(audio.currentSrc || audio.src || '');
+  if (currentSrc !== normalized) {
+    try {
+      audio.src = normalized;
+      audio.load();
+    } catch {
+      return false;
+    }
+  }
+
+  tryPlayAudio(audio);
+  return true;
+}
+
 class PlaylistController {
   private readonly sendRuntimeMessage: <T = any>(message: any) => Promise<T>;
   private readonly onChange: (() => void) | null;
@@ -736,6 +1003,10 @@ class PlaylistController {
   private bpmByCacheKey = new Map<string, number>();
   private bpmMissingKeys = new Set<string>();
   private currentAudioSrc = '';
+  private currentTrackTitleHint = '';
+  private currentArtistHint = '';
+  private externalPlaylistMode = false;
+  private nativeTrackId = '';
   private lastLocationHref = '';
   private resolveRunId = 0;
   private resolveInFlight = false;
@@ -752,12 +1023,14 @@ class PlaylistController {
     return this.viewState;
   }
 
-  refresh(currentAudioSrc: string, currentTrackBpm?: number): void {
+  refresh(currentAudioSrc: string, currentTrackBpm?: number, currentTrackTitle?: string, currentArtist?: string): void {
     const nextSrc = normalizeUrl(currentAudioSrc);
     const locationHref = window.location.href;
     const srcChanged = nextSrc !== this.currentAudioSrc;
     const locationChanged = locationHref !== this.lastLocationHref;
     this.currentAudioSrc = nextSrc;
+    this.currentTrackTitleHint = norm(currentTrackTitle || '');
+    this.currentArtistHint = norm(currentArtist || '');
     this.lastLocationHref = locationHref;
 
     if (locationChanged && this.viewState.expanded) {
@@ -819,6 +1092,18 @@ class PlaylistController {
     const currentIndex = getCurrentTrackIndex(this.tracks, this.currentAudioSrc);
     const total = this.tracks.length;
 
+    if (this.externalPlaylistMode) {
+      const isNativeTarget = Boolean(this.nativeTrackId && track.trackId && track.trackId === this.nativeTrackId);
+      if (!isNativeTarget) {
+        const played = playViaExternalAudioSource(track.streamUrl);
+        if (played) {
+          return true;
+        }
+        return false;
+      }
+      stopExternalPlaylistAudio();
+    }
+
     if (jumpViaPrevNext(currentIndex, index, total)) {
       ensureSelectedTrackPlayback(track.streamUrl, true, false);
       return true;
@@ -848,6 +1133,15 @@ class PlaylistController {
       return true;
     }
     return false;
+  }
+
+  jumpRelative(direction: number): boolean {
+    if (!this.externalPlaylistMode) return false;
+    if (!this.tracks.length) return false;
+    const currentIndex = getCurrentTrackIndex(this.tracks, this.currentAudioSrc);
+    const base = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (base + (direction > 0 ? 1 : -1) + this.tracks.length) % this.tracks.length;
+    return this.jumpToTrack(nextIndex);
   }
 
   private notifyChange(): void {
@@ -890,8 +1184,17 @@ class PlaylistController {
       const localTralbum = getLocalTralbumData();
       let trackinfo = Array.isArray(localTralbum?.trackinfo) ? localTralbum!.trackinfo! : [];
 
-      if (isCollectionPage() && trackinfo.length <= 1) {
-        const linkedUrl = getCollectionPlayerLinkedUrl();
+      if (trackinfo.length <= 1) {
+        const nowPlayingTitle =
+          getNowPlayingTitleFromDom() ||
+          this.currentTrackTitleHint ||
+          norm(localTralbum?.current?.title) ||
+          norm(localTralbum?.trackinfo?.[0]?.title);
+        const nowPlayingArtist = getNowPlayingArtistFromDom() || this.currentArtistHint || norm(localTralbum?.artist);
+        const linkedUrl =
+          getLinkedUrlFromLocalTralbum(localTralbum, nowPlayingTitle) ||
+          getCollectionPlayerLinkedUrl(nowPlayingTitle, nowPlayingArtist) ||
+          getLinkedUrlFromEmbedIframes(nowPlayingTitle, nowPlayingArtist);
         if (linkedUrl) {
           try {
             const response = await this.sendRuntimeMessage<FetchTralbumResponse>({
@@ -915,6 +1218,12 @@ class PlaylistController {
       }
 
       if (runId !== this.resolveRunId) return;
+
+      const localTrackinfoLen = Array.isArray(localTralbum?.trackinfo) ? localTralbum!.trackinfo!.length : 0;
+      this.externalPlaylistMode = localTrackinfoLen <= 1 && trackinfo.length > 1;
+      this.nativeTrackId =
+        norm(String(localTralbum?.trackinfo?.[0]?.track_id ?? localTralbum?.trackinfo?.[0]?.id ?? '')) ||
+        extractTrackIdFromSrc(this.currentAudioSrc);
 
       this.tracks = toInternalTracks(trackinfo);
       this.bpmRunId += 1;

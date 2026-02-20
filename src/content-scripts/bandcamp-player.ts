@@ -877,7 +877,7 @@ function buildPanelState(): PanelState {
   }
 
   const waveformStatus = analysisInFlight ? 'Analyzing…' : lastAnalysis?.waveformStatus || '';
-  playlistController.refresh(src, lastAnalysis?.bpm);
+  playlistController.refresh(src, lastAnalysis?.bpm, meta.trackTitle, meta.artistName);
   const playlistState = playlistController.getState();
 
   return {
@@ -917,8 +917,16 @@ function renderPanel(): void {
       if (!audio) return;
       seekToFraction(audio, fraction);
     },
-    onPrevTrack: () => skipTrack(-1),
-    onNextTrack: () => skipTrack(1),
+    onPrevTrack: () => {
+      if (!playlistController.jumpRelative(-1)) {
+        skipTrack(-1);
+      }
+    },
+    onNextTrack: () => {
+      if (!playlistController.jumpRelative(1)) {
+        skipTrack(1);
+      }
+    },
     onTogglePlaylist: () => playlistController.toggleExpanded(),
     onSelectPlaylistTrack: (index: number) => {
       if (!Number.isFinite(index)) return;
