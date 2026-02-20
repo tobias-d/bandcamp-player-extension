@@ -1,43 +1,53 @@
 # Bandcamp Player Extension
 
-A floating Bandcamp player with reliable BPM analysis (Essentia.js), waveform visualization, and playlist-aware playback controls.
+Bandcamp Player Extension is a floating player add-on for Bandcamp.
+Its main goal is to provide accurate BPM readings and make music digging more fun.
 
-![Screenshot](image.png)
-
-## Latest Change (v2.5)
-
-- Added a robust Playlist workflow across album, track, collection, feed, and recommendation contexts.
-- Added an Information button (`i`) with quick links for feedback and support.
-- Improved playlist/playback syncing and stability when switching between page-native and external playlist sources.
+![Bandcamp Player Screenshot](image.png)
 
 ## Main Features
 
 - Floating player overlay on Bandcamp pages
-- BPM detection using `essentia.js` (WASM)
+- Accurate BPM detection via `essentia.js` (WASM)
 - 3-band waveform visualization (low / mid / high)
-- Playlist UI with track list, BPM, duration, sorting, and track jump
-- Previous/next/play transport controls and media key support
-- Background analysis cache reused across pages
+- Playlist UI with track list, BPM, duration, sorting, and direct track jump
+- Previous/next/play controls plus media key support
+- Background analysis caching reused across pages
 
-## Browser Targets
+## Latest Changes (v2.5)
 
-- Firefox (MV2): `src/manifest.firefox.json`
-- Chromium (MV3): `src/manifest.json`
+- Added a robust playlist workflow across album, track, collection, feed, and recommendation contexts.
+- Added an Information button (`i`) with quick links for feedback and support.
+- Improved playlist/playback syncing and stability when switching between page-native and external playlist sources.
 
-## Build
+## What Is Essentia?
+
+Essentia is an open-source audio analysis library. This project uses `essentia.js` (its WebAssembly/JavaScript version) to estimate BPM more reliably than simple heuristics.
+
+## Installation
+
+Download this build and install dependencies:
 
 ```bash
+git clone https://github.com/tobias-d/bandcamp-player-extension.git
+cd bandcamp-player-extension
+git checkout codex/playlist
 npm install
-npm run build:firefox
-npm run build:chrome
-npm run build:dev
 ```
 
-## Firefox Local Load
+Build:
 
-1. Build: `npm run build:firefox`
-2. Open: `about:debugging#/runtime/this-firefox`
-3. Load temporary add-on: `dist/manifest.json`
+```bash
+npm run build:firefox
+# or
+npm run build:chrome
+```
+
+Load in Firefox (temporary):
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click `Load Temporary Add-on...`
+3. Select `dist/manifest.json`
 
 ## Project Structure
 
@@ -46,14 +56,14 @@ npm run build:dev
 - `src/background/messaging.ts`: message routing between content and background
 - `src/background/analyzer.ts`: BPM + waveform analysis orchestration
 - `src/background/tempo-essentia.ts`: Essentia-based tempo estimation
-- `src/background/waveform.ts`: waveform generation/cache
-- `src/ui/results-panel.ts`: floating player/panel UI rendering
+- `src/background/waveform.ts`: waveform generation and cache
+- `src/ui/results-panel.ts`: floating player and panel UI rendering
 
 ## License
 
 Project source is MIT-licensed (see `LICENSE`).
 
-Third-party note: this project uses `essentia.js` (`AGPL-3.0`). Distribution must comply with AGPL obligations for that dependency.
+This project uses `essentia.js` (`AGPL-3.0`). If you distribute the extension, ensure compliance with AGPL obligations for that dependency.
 
 See:
 - `docs/THIRD_PARTY_NOTICES.md`
