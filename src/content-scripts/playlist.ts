@@ -487,12 +487,21 @@ function findAndClickTrackByTitle(title: string): boolean {
   if (!target) return false;
 
   const rows = selectPlaylistRows();
+  const fuzzyMatches: HTMLElement[] = [];
   for (const row of rows) {
     const rowTitle = normalizeCmpText(getTrackRowTitle(row));
     if (!rowTitle) continue;
-    if (rowTitle === target || rowTitle.includes(target) || target.includes(rowTitle)) {
+    if (rowTitle === target) {
       if (clickTrackContainer(row)) return true;
     }
+    if (rowTitle.includes(target) || target.includes(rowTitle)) {
+      fuzzyMatches.push(row);
+    }
+  }
+
+  // Only use fuzzy fallback when there is exactly one candidate.
+  if (fuzzyMatches.length === 1) {
+    if (clickTrackContainer(fuzzyMatches[0])) return true;
   }
 
   return false;
@@ -626,7 +635,11 @@ function findAudioByStreamUrl(streamUrl: string): HTMLAudioElement | null {
   return null;
 }
 
-function ensureSelectedTrackPlayback(targetStreamUrl: string, preferImmediateFallback = false): void {
+function ensureSelectedTrackPlayback(
+  targetStreamUrl: string,
+  preferImmediateFallback = false,
+  allowDirectSrcFallback = true
+): void {
   const maxRetries = preferImmediateFallback ? 6 : 12;
   const retryMs = preferImmediateFallback ? 70 : 120;
   const fallbackAttempt = preferImmediateFallback ? 4 : maxRetries;
@@ -648,7 +661,7 @@ function ensureSelectedTrackPlayback(targetStreamUrl: string, preferImmediateFal
 
     // If we know target URL, do not reactivate a different track.
     if (normalizedTarget) {
-      if (!fallbackTriggered && attempt >= fallbackAttempt) {
+      if (allowDirectSrcFallback && !fallbackTriggered && attempt >= fallbackAttempt) {
         fallbackTriggered = true;
         jumpByAudioSource(normalizedTarget);
       }
@@ -656,7 +669,7 @@ function ensureSelectedTrackPlayback(targetStreamUrl: string, preferImmediateFal
       if (attempt < maxRetries) {
         setTimeout(tick, retryMs);
       } else {
-        if (!fallbackTriggered) {
+        if (allowDirectSrcFallback && !fallbackTriggered) {
           jumpByAudioSource(normalizedTarget);
         }
       }
@@ -806,25 +819,26 @@ class PlaylistController {
     const currentIndex = getCurrentTrackIndex(this.tracks, this.currentAudioSrc);
     const total = this.tracks.length;
 
+    if (jumpViaPrevNext(currentIndex, index, total)) {
+      ensureSelectedTrackPlayback(track.streamUrl, true, false);
+      return true;
+    }
+
     if (findAndClickTrackById(track.trackId)) {
-      ensureSelectedTrackPlayback(track.streamUrl, true);
-      return true;
-    }
-    if (findAndClickTrackByPageUrl(track.pageUrl)) {
-      ensureSelectedTrackPlayback(track.streamUrl, true);
-      return true;
-    }
-    if (findAndClickTrackByTitle(track.title)) {
-      ensureSelectedTrackPlayback(track.streamUrl, true);
+      ensureSelectedTrackPlayback(track.streamUrl, true, false);
       return true;
     }
     const rows = selectPlaylistRows();
     if (rows[track.index] && clickTrackContainer(rows[track.index])) {
-      ensureSelectedTrackPlayback(track.streamUrl, true);
+      ensureSelectedTrackPlayback(track.streamUrl, true, false);
       return true;
     }
-    if (jumpViaPrevNext(currentIndex, index, total)) {
-      ensureSelectedTrackPlayback(track.streamUrl, true);
+    if (findAndClickTrackByPageUrl(track.pageUrl)) {
+      ensureSelectedTrackPlayback(track.streamUrl, true, false);
+      return true;
+    }
+    if (findAndClickTrackByTitle(track.title)) {
+      ensureSelectedTrackPlayback(track.streamUrl, true, false);
       return true;
     }
 

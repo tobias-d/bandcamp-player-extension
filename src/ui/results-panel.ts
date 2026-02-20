@@ -647,6 +647,7 @@ function drawWaveform(waveform, statusText, playheadFraction, isAnalyzing) {
 function renderPlaylistUI() {
   if (!playlistWrapEl || !playlistScrollEl || !playlistBodyEl || !playlistStatusEl) return;
   const playlistViewportEl = playlistScrollEl.parentElement as HTMLElement | null;
+  const prevScrollTop = playlistScrollEl.scrollTop;
 
   const hasTracks = currentPlaylistRows.length > 0;
   const shouldShow = currentPlaylistExpanded && (hasTracks || currentPlaylistLoading);
@@ -758,6 +759,11 @@ function renderPlaylistUI() {
     playlistBodyEl.appendChild(rowBtn);
   }
 
+  if (!pendingPlaylistAutoCenter && Number.isFinite(prevScrollTop)) {
+    const maxTop = Math.max(0, playlistScrollEl.scrollHeight - playlistScrollEl.clientHeight);
+    playlistScrollEl.scrollTop = clamp(prevScrollTop, 0, maxTop);
+  }
+
   syncPlaylistCurrentHighlight();
   if (pendingPlaylistAutoCenter) {
     const centered = maybeCenterCurrentPlaylistRow(true);
@@ -783,6 +789,14 @@ function getSortedPlaylistRows(): Array<{
   });
 
   if (currentPlaylistSortMode === 'track') {
+    rows.sort((a, b) => a.playlistIndex - b.playlistIndex);
+    return rows;
+  }
+
+  // Avoid unstable "current track jumps to top" behavior when only one
+  // track has a resolved BPM. In that case, keep track-number ordering.
+  const knownBpmCount = rows.reduce((count, item) => (Number.isFinite(item.bpm) ? count + 1 : count), 0);
+  if (knownBpmCount < 2) {
     rows.sort((a, b) => a.playlistIndex - b.playlistIndex);
     return rows;
   }
@@ -864,6 +878,7 @@ function maybeCenterCurrentPlaylistRow(force = false): boolean {
   if (!currentPlaylistExpanded) return false;
   if (!currentPlaylistRows.length) return false;
   if (!Number.isFinite(currentPlaylistIndex) || currentPlaylistIndex < 0) return false;
+  if (currentPlaylistSortMode === 'bpm') return false;
 
   const row = playlistBodyEl.querySelector(`[data-playlist-index="${currentPlaylistIndex}"]`) as HTMLElement | null;
   if (!row) return false;
@@ -1381,7 +1396,7 @@ width:460px;
 --surface-soft:rgba(228,228,228,0.25);
 transform-origin:top left;
 transform:scale(var(--panel-scale));
-font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,Helvetica,Arial,sans-serif;
 background:rgba(235,235,235,0.62);
 color:#111;
 border:1px solid rgba(0,0,0,0.14);
