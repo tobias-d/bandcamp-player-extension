@@ -17,6 +17,7 @@
 import showResultsPanel from '../ui/results-panel';
 import { getTrackMeta } from './metadata-extractor';
 import type { BeatMode } from '../shared/index';
+import { createPlaylistController, type PlaylistTrack } from './playlist';
 
 interface WaveformData {
   peaksLow?: number[];
@@ -62,6 +63,10 @@ interface PanelState {
   note?: string;
   waveform: WaveformData | null;
   waveformStatus: string;
+  playlistTracks: PlaylistTrack[];
+  playlistCurrentIndex: number;
+  playlistExpanded: boolean;
+  playlistLoading: boolean;
 }
 
 interface PanelCallbacks {
@@ -69,6 +74,8 @@ interface PanelCallbacks {
   onSeekToFraction: (fraction: number) => void;
   onPrevTrack: () => void;
   onNextTrack: () => void;
+  onTogglePlaylist: () => void;
+  onSelectPlaylistTrack: (index: number) => void;
 }
 
 interface BandcampTrackInfo {
@@ -177,6 +184,12 @@ function sendRuntimeMessage<T = any>(message: any): Promise<T> {
     }
   });
 }
+
+const playlistController = createPlaylistController({
+  sendRuntimeMessage,
+  onChange: () => scheduleRender(),
+  getBeatMode: () => beatMode,
+});
 
 async function cancelAnalysis(url?: string): Promise<void> {
   if (!canMessage()) return;
@@ -864,6 +877,8 @@ function buildPanelState(): PanelState {
   }
 
   const waveformStatus = analysisInFlight ? 'Analyzing…' : lastAnalysis?.waveformStatus || '';
+  playlistController.refresh(src, lastAnalysis?.bpm);
+  const playlistState = playlistController.getState();
 
   return {
     title,
@@ -882,9 +897,16 @@ function buildPanelState(): PanelState {
     note: lastAnalysis?.note,
     waveform: lastAnalysis?.waveform || null,
     waveformStatus,
+    playlistTracks: playlistState.tracks,
+    playlistCurrentIndex: playlistState.currentIndex,
+    playlistExpanded: playlistState.expanded,
+    playlistLoading: playlistState.loading,
   };
 }
 
+/**
+ * Build callbacks and push the latest state into the UI panel.
+ */
 function renderPanel(): void {
   const state = buildPanelState();
 
@@ -897,6 +919,17 @@ function renderPanel(): void {
     },
     onPrevTrack: () => skipTrack(-1),
     onNextTrack: () => skipTrack(1),
+    onTogglePlaylist: () => playlistController.toggleExpanded(),
+    onSelectPlaylistTrack: (index: number) => {
+      if (!Number.isFinite(index)) return;
+      const jumped = playlistController.jumpToTrack(index);
+      if (jumped) {
+        setTimeout(() => {
+          ensureActiveAudio();
+          scheduleRender();
+        }, 50);
+      }
+    },
   };
 
   showResultsPanel(state, callbacks);
@@ -952,9 +985,14 @@ async function waitForAudio(timeoutMs = 20000): Promise<void> {
   }
 }
 
+/**
+ * Content-script bootstrap:
+ * - subscribe to runtime partial updates
+ * - subscribe to play events
+ * - restore persisted beat mode
+ * - render once audio is available
+ */
 async function init(): Promise<void> {
-  console.log('[Player] Initializing Bandcamp player integration');
-
   listenForPartialUpdates();
   listenForPlayEvents();
   await restoreBeatMode();
@@ -962,8 +1000,6 @@ async function init(): Promise<void> {
 
   ensureActiveAudio();
   scheduleRender();
-
-  console.log('[Player] Initialization complete');
 }
 
 void init();

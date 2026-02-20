@@ -64,6 +64,8 @@ type IncomingMessage =
   | { type: 'SETBEATMODE'; beatMode: string }
   | { type: 'GETWAVEFORM' | 'GET_WAVEFORM'; url: string }
   | { type: 'ANALYZE_TRACK' | 'ANALYZETRACK'; url: string; beatMode?: BeatMode; cacheKey?: string }
+  | { type: 'ANALYZE_TRACK_SILENT'; url: string; beatMode?: BeatMode; cacheKey?: string }
+  | { type: 'FETCH_TRALBUM'; url: string }
   | { type: 'CANCEL_ANALYSIS'; url?: string };
 
 /**
@@ -100,6 +102,40 @@ interface ActiveAnalysis {
 }
 
 const activeAnalysisByTab = new Map<number, ActiveAnalysis>();
+
+/**
+ * Decode HTML-escaped characters before JSON parsing.
+ */
+function decodeHtmlEntities(input: string): string {
+  return String(input || '')
+    .replace(/&quot;/g, '"')
+    .replace(/&#34;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+/**
+ * Parse the `data-tralbum` payload from fetched Bandcamp HTML.
+ */
+function extractTralbumFromHtml(html: string): any | null {
+  const source = String(html || '');
+  if (!source) return null;
+
+  const scriptMatch = source.match(/<script[^>]*\bdata-tralbum=(["'])([\s\S]*?)\1[^>]*>/i);
+  if (!scriptMatch?.[2]) return null;
+
+  const raw = decodeHtmlEntities(scriptMatch[2]).trim();
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
 function isAbortError(error: unknown): boolean {
   return (error as any)?.name === 'AbortError';
@@ -171,6 +207,56 @@ async function handleMessage(
       const tabId = sender?.tab?.id;
       const cancelled = cancelActiveAnalysisForTab(tabId, msg.url);
       return { cancelled, ts: Date.now() };
+    }
+
+    // Full track analysis without tab-scoped cancellation/progressive updates
+    if (msg.type === 'ANALYZE_TRACK_SILENT') {
+      if (!msg.url) {
+        return { error: 'URL required', ts: Date.now() } as ErrorResponse;
+      }
+
+      try {
+        const result = await analyzeUrl(msg.url, msg.beatMode, null, {
+          cacheIdentity: typeof msg.cacheKey === 'string' ? msg.cacheKey : undefined,
+        });
+        return result;
+      } catch (e: any) {
+        return {
+          error: e?.message || String(e),
+          ts: Date.now(),
+        } as ErrorResponse;
+      }
+    }
+
+    if (msg.type === 'FETCH_TRALBUM') {
+      if (!msg.url) {
+        return { error: 'URL required', ts: Date.now() } as ErrorResponse;
+      }
+
+      try {
+        const response = await fetch(msg.url);
+        if (!response.ok) {
+          return {
+            error: `Fetch failed: ${response.status} ${response.statusText}`,
+            ts: Date.now(),
+          } as ErrorResponse;
+        }
+
+        const html = await response.text();
+        const tralbum = extractTralbumFromHtml(html);
+        const trackinfo = Array.isArray(tralbum?.trackinfo) ? tralbum.trackinfo : [];
+        return {
+          tralbum,
+          trackinfo,
+          url: msg.url,
+          ts: Date.now(),
+        };
+      } catch (e: any) {
+        return {
+          error: e?.message || String(e),
+          ts: Date.now(),
+        } as ErrorResponse;
+      }
     }
 
     // Full track analysis with progressive updates

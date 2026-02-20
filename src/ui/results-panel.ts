@@ -1,3 +1,9 @@
+/**
+ * Floating analysis panel renderer.
+ *
+ * Handles panel lifecycle, transport controls, waveform drawing, and playlist UI
+ * rendering/sorting/autoscroll behavior from immutable input state snapshots.
+ */
 type WaveformData = {
   peaksLow?: number[];
   peaksMid?: number[];
@@ -22,6 +28,10 @@ type PanelInput = {
   playheadFraction?: number;
   currentTimeSec?: number;
   durationSec?: number;
+  playlistTracks?: PlaylistRowInput[];
+  playlistCurrentIndex?: number;
+  playlistExpanded?: boolean;
+  playlistLoading?: boolean;
 };
 
 type PanelHandlers = {
@@ -29,6 +39,16 @@ type PanelHandlers = {
   onPrevTrack?: (() => void) | null;
   onNextTrack?: (() => void) | null;
   onSeekToFraction?: ((fraction: number) => void) | null;
+  onTogglePlaylist?: (() => void) | null;
+  onSelectPlaylistTrack?: ((index: number) => void) | null;
+};
+
+type PlaylistRowInput = {
+  index?: number;
+  title?: string;
+  durationSec?: number;
+  bpm?: number;
+  isCurrent?: boolean;
 };
 
 const EMPTY_HANDLERS: PanelHandlers = {
@@ -36,6 +56,8 @@ const EMPTY_HANDLERS: PanelHandlers = {
   onPrevTrack: null,
   onNextTrack: null,
   onSeekToFraction: null,
+  onTogglePlaylist: null,
+  onSelectPlaylistTrack: null,
 };
 
 let containerEl: HTMLDivElement | null = null;
@@ -52,6 +74,13 @@ let playBtnEl: HTMLButtonElement | null = null;
 let prevTrackBtnEl: HTMLButtonElement | null = null;
 let timeBtnEl: HTMLButtonElement | null = null;
 let nextTrackBtnEl: HTMLButtonElement | null = null;
+let playlistBtnEl: HTMLButtonElement | null = null;
+let playlistWrapEl: HTMLDivElement | null = null;
+let playlistScrollEl: HTMLDivElement | null = null;
+let playlistBodyEl: HTMLDivElement | null = null;
+let playlistStatusEl: HTMLDivElement | null = null;
+let playlistHeadTrackBtnEl: HTMLButtonElement | null = null;
+let playlistHeadBpmBtnEl: HTMLButtonElement | null = null;
 let closeBtnEl: HTMLButtonElement | null = null;
 let bpmMainEl: HTMLDivElement | null = null;
 let bpmConfLabelEl: HTMLDivElement | null = null;
@@ -78,9 +107,19 @@ let tapBpm = NaN;
 let tapLongPressTimer: ReturnType<typeof setTimeout> | null = null;
 let tapLongPressed = false;
 let lastTapTrackKey = '';
+let currentPlaylistRows: PlaylistRowInput[] = [];
+let currentPlaylistIndex = -1;
+let currentPlaylistExpanded = false;
+let currentPlaylistLoading = false;
+let currentPlaylistSortMode: 'track' | 'bpm' = 'track';
+let currentPlaylistSortDir: 1 | -1 = 1;
+let lastPlaylistRenderKey = '';
+let pendingPlaylistAutoCenter = false;
+let skipNextAutoCenterFromPlaylistClick = false;
+let playlistClickTargetIndex = -1;
 
 const PANEL_ID = 'bc-bpm-panel';
-const PANEL_UI_VERSION = 'alt-v34-edge-resize';
+const PANEL_UI_VERSION = 'alt-v39-playlist-glyph-center';
 const PLAYED_BLUE = '#5aa7ff';
 const TAP_LONG_PRESS_MS = 2000;
 const CLOSED_FLAG = '__BC_BPM_PANEL_CLOSED__';
@@ -605,6 +644,250 @@ function drawWaveform(waveform, statusText, playheadFraction, isAnalyzing) {
   ctx.restore();
 }
 
+function renderPlaylistUI() {
+  if (!playlistWrapEl || !playlistScrollEl || !playlistBodyEl || !playlistStatusEl) return;
+  const playlistViewportEl = playlistScrollEl.parentElement as HTMLElement | null;
+
+  const hasTracks = currentPlaylistRows.length > 0;
+  const shouldShow = currentPlaylistExpanded && (hasTracks || currentPlaylistLoading);
+  const playlistKey = JSON.stringify({
+    shouldShow,
+    loading: currentPlaylistLoading,
+    currentIndex: currentPlaylistIndex,
+    sortMode: currentPlaylistSortMode,
+    sortDir: currentPlaylistSortDir,
+    rows: currentPlaylistRows.map((row, i) => ({
+      i: Number.isFinite(row?.index) ? Number(row.index) : i,
+      t: norm(row?.title),
+      d: Number.isFinite(row?.durationSec) ? Number(row.durationSec) : NaN,
+      b: Number.isFinite(row?.bpm) ? Math.round(Number(row.bpm)) : NaN,
+      c: Boolean(row?.isCurrent),
+    })),
+  });
+
+  if (playlistKey === lastPlaylistRenderKey) {
+    refreshPlaylistSortUI();
+    syncPlaylistCurrentHighlight();
+    if (pendingPlaylistAutoCenter) {
+      const centered = maybeCenterCurrentPlaylistRow(true);
+      if (centered) pendingPlaylistAutoCenter = false;
+    }
+    return;
+  }
+  lastPlaylistRenderKey = playlistKey;
+
+  playlistWrapEl.style.display = shouldShow ? 'block' : 'none';
+
+  if (!shouldShow) {
+    playlistBodyEl.innerHTML = '';
+    if (playlistViewportEl) playlistViewportEl.style.display = 'none';
+    playlistScrollEl.style.display = 'none';
+    playlistStatusEl.style.display = 'none';
+    return;
+  }
+
+  playlistBodyEl.innerHTML = '';
+
+  if (currentPlaylistLoading) {
+    if (playlistViewportEl) playlistViewportEl.style.display = 'none';
+    playlistScrollEl.style.display = 'none';
+    playlistStatusEl.style.display = 'block';
+    playlistStatusEl.textContent = 'Loading playlist…';
+    return;
+  }
+
+  if (!hasTracks) {
+    if (playlistViewportEl) playlistViewportEl.style.display = 'none';
+    playlistScrollEl.style.display = 'none';
+    playlistStatusEl.style.display = 'block';
+    playlistStatusEl.textContent = 'No playlist tracks found.';
+    return;
+  }
+
+  if (playlistViewportEl) playlistViewportEl.style.display = 'block';
+  playlistScrollEl.style.display = 'block';
+  playlistStatusEl.style.display = 'none';
+  if (playlistViewportEl) {
+    const scrollbarW = Math.max(0, playlistScrollEl.offsetWidth - playlistScrollEl.clientWidth);
+    playlistViewportEl.style.setProperty('--playlist-scrollbar-w', `${scrollbarW}px`);
+  }
+  refreshPlaylistSortUI();
+
+  const rowsToRender = getSortedPlaylistRows();
+  for (const rowData of rowsToRender) {
+    const { row, playlistIndex, title, bpm, durationSec, isCurrent } = rowData;
+    const numberedTitle = `${pad2(playlistIndex + 1)} - ${title}`;
+
+    const rowBtn = document.createElement('button');
+    rowBtn.type = 'button';
+    rowBtn.className = `playlistRow${isCurrent ? ' current' : ''}`;
+    rowBtn.setAttribute('data-playlist-index', String(playlistIndex));
+    rowBtn.setAttribute('aria-label', `Play ${title}`);
+    rowBtn.title = `Play ${title}`;
+
+    const titleEl = document.createElement('span');
+    titleEl.className = 'playlistTitle';
+    titleEl.textContent = numberedTitle;
+
+    const bpmEl = document.createElement('span');
+    bpmEl.className = 'playlistBpm';
+    bpmEl.textContent = Number.isFinite(bpm) ? String(Math.round(bpm)) : '---';
+
+    const timeEl = document.createElement('span');
+    timeEl.className = 'playlistTime';
+    timeEl.textContent = fmtTime(durationSec);
+
+    rowBtn.appendChild(titleEl);
+    rowBtn.appendChild(bpmEl);
+    rowBtn.appendChild(timeEl);
+
+    rowBtn.addEventListener(
+      'click',
+      (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        skipNextAutoCenterFromPlaylistClick = true;
+        playlistClickTargetIndex = playlistIndex;
+        if (typeof currentHandlers.onSelectPlaylistTrack === 'function') {
+          currentHandlers.onSelectPlaylistTrack(playlistIndex);
+        }
+      },
+      true
+    );
+
+    playlistBodyEl.appendChild(rowBtn);
+  }
+
+  syncPlaylistCurrentHighlight();
+  if (pendingPlaylistAutoCenter) {
+    const centered = maybeCenterCurrentPlaylistRow(true);
+    if (centered) pendingPlaylistAutoCenter = false;
+  }
+}
+
+function getSortedPlaylistRows(): Array<{
+  row: PlaylistRowInput;
+  playlistIndex: number;
+  title: string;
+  bpm: number;
+  durationSec: number;
+  isCurrent: boolean;
+}> {
+  const rows = currentPlaylistRows.map((row, i) => {
+    const playlistIndex = Number.isFinite(row?.index) ? Number(row.index) : i;
+    const title = norm(row?.title) || `Track ${i + 1}`;
+    const bpm = Number(row?.bpm);
+    const durationSec = Number(row?.durationSec);
+    const isCurrent = Boolean(row?.isCurrent) || playlistIndex === currentPlaylistIndex;
+    return { row, playlistIndex, title, bpm, durationSec, isCurrent };
+  });
+
+  if (currentPlaylistSortMode === 'track') {
+    rows.sort((a, b) => a.playlistIndex - b.playlistIndex);
+    return rows;
+  }
+
+  rows.sort((a, b) => {
+    const aHas = Number.isFinite(a.bpm);
+    const bHas = Number.isFinite(b.bpm);
+    if (!aHas && !bHas) return a.playlistIndex - b.playlistIndex;
+    if (!aHas) return 1;
+    if (!bHas) return -1;
+    const diff = (a.bpm - b.bpm) * currentPlaylistSortDir;
+    if (Math.abs(diff) > 0.001) return diff;
+    return a.playlistIndex - b.playlistIndex;
+  });
+
+  return rows;
+}
+
+function setPlaylistSort(mode: 'track' | 'bpm'): void {
+  if (mode === 'track') {
+    currentPlaylistSortMode = 'track';
+    currentPlaylistSortDir = 1;
+    renderPlaylistUI();
+    return;
+  }
+
+  if (currentPlaylistSortMode === 'bpm') {
+    currentPlaylistSortDir = currentPlaylistSortDir === 1 ? -1 : 1;
+  } else {
+    currentPlaylistSortMode = 'bpm';
+    currentPlaylistSortDir = 1;
+  }
+  renderPlaylistUI();
+}
+
+function refreshPlaylistSortUI(): void {
+  if (playlistHeadTrackBtnEl) {
+    const active = currentPlaylistSortMode === 'track';
+    playlistHeadTrackBtnEl.classList.toggle('active', active);
+    playlistHeadTrackBtnEl.setAttribute('aria-pressed', active ? 'true' : 'false');
+    playlistHeadTrackBtnEl.title = 'Sort by track number';
+  }
+
+  if (playlistHeadBpmBtnEl) {
+    const active = currentPlaylistSortMode === 'bpm';
+    playlistHeadBpmBtnEl.classList.toggle('active', active);
+    playlistHeadBpmBtnEl.setAttribute('aria-pressed', active ? 'true' : 'false');
+    playlistHeadBpmBtnEl.setAttribute('data-dir', currentPlaylistSortDir === 1 ? 'asc' : 'desc');
+    playlistHeadBpmBtnEl.title = active
+      ? currentPlaylistSortDir === 1
+        ? 'Sort by BPM (ascending)'
+        : 'Sort by BPM (descending)'
+      : 'Sort by BPM';
+  }
+}
+
+function syncPlaylistCurrentHighlight(): void {
+  if (!playlistBodyEl) return;
+  const rowButtons = Array.from(playlistBodyEl.querySelectorAll('[data-playlist-index]')) as HTMLElement[];
+  if (!rowButtons.length) return;
+
+  const explicitCurrent = new Set<number>();
+  for (let i = 0; i < currentPlaylistRows.length; i += 1) {
+    const row = currentPlaylistRows[i];
+    const rowIndex = Number.isFinite(row?.index) ? Number(row.index) : i;
+    if (row?.isCurrent) explicitCurrent.add(rowIndex);
+  }
+
+  for (const button of rowButtons) {
+    const idx = Number(button.getAttribute('data-playlist-index'));
+    const isCurrent = idx === currentPlaylistIndex || explicitCurrent.has(idx);
+    button.classList.toggle('current', isCurrent);
+  }
+}
+
+function maybeCenterCurrentPlaylistRow(force = false): boolean {
+  if (!playlistScrollEl || !playlistBodyEl) return false;
+  if (!force) return false;
+  if (!currentPlaylistExpanded) return false;
+  if (!currentPlaylistRows.length) return false;
+  if (!Number.isFinite(currentPlaylistIndex) || currentPlaylistIndex < 0) return false;
+
+  const row = playlistBodyEl.querySelector(`[data-playlist-index="${currentPlaylistIndex}"]`) as HTMLElement | null;
+  if (!row) return false;
+
+  const viewportRect = playlistScrollEl.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  const viewportCenterY = viewportRect.top + playlistScrollEl.clientHeight / 2;
+  const rowCenterY = rowRect.top + rowRect.height / 2;
+  const centerDelta = rowCenterY - viewportCenterY;
+  const targetTop = playlistScrollEl.scrollTop + centerDelta;
+  const maxTop = Math.max(0, playlistScrollEl.scrollHeight - playlistScrollEl.clientHeight);
+  const clampedTop = clamp(targetTop, 0, maxTop);
+  const delta = Math.abs(playlistScrollEl.scrollTop - clampedTop);
+
+  if (delta > 1) {
+    playlistScrollEl.scrollTo({
+      top: clampedTop,
+      behavior: 'auto',
+    });
+  }
+
+  return true;
+}
+
 function refreshTransportUI() {
   if (!playBtnEl) return;
   playBtnEl.textContent = currentIsPlaying ? '❚❚' : '▶';
@@ -645,6 +928,25 @@ function refreshTransportUI() {
     timeBtnEl.textContent = `${fmtTime(elapsed)} / ${fmtTime(dur)}`;
     timeBtnEl.title = 'Click to show remaining time';
   }
+
+  if (playlistBtnEl) {
+    const hasTracks = currentPlaylistRows.length > 0;
+    const enabled = hasTracks || currentPlaylistLoading;
+    playlistBtnEl.disabled = !enabled;
+    playlistBtnEl.classList.toggle('active', currentPlaylistExpanded && enabled);
+    playlistBtnEl.setAttribute('aria-pressed', currentPlaylistExpanded && enabled ? 'true' : 'false');
+    playlistBtnEl.setAttribute(
+      'aria-label',
+      currentPlaylistExpanded && enabled ? 'Hide playlist' : 'Show playlist'
+    );
+    playlistBtnEl.title = enabled
+      ? currentPlaylistExpanded
+        ? 'Hide playlist'
+        : 'Show playlist'
+      : 'Playlist unavailable';
+  }
+
+  renderPlaylistUI();
 }
 
 function setTapperHintDefault() {
@@ -967,6 +1269,13 @@ function closePanel() {
   prevTrackBtnEl = null;
   timeBtnEl = null;
   nextTrackBtnEl = null;
+  playlistBtnEl = null;
+  playlistWrapEl = null;
+  playlistScrollEl = null;
+  playlistBodyEl = null;
+  playlistStatusEl = null;
+  playlistHeadTrackBtnEl = null;
+  playlistHeadBpmBtnEl = null;
   closeBtnEl = null;
   bpmMainEl = null;
   bpmConfLabelEl = null;
@@ -980,6 +1289,16 @@ function closePanel() {
   clearTapLongPressTimer();
   tapLongPressed = false;
   lastTapTrackKey = '';
+  currentPlaylistRows = [];
+  currentPlaylistIndex = -1;
+  currentPlaylistExpanded = false;
+  currentPlaylistLoading = false;
+  currentPlaylistSortMode = 'track';
+  currentPlaylistSortDir = 1;
+  lastPlaylistRenderKey = '';
+  pendingPlaylistAutoCenter = false;
+  skipNextAutoCenterFromPlaylistClick = false;
+  playlistClickTargetIndex = -1;
 }
 
 function bindRefsFromContainer() {
@@ -1000,6 +1319,13 @@ function bindRefsFromContainer() {
   prevTrackBtnEl = byRole<HTMLButtonElement>('prevTrack');
   timeBtnEl = byRole<HTMLButtonElement>('timeBox');
   nextTrackBtnEl = byRole<HTMLButtonElement>('nextTrack');
+  playlistBtnEl = byRole<HTMLButtonElement>('playlistToggle');
+  playlistWrapEl = byRole<HTMLDivElement>('playlistWrap');
+  playlistScrollEl = byRole<HTMLDivElement>('playlistScroll');
+  playlistBodyEl = byRole<HTMLDivElement>('playlistBody');
+  playlistStatusEl = byRole<HTMLDivElement>('playlistStatus');
+  playlistHeadTrackBtnEl = byRole<HTMLButtonElement>('playlistHeadTrackSort');
+  playlistHeadBpmBtnEl = byRole<HTMLButtonElement>('playlistHeadBpmSort');
   closeBtnEl = byRole<HTMLButtonElement>('closeX');
   bpmMainEl = byRole<HTMLDivElement>('bpmMain');
   bpmConfLabelEl = byRole<HTMLDivElement>('bpmConfLabel');
@@ -1052,6 +1378,7 @@ bottom:16px;
 z-index:2147483647;
 width:460px;
 --panel-scale:1;
+--surface-soft:rgba(228,228,228,0.25);
 transform-origin:top left;
 transform:scale(var(--panel-scale));
 font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
@@ -1162,7 +1489,7 @@ line-height:1.15;
 margin:2px 0 0 0;
 padding:6px 8px 2px 8px;
 border-radius:10px;
-background:rgba(255,255,255,0.26);
+background:var(--surface-soft);
 border:1px solid rgba(0,0,0,0.10);
 min-height:80px;
 display:flex;
@@ -1227,11 +1554,13 @@ clip-path:inset(0 0 0 0);
 }
 
 #${PANEL_ID} .transportRow{
+position:relative;
 display:flex;
 align-items:center;
 justify-content:flex-start;
 gap:8px;
 margin-top:10px;
+min-height:34px;
 }
 
 #${PANEL_ID} .lower{
@@ -1244,7 +1573,7 @@ gap:10px;
 /* FIXED HEIGHT: Card */
 #${PANEL_ID} .card{
 border-radius:14px;
-background:rgba(255,255,255,0.22);
+background:var(--surface-soft);
 border:1px solid rgba(0,0,0,0.10);
 padding:10px;
 min-height:156px;
@@ -1547,20 +1876,376 @@ background:rgba(0,0,0,0.16);
 }
 
 #${PANEL_ID} button.timebox{
-height:34px;
+position:absolute;
+left:50%;
+transform:translateX(-50%);
+height:auto;
 display:flex;
 align-items:center;
 justify-content:center;
-padding:0 10px;
+padding:0;
 font-size:12px;
 font-weight:750;
-border-radius:10px;
+border-radius:0;
 font-variant-numeric:tabular-nums;
 white-space:nowrap;
 user-select:none;
+background:transparent;
+border:none;
+min-width:0;
+line-height:1.1;
 }
 
-/* Note removed - using inline indicator */
+#${PANEL_ID} button.timebox:hover{
+background:transparent;
+border-color:transparent;
+}
+
+#${PANEL_ID} button.timebox:active{
+background:transparent;
+}
+
+#${PANEL_ID} button.timebox:focus-visible{
+outline:1px solid rgba(0,0,0,0.20);
+outline-offset:2px;
+}
+
+#${PANEL_ID} button.playlistToggle{
+appearance:none;
+position:absolute;
+right:0;
+top:50%;
+transform:translateY(-50%);
+background:transparent;
+border:none;
+padding:4px 8px;
+margin:0;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+gap:6px;
+min-width:0;
+height:auto;
+line-height:1.2;
+color:rgba(0,0,0,0.72);
+cursor:pointer;
+overflow:hidden;
+flex-direction:row-reverse;
+}
+
+#${PANEL_ID} button.playlistToggle.active{
+color:rgba(0,0,0,0.92);
+}
+
+#${PANEL_ID} button.playlistToggle:hover{
+background:transparent;
+border-color:transparent;
+color:rgba(96,96,96,0.96);
+}
+
+#${PANEL_ID} button.playlistToggle:active{
+background:transparent;
+}
+
+#${PANEL_ID} .playlistToggleGlyph{
+position:relative;
+display:inline-block;
+width:22px;
+height:14px;
+overflow:visible;
+flex:0 0 auto;
+}
+
+#${PANEL_ID} .playlistToggleGlyph .bar{
+position:absolute;
+left:0;
+width:13px;
+height:2px;
+background:currentColor;
+border-radius:999px;
+transform:translateZ(0);
+}
+
+#${PANEL_ID} .playlistToggleGlyph .bar.bar1{
+top:0;
+}
+
+#${PANEL_ID} .playlistToggleGlyph .bar.bar2{
+top:6px;
+}
+
+#${PANEL_ID} .playlistToggleGlyph .bar.bar3{
+top:12px;
+}
+
+#${PANEL_ID} .playlistToggleGlyph::after{
+content:'';
+position:absolute;
+right:0;
+top:50%;
+transform:translateY(-50%);
+width:0;
+height:0;
+border-top:4px solid transparent;
+border-bottom:4px solid transparent;
+border-left:6px solid currentColor;
+}
+
+#${PANEL_ID} .playlistToggleLabel{
+display:inline-block;
+font-size:10px;
+font-weight:700;
+letter-spacing:0.08em;
+text-transform:uppercase;
+white-space:nowrap;
+color:currentColor;
+opacity:0;
+max-width:0;
+transform:translateX(6px);
+transition:
+  max-width 220ms ease,
+  opacity 180ms ease,
+  transform 220ms ease;
+}
+
+#${PANEL_ID} button.playlistToggle:hover .playlistToggleLabel{
+opacity:0.95;
+max-width:72px;
+transform:translateX(0);
+}
+
+#${PANEL_ID} button.playlistToggle:focus-visible .playlistToggleLabel{
+opacity:0.95;
+max-width:72px;
+transform:translateX(0);
+}
+
+#${PANEL_ID} .playlistWrap{
+--playlist-bpm-col:56px;
+--playlist-time-col:56px;
+--playlist-right-gap:18px;
+--playlist-header-h:36px;
+--playlist-max-h:220px;
+margin-top:10px;
+display:none;
+}
+
+#${PANEL_ID} .playlistViewport{
+--playlist-scrollbar-w:0px;
+position:relative;
+border-radius:12px;
+border:1px solid rgba(0,0,0,0.10);
+background:var(--surface-soft);
+overflow:hidden;
+max-height:var(--playlist-max-h);
+}
+
+#${PANEL_ID} .playlistViewport::after{
+content:'';
+position:absolute;
+left:0;
+right:calc(var(--playlist-scrollbar-w) + 2px);
+bottom:0;
+height:16px;
+background:linear-gradient(to bottom, rgba(255,255,255,0), var(--surface-soft));
+pointer-events:none;
+z-index:2;
+}
+
+#${PANEL_ID} .playlistScroll{
+max-height:calc(var(--playlist-max-h) - var(--playlist-header-h));
+overflow-y:auto;
+overflow-x:hidden;
+scrollbar-gutter:stable;
+scrollbar-width:thin;
+scrollbar-color:rgba(0,0,0,0.30) transparent;
+}
+
+#${PANEL_ID} .playlistScroll::-webkit-scrollbar{
+width:10px;
+height:10px;
+}
+
+#${PANEL_ID} .playlistScroll::-webkit-scrollbar-track{
+background:transparent;
+border-radius:999px;
+margin:10px 2px;
+}
+
+#${PANEL_ID} .playlistScroll::-webkit-scrollbar-thumb{
+background:rgba(0,0,0,0.30);
+border-radius:999px;
+border:2px solid var(--surface-soft);
+background-clip:padding-box;
+}
+
+#${PANEL_ID} .playlistScroll::-webkit-scrollbar-thumb:hover{
+background:rgba(0,0,0,0.40);
+background-clip:padding-box;
+}
+
+#${PANEL_ID} .playlistScroll::-webkit-scrollbar-corner{
+background:transparent;
+}
+
+#${PANEL_ID} .playlistHead{
+display:grid;
+grid-template-columns:minmax(0,1fr) var(--playlist-bpm-col) var(--playlist-time-col);
+gap:10px;
+font-size:10px;
+letter-spacing:0.05em;
+text-transform:uppercase;
+opacity:1;
+color:rgba(0,0,0,0.9);
+padding:0 calc(var(--playlist-right-gap) + var(--playlist-scrollbar-w)) 0 6px;
+padding-left:12px;
+min-height:var(--playlist-header-h);
+align-items:center;
+background:transparent;
+border-bottom:1px solid rgba(0,0,0,0.12);
+box-shadow:none;
+font-weight:700;
+}
+
+#${PANEL_ID} .playlistHead button{
+appearance:none;
+background:transparent;
+border:none;
+padding:0;
+margin:0;
+display:block;
+width:100%;
+text-align:left;
+font:inherit;
+font-size:10px;
+letter-spacing:0.05em;
+text-transform:uppercase;
+font-weight:700;
+color:inherit;
+opacity:0.88;
+cursor:pointer;
+}
+
+#${PANEL_ID} .playlistHead > *{
+justify-self:start;
+align-self:center;
+width:100%;
+text-align:left;
+}
+
+#${PANEL_ID} .playlistHead button:hover{
+background:transparent;
+border-color:transparent;
+opacity:1;
+}
+
+#${PANEL_ID} .playlistHead button.active{
+opacity:1;
+}
+
+#${PANEL_ID} .playlistHead .playlistHeadBtn.sortable::after{
+content:' ▲▼';
+font-size:9px;
+color:rgba(0,0,0,0.78);
+opacity:0.95;
+vertical-align:1px;
+letter-spacing:-0.12em;
+margin-left:6px;
+}
+
+#${PANEL_ID} .playlistHead .playlistHeadBtn.track.active::after{
+opacity:0.9;
+}
+
+#${PANEL_ID} .playlistHead .playlistHeadBtn.bpm.active::after{
+opacity:0.9;
+}
+
+#${PANEL_ID} .playlistHead .playlistHeadBtn.bpm.active[data-dir="asc"]::after{
+content:' ▲';
+}
+
+#${PANEL_ID} .playlistHead .playlistHeadBtn.bpm.active[data-dir="desc"]::after{
+content:' ▼';
+}
+
+#${PANEL_ID} .playlistHead .playlistHeadBtn.bpm,
+#${PANEL_ID} .playlistHead span.timeHead{
+text-align:left;
+}
+
+#${PANEL_ID} .playlistHead span.timeHead{
+display:block;
+}
+
+#${PANEL_ID} .playlistBody{
+display:flex;
+flex-direction:column;
+gap:4px;
+}
+
+#${PANEL_ID} .playlistStatus{
+font-size:12px;
+opacity:0.75;
+padding:6px;
+display:none;
+}
+
+#${PANEL_ID} .playlistRow{
+display:grid;
+grid-template-columns:minmax(0,1fr) var(--playlist-bpm-col) var(--playlist-time-col);
+align-items:center;
+gap:10px;
+padding:6px var(--playlist-right-gap) 6px 6px;
+padding-left:12px;
+border:none;
+border-radius:8px;
+background:transparent;
+text-align:left;
+width:100%;
+box-sizing:border-box;
+box-shadow:inset 0 0 0 1px transparent;
+font-weight:400;
+}
+
+#${PANEL_ID} .playlistRow:hover{
+background:rgba(0,0,0,0.08);
+box-shadow:inset 0 0 0 1px rgba(0,0,0,0.08);
+}
+
+#${PANEL_ID} .playlistRow.current{
+background:rgba(113,106,169,0.22);
+box-shadow:none;
+}
+
+#${PANEL_ID} .playlistTitle{
+min-width:0;
+overflow:hidden;
+text-overflow:ellipsis;
+white-space:nowrap;
+font-size:12px;
+font-weight:400;
+}
+
+#${PANEL_ID} .playlistBpm,
+#${PANEL_ID} .playlistTime{
+font-size:11px;
+font-variant-numeric:tabular-nums;
+opacity:0.85;
+white-space:nowrap;
+font-weight:400;
+}
+
+#${PANEL_ID} .playlistBpm{
+text-align:left;
+justify-self:start;
+}
+
+#${PANEL_ID} .playlistTime{
+text-align:left;
+justify-self:start;
+}
+
 `;
 
   document.documentElement.appendChild(styleEl);
@@ -1702,6 +2387,43 @@ user-select:none;
     true
   );
 
+  playlistBtnEl = document.createElement('button');
+  playlistBtnEl.type = 'button';
+  playlistBtnEl.className = 'playlistToggle';
+  playlistBtnEl.setAttribute('data-role', 'playlistToggle');
+  playlistBtnEl.title = 'Show playlist';
+  playlistBtnEl.setAttribute('aria-label', 'Toggle playlist');
+
+  const playlistGlyphEl = document.createElement('span');
+  playlistGlyphEl.className = 'playlistToggleGlyph';
+  const playlistGlyphBar1El = document.createElement('span');
+  playlistGlyphBar1El.className = 'bar bar1';
+  const playlistGlyphBar2El = document.createElement('span');
+  playlistGlyphBar2El.className = 'bar bar2';
+  const playlistGlyphBar3El = document.createElement('span');
+  playlistGlyphBar3El.className = 'bar bar3';
+  playlistGlyphEl.appendChild(playlistGlyphBar1El);
+  playlistGlyphEl.appendChild(playlistGlyphBar2El);
+  playlistGlyphEl.appendChild(playlistGlyphBar3El);
+
+  const playlistLabelEl = document.createElement('span');
+  playlistLabelEl.className = 'playlistToggleLabel';
+  playlistLabelEl.textContent = 'PLAYLIST';
+
+  playlistBtnEl.appendChild(playlistGlyphEl);
+  playlistBtnEl.appendChild(playlistLabelEl);
+  playlistBtnEl.addEventListener(
+    'click',
+    (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (typeof currentHandlers.onTogglePlaylist === 'function') {
+        currentHandlers.onTogglePlaylist();
+      }
+    },
+    true
+  );
+
   // Create unified transport controls container
   const transportControlsEl = document.createElement('div');
   transportControlsEl.className = 'transportControls';
@@ -1712,6 +2434,7 @@ user-select:none;
 
   transportRowEl.appendChild(transportControlsEl);
   transportRowEl.appendChild(timeBtnEl);
+  transportRowEl.appendChild(playlistBtnEl);
 
   const lower = document.createElement('div');
   lower.className = 'lower';
@@ -1844,6 +2567,73 @@ user-select:none;
 
   lower.appendChild(bpmCard);
 
+  playlistWrapEl = document.createElement('div');
+  playlistWrapEl.className = 'playlistWrap';
+  playlistWrapEl.setAttribute('data-role', 'playlistWrap');
+
+  const playlistHeadEl = document.createElement('div');
+  playlistHeadEl.className = 'playlistHead';
+
+  const playlistHeadTitleEl = document.createElement('button');
+  playlistHeadTitleEl.type = 'button';
+  playlistHeadTitleEl.className = 'playlistHeadBtn track sortable';
+  playlistHeadTitleEl.setAttribute('data-role', 'playlistHeadTrackSort');
+  playlistHeadTitleEl.textContent = 'Track';
+  playlistHeadTitleEl.addEventListener(
+    'click',
+    (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      setPlaylistSort('track');
+    },
+    true
+  );
+
+  const playlistHeadBpmEl = document.createElement('button');
+  playlistHeadBpmEl.type = 'button';
+  playlistHeadBpmEl.className = 'playlistHeadBtn bpm sortable';
+  playlistHeadBpmEl.setAttribute('data-role', 'playlistHeadBpmSort');
+  playlistHeadBpmEl.textContent = 'BPM';
+  playlistHeadBpmEl.addEventListener(
+    'click',
+    (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      setPlaylistSort('bpm');
+    },
+    true
+  );
+
+  const playlistHeadTimeEl = document.createElement('span');
+  playlistHeadTimeEl.className = 'timeHead';
+  playlistHeadTimeEl.textContent = 'Time';
+
+  playlistHeadEl.appendChild(playlistHeadTitleEl);
+  playlistHeadEl.appendChild(playlistHeadBpmEl);
+  playlistHeadEl.appendChild(playlistHeadTimeEl);
+
+  playlistScrollEl = document.createElement('div');
+  playlistScrollEl.className = 'playlistScroll';
+  playlistScrollEl.setAttribute('data-role', 'playlistScroll');
+
+  const playlistViewportEl = document.createElement('div');
+  playlistViewportEl.className = 'playlistViewport';
+
+  playlistBodyEl = document.createElement('div');
+  playlistBodyEl.className = 'playlistBody';
+  playlistBodyEl.setAttribute('data-role', 'playlistBody');
+
+  playlistStatusEl = document.createElement('div');
+  playlistStatusEl.className = 'playlistStatus';
+  playlistStatusEl.setAttribute('data-role', 'playlistStatus');
+  playlistStatusEl.textContent = '';
+
+  playlistViewportEl.appendChild(playlistHeadEl);
+  playlistScrollEl.appendChild(playlistBodyEl);
+  playlistViewportEl.appendChild(playlistScrollEl);
+  playlistWrapEl.appendChild(playlistViewportEl);
+  playlistWrapEl.appendChild(playlistStatusEl);
+
   noteEl = document.createElement('div');
   noteEl.className = 'note';
   noteEl.setAttribute('data-role', 'note');
@@ -1856,6 +2646,7 @@ user-select:none;
   inner.appendChild(waveformWrapEl);
   inner.appendChild(transportRowEl);
   inner.appendChild(lower);
+  inner.appendChild(playlistWrapEl);
   inner.appendChild(noteEl);
 
   containerEl.appendChild(inner);
@@ -1878,6 +2669,9 @@ user-select:none;
   return containerEl;
 }
 
+/**
+ * Render or update the floating panel from the latest player/analysis state.
+ */
 export default function showResultsPanel(input: PanelInput = {}, handlers: PanelHandlers = EMPTY_HANDLERS): void {
   if (isPanelClosed()) return;
   ensurePanel();
@@ -1921,6 +2715,30 @@ export default function showResultsPanel(input: PanelInput = {}, handlers: Panel
   currentPlayheadFraction = Number.isFinite(input?.playheadFraction) ? input.playheadFraction : NaN;
   currentTimeSec = Number.isFinite(input?.currentTimeSec) ? input.currentTimeSec : NaN;
   currentDurationSec = Number.isFinite(input?.durationSec) ? input.durationSec : NaN;
+  const prevPlaylistIndex = currentPlaylistIndex;
+  const prevPlaylistExpanded = currentPlaylistExpanded;
+  currentPlaylistRows = Array.isArray(input?.playlistTracks) ? input.playlistTracks : [];
+  currentPlaylistIndex = Number.isFinite(input?.playlistCurrentIndex) ? Number(input.playlistCurrentIndex) : -1;
+  currentPlaylistExpanded = Boolean(input?.playlistExpanded);
+  currentPlaylistLoading = Boolean(input?.playlistLoading);
+
+  const indexChangedToValid = Number.isFinite(currentPlaylistIndex) && currentPlaylistIndex >= 0 && prevPlaylistIndex !== currentPlaylistIndex;
+  const playlistOpened = currentPlaylistExpanded && !prevPlaylistExpanded;
+  if (indexChangedToValid && currentIsPlaying) {
+    const isExpectedPlaylistClickTarget =
+      Number.isFinite(playlistClickTargetIndex) && playlistClickTargetIndex >= 0 && currentPlaylistIndex === playlistClickTargetIndex;
+    if (skipNextAutoCenterFromPlaylistClick && (isExpectedPlaylistClickTarget || playlistClickTargetIndex < 0)) {
+      pendingPlaylistAutoCenter = false;
+      skipNextAutoCenterFromPlaylistClick = false;
+      playlistClickTargetIndex = -1;
+    } else {
+      pendingPlaylistAutoCenter = true;
+      skipNextAutoCenterFromPlaylistClick = false;
+      playlistClickTargetIndex = -1;
+    }
+  } else if (playlistOpened) {
+    pendingPlaylistAutoCenter = true;
+  }
 
   const shownBpm = Number.isFinite(bpm) ? bpm * tempoScale : NaN;
 
