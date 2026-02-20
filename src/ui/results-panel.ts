@@ -129,6 +129,8 @@ const CLOSED_FLAG = '__BC_BPM_PANEL_CLOSED__';
 const POS_KEY = '__BC_BPM_PANEL_POS__';
 const SCALE_KEY = '__BC_BPM_PANEL_SCALE__';
 const PANEL_PREFS_STORAGE_KEY = '__BC_BPM_PANEL_PREFS__';
+const INFO_NUDGE_STORAGE_KEY = '__BC_BPM_INFO_NUDGE__';
+const INFO_NUDGE_AFTER_ACTIVE_DAYS = 7;
 const PANEL_MIN_SCALE = 0.6;
 const PANEL_MAX_SCALE = 1;
 const PANEL_DEFAULT_SCALE = 0.8;
@@ -139,6 +141,19 @@ let prefsLoaded = false;
 let prefsLoadPromise: Promise<void> | null = null;
 let panelPrefsTouched = false;
 let infoGlobalListenersAttached = false;
+let infoNudgeLoaded = false;
+let infoNudgeLoadPromise: Promise<void> | null = null;
+let lastInfoUsageDay = '';
+
+type InfoNudgeState = {
+  activeDays: string[];
+  dismissed: boolean;
+};
+
+let infoNudgeState: InfoNudgeState = {
+  activeDays: [],
+  dismissed: false,
+};
 
 const win = window as unknown as Record<string, unknown>;
 seedPanelPrefsFromLegacy();
@@ -247,6 +262,134 @@ function storageSetPanelPrefs(value: any): Promise<void> {
       resolve();
     }
   });
+}
+
+function storageGetKey(key: string): Promise<any | null> {
+  const area = getExtensionStorageArea();
+  if (!area) return Promise.resolve(null);
+
+  try {
+    const maybePromise = area.get(key);
+    if (maybePromise && typeof maybePromise.then === 'function') {
+      return maybePromise.then((res: any) => res?.[key] ?? null).catch(() => null);
+    }
+  } catch (_) {}
+
+  return new Promise((resolve) => {
+    try {
+      area.get(key, (res: any) => resolve(res?.[key] ?? null));
+    } catch (_) {
+      resolve(null);
+    }
+  });
+}
+
+function storageSetKey(key: string, value: any): Promise<void> {
+  const area = getExtensionStorageArea();
+  if (!area) return Promise.resolve();
+
+  try {
+    const maybePromise = area.set({ [key]: value });
+    if (maybePromise && typeof maybePromise.then === 'function') {
+      return maybePromise.then(() => undefined).catch(() => undefined);
+    }
+  } catch (_) {}
+
+  return new Promise((resolve) => {
+    try {
+      area.set({ [key]: value }, () => resolve());
+    } catch (_) {
+      resolve();
+    }
+  });
+}
+
+function localDayStamp(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function normalizeInfoNudgeState(input: any): InfoNudgeState {
+  const rawDays = Array.isArray(input?.activeDays) ? input.activeDays : [];
+  const dedup = new Set<string>();
+  for (const value of rawDays) {
+    const s = String(value || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) dedup.add(s);
+  }
+  const activeDays = Array.from(dedup).sort().slice(-60);
+  return {
+    activeDays,
+    dismissed: Boolean(input?.dismissed),
+  };
+}
+
+function isInfoNudgeActive(): boolean {
+  return !infoNudgeState.dismissed && infoNudgeState.activeDays.length >= INFO_NUDGE_AFTER_ACTIVE_DAYS;
+}
+
+function applyInfoNudgeClass(): void {
+  if (!infoBtnEl) return;
+  infoBtnEl.classList.toggle('nudge', isInfoNudgeActive());
+}
+
+function persistInfoNudgeState(): void {
+  void storageSetKey(INFO_NUDGE_STORAGE_KEY, infoNudgeState);
+}
+
+function ensureInfoNudgeLoaded(): void {
+  if (infoNudgeLoaded || infoNudgeLoadPromise) {
+    if (infoNudgeLoaded) applyInfoNudgeClass();
+    return;
+  }
+
+  infoNudgeLoadPromise = (async () => {
+    try {
+      const stored = await storageGetKey(INFO_NUDGE_STORAGE_KEY);
+      infoNudgeState = normalizeInfoNudgeState(stored);
+    } catch (_) {
+      infoNudgeState = normalizeInfoNudgeState(null);
+    } finally {
+      infoNudgeLoaded = true;
+      infoNudgeLoadPromise = null;
+      applyInfoNudgeClass();
+    }
+  })();
+}
+
+function markInfoNudgeUsageToday(): void {
+  ensureInfoNudgeLoaded();
+  if (!infoNudgeLoaded) {
+    if (infoNudgeLoadPromise) {
+      void infoNudgeLoadPromise.then(() => markInfoNudgeUsageToday());
+    }
+    return;
+  }
+
+  const today = localDayStamp();
+  if (lastInfoUsageDay === today) return;
+  lastInfoUsageDay = today;
+  if (infoNudgeState.activeDays.includes(today)) return;
+
+  infoNudgeState.activeDays = [...infoNudgeState.activeDays, today].sort().slice(-60);
+  persistInfoNudgeState();
+  applyInfoNudgeClass();
+}
+
+function dismissInfoNudge(): void {
+  ensureInfoNudgeLoaded();
+  if (!infoNudgeLoaded) {
+    if (infoNudgeLoadPromise) {
+      void infoNudgeLoadPromise.then(() => dismissInfoNudge());
+    }
+    return;
+  }
+
+  if (infoNudgeState.dismissed) return;
+  infoNudgeState.dismissed = true;
+  persistInfoNudgeState();
+  applyInfoNudgeClass();
 }
 
 function normalizeSavedPos(input: any): { left: number; top: number } | null {
@@ -1576,6 +1719,16 @@ opacity:1;
 animation:infoEdgeSpin 1.2s linear infinite;
 }
 
+#${PANEL_ID} .topActions .infoBtn.nudge{
+background:rgba(255,255,255,0.30);
+color:rgba(64,18,86,0.96);
+}
+
+#${PANEL_ID} .topActions .infoBtn.nudge::before{
+opacity:1;
+animation:infoEdgeSpin 1.2s linear infinite;
+}
+
 #${PANEL_ID} .topActions .infoBtn:active{
 background:rgba(255,255,255,0.16);
 }
@@ -2180,7 +2333,7 @@ background:rgba(255,255,255,0.12);
 #${PANEL_ID} .playlistToggleGlyph{
 position:relative;
 display:inline-block;
-width:12px;
+width:16px;
 height:12px;
 overflow:visible;
 flex:0 0 auto;
@@ -2196,20 +2349,20 @@ transform:translateZ(0);
 
 #${PANEL_ID} .playlistToggleGlyph .line.line1{
 top:0;
-width:10px;
-height:1.5px;
+width:14px;
+height:2px;
 }
 
 #${PANEL_ID} .playlistToggleGlyph .line.line2{
 top:5px;
-width:10px;
-height:1.5px;
+width:14px;
+height:2px;
 }
 
 #${PANEL_ID} .playlistToggleGlyph .line.line3{
 top:10px;
-width:10px;
-height:1.5px;
+width:14px;
+height:2px;
 }
 
 #${PANEL_ID} .playlistToggleLabel{
@@ -2288,11 +2441,11 @@ background:transparent;
 display:grid;
 grid-template-columns:minmax(0,1fr) var(--playlist-bpm-col) var(--playlist-time-col);
 gap:10px;
-font-size:10px;
+font-size:11px;
 letter-spacing:0.05em;
 text-transform:uppercase;
 opacity:1;
-color:rgba(0,0,0,0.9);
+color:#111;
 padding:0 calc(var(--playlist-right-gap) + var(--playlist-scrollbar-w)) 0 6px;
 padding-left:12px;
 min-height:var(--playlist-header-h);
@@ -2313,12 +2466,12 @@ display:block;
 width:100%;
 text-align:left;
 font:inherit;
-font-size:10px;
+font-size:11px;
 letter-spacing:0.05em;
 text-transform:uppercase;
 font-weight:700;
 color:inherit;
-opacity:0.88;
+opacity:1;
 cursor:pointer;
 }
 
@@ -2381,7 +2534,7 @@ gap:4px;
 }
 
 #${PANEL_ID} .playlistStatus{
-font-size:12px;
+font-size:13px;
 opacity:0.75;
 padding:6px;
 display:none;
@@ -2402,16 +2555,18 @@ width:100%;
 box-sizing:border-box;
 box-shadow:inset 0 0 0 1px transparent;
 font-weight:400;
+font-size:13px;
 }
 
 #${PANEL_ID} .playlistRow:hover{
-background:rgba(0,0,0,0.08);
-box-shadow:inset 0 0 0 1px rgba(0,0,0,0.08);
+background:transparent;
+box-shadow:inset 0 0 0 1px transparent;
 }
 
 #${PANEL_ID} .playlistRow.current{
-background:rgba(113,106,169,0.22);
+background:transparent;
 box-shadow:none;
+font-weight:700;
 }
 
 #${PANEL_ID} .playlistTitle{
@@ -2419,17 +2574,24 @@ min-width:0;
 overflow:hidden;
 text-overflow:ellipsis;
 white-space:nowrap;
-font-size:12px;
+font-size:13px;
 font-weight:400;
 }
 
 #${PANEL_ID} .playlistBpm,
 #${PANEL_ID} .playlistTime{
-font-size:11px;
+font-size:12px;
 font-variant-numeric:tabular-nums;
 opacity:0.85;
 white-space:nowrap;
 font-weight:400;
+}
+
+#${PANEL_ID} .playlistRow.current .playlistTitle,
+#${PANEL_ID} .playlistRow.current .playlistBpm,
+#${PANEL_ID} .playlistRow.current .playlistTime{
+font-weight:700;
+opacity:1;
 }
 
 #${PANEL_ID} .playlistBpm{
@@ -2483,6 +2645,7 @@ justify-self:start;
     (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
+      dismissInfoNudge();
       toggleInfoPanel();
     },
     true
@@ -2911,6 +3074,7 @@ justify-self:start;
   refreshTransportUI();
   drawWaveform(null, '', NaN, false);
   resetTapper();
+  ensureInfoNudgeLoaded();
 
   return containerEl;
 }
@@ -2922,6 +3086,7 @@ export default function showResultsPanel(input: PanelInput = {}, handlers: Panel
   if (isPanelClosed()) return;
   ensurePanel();
   if (!containerEl) return;
+  markInfoNudgeUsageToday();
 
   currentHandlers = { ...EMPTY_HANDLERS, ...handlers };
 
