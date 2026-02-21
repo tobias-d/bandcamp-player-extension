@@ -130,7 +130,7 @@ let skipNextAutoCenterFromPlaylistClick = false;
 let playlistClickTargetIndex = -1;
 
 const PANEL_ID = 'bc-bpm-panel';
-const PANEL_UI_VERSION = 'alt-v41-minimized-tapper-toggle';
+const PANEL_UI_VERSION = 'alt-v43-svg-play-fix';
 const PLAYED_BLUE = '#5aa7ff';
 const TAP_LONG_PRESS_MS = 2000;
 const CLOSED_FLAG = '__BC_BPM_PANEL_CLOSED__';
@@ -231,27 +231,8 @@ function getExtensionAssetUrl(path: string): string {
   return path;
 }
 
-function imageIsSolidDark(img: HTMLImageElement): boolean {
-  try {
-    const canvas = document.createElement('canvas');
-    const w = Math.max(1, Math.min(32, img.naturalWidth || 32));
-    const h = Math.max(1, Math.min(32, img.naturalHeight || 32));
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return false;
-    ctx.drawImage(img, 0, 0, w, h);
-    const data = ctx.getImageData(0, 0, w, h).data;
-    let brightPixels = 0;
-    const pixelCount = w * h;
-    for (let i = 0; i < data.length; i += 4) {
-      const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
-      if (lum > 18) brightPixels++;
-    }
-    return brightPixels <= Math.max(2, Math.floor(pixelCount * 0.01));
-  } catch (_) {
-    return false;
-  }
+function getPanelIconUrl(file: string): string {
+  return getExtensionAssetUrl(`public/${file}`);
 }
 
 function seedPanelPrefsFromLegacy(): void {
@@ -1285,7 +1266,7 @@ function refreshTransportUI() {
   }
 
   if (tapInlineBpmValueEl) {
-    tapInlineBpmValueEl.textContent = `${Number.isFinite(currentTrackShownBpm) ? Math.round(currentTrackShownBpm) : '---'} BPM`;
+    tapInlineBpmValueEl.textContent = `${Number.isFinite(currentTrackShownBpm) ? Math.round(currentTrackShownBpm) : '---'} bpm`;
   }
 
   if (tapInlineConfEl) {
@@ -1753,7 +1734,7 @@ width:460px;
 --surface-soft:rgba(228,228,228,0.25);
 transform-origin:top left;
 transform:scale(var(--panel-scale));
-font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+font-family:'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, sans-serif;
 background:rgba(235,235,235,0.62);
 color:#111;
 border:1px solid rgba(0,0,0,0.14);
@@ -1763,7 +1744,10 @@ box-shadow:0 10px 26px rgba(0,0,0,0.18);
 backdrop-filter:blur(10px);
 }
 
-#${PANEL_ID} .inner{ position:relative; }
+#${PANEL_ID} .inner{
+position:relative;
+overflow:visible;
+}
 
 #${PANEL_ID} .dragHandle{
 display:none;
@@ -1948,20 +1932,35 @@ position:absolute;
 left:0;
 right:0;
 top:28px;
-bottom:0;
+bottom:auto;
 display:flex;
 flex-direction:column;
 justify-content:space-between;
 gap:16px;
+min-height:calc(100% - 28px);
+height:max-content;
 padding:18px 14px 14px 14px;
 border-radius:10px;
-background:linear-gradient(
-  to bottom,
-  rgba(162,162,162,0.56) 0%,
-  rgba(232,232,232,0.62) 100%
-);
-backdrop-filter:blur(6px);
+border:1px solid rgba(145,145,145,0.65);
+background:rgba(235,235,235,0.90);
+-webkit-backdrop-filter:blur(28px) saturate(130%);
+backdrop-filter:blur(28px) saturate(130%);
 z-index:30;
+overflow:hidden;
+}
+
+#${PANEL_ID} .welcomeOverlay::before{
+content:'';
+position:absolute;
+inset:0;
+border-radius:inherit;
+background:rgba(235,235,235,0.76);
+pointer-events:none;
+}
+
+#${PANEL_ID} .welcomeOverlay > *{
+position:relative;
+z-index:1;
 }
 
 #${PANEL_ID} .welcomeOverlayTitle{
@@ -2011,14 +2010,14 @@ align-self:center;
 min-height:56px;
 border:none;
 border-radius:10px;
-background:linear-gradient(120deg,#6a2fff 0%,#9a3bff 34%,#c84dff 68%,#a239ff 100%);
-background-size:220% 220%;
-color:#fff;
+background:rgba(235,235,235,0.72);
+border:1px solid rgba(0,0,0,0.14);
+color:#111;
 font-size:24px;
 font-weight:780;
 letter-spacing:0.01em;
-text-shadow:0 1px 2px rgba(0,0,0,0.25);
-box-shadow:0 8px 18px rgba(111,53,255,0.35);
+text-shadow:none;
+box-shadow:0 8px 18px rgba(0,0,0,0.16);
 cursor:pointer;
 position:relative;
 isolation:isolate;
@@ -2028,9 +2027,9 @@ transition:transform 140ms ease, opacity 140ms ease, box-shadow 180ms ease;
 
 #${PANEL_ID} .welcomeOverlayCta:hover{
 opacity:1;
-box-shadow:0 8px 18px rgba(111,53,255,0.35);
-background:linear-gradient(120deg,#6a2fff 0%,#9a3bff 34%,#c84dff 68%,#a239ff 100%);
-border:none;
+box-shadow:0 8px 18px rgba(0,0,0,0.16);
+background:rgba(240,240,240,0.78);
+border:1px solid rgba(0,0,0,0.18);
 }
 
 #${PANEL_ID} .welcomeOverlayCta:active{
@@ -2079,7 +2078,7 @@ touch-action:none;
 #${PANEL_ID} .artist{
 flex:1 1 auto;
 min-width:0;
-font-size:16px;
+font-size:17px;
 font-weight:750;
 line-height:32px;
 opacity:0.85;
@@ -2089,7 +2088,7 @@ text-overflow:ellipsis;
 }
 
 #${PANEL_ID} .title{
-font-size:16px;
+font-size:17px;
 font-weight:750;
 margin:10px 0 14px 0;
 opacity:0.95;
@@ -2186,16 +2185,17 @@ margin:0 !important;
 #${PANEL_ID} .tapInlineBpm{
 display:inline-flex;
 align-items:center;
+justify-content:center;
 gap:10px;
 height:36px;
-min-width:86px;
+min-width:98px;
 padding:0 6px;
 margin-left:auto !important;
 border:1px solid rgba(0,0,0,0.14);
 border-radius:12px;
 background:rgba(255,255,255,0.16);
 font-size:14px;
-font-weight:760;
+font-weight:500;
 letter-spacing:0.01em;
 font-variant-numeric:tabular-nums;
 white-space:nowrap;
@@ -2212,6 +2212,7 @@ border-color:rgba(0,0,0,0.18);
 
 #${PANEL_ID} .tapInlineBpmValue{
 line-height:1;
+font-weight:400;
 }
 
 #${PANEL_ID} .tapInlineConf.confLabel{
@@ -2440,6 +2441,7 @@ appearance:none;
 border:1px solid rgba(0,0,0,0.16);
 background:rgba(255,255,255,0.28);
 color:#111;
+font-family:inherit;
 padding:6px 10px;
 border-radius:10px;
 font-size:12px;
@@ -2493,6 +2495,14 @@ min-width:42px;
 color:#111;
 }
 
+#${PANEL_ID} .controlIcon{
+display:block;
+width:20px;
+height:20px;
+object-fit:contain;
+pointer-events:none;
+}
+
 /* Rounded hover effect - only around symbol */
 #${PANEL_ID} .transportControls button::before{
 content:'';
@@ -2541,12 +2551,13 @@ left:auto;
 top:auto;
 transform:none;
 height:36px;
+width:108px;
 display:flex;
 align-items:center;
 justify-content:center;
 padding:0 12px;
-font-size:12px;
-font-weight:720;
+font-size:14px;
+font-weight:500;
 letter-spacing:0.01em;
 border-radius:12px;
 font-variant-numeric:tabular-nums;
@@ -2554,7 +2565,7 @@ white-space:nowrap;
 user-select:none;
 background:rgba(255,255,255,0.16);
 border:1px solid rgba(0,0,0,0.14);
-min-width:102px;
+min-width:108px;
 line-height:1.1;
 color:#111;
 z-index:0;
@@ -2617,101 +2628,16 @@ color:rgba(64,64,64,0.96);
 background:rgba(255,255,255,0.12);
 }
 
-#${PANEL_ID} .playlistToggleGlyph{
-position:relative;
-display:inline-block;
-width:16px;
-height:12px;
-overflow:visible;
-flex:0 0 auto;
-}
-
-#${PANEL_ID} .playlistToggleGlyph .line{
-position:absolute;
-left:0;
-background:currentColor;
-border-radius:999px;
-transform:translateZ(0);
-}
-
-#${PANEL_ID} .playlistToggleGlyph .line.line1{
-top:0;
-width:14px;
-height:2px;
-}
-
-#${PANEL_ID} .playlistToggleGlyph .line.line2{
-top:5px;
-width:14px;
-height:2px;
-}
-
-#${PANEL_ID} .playlistToggleGlyph .line.line3{
-top:10px;
-width:14px;
-height:2px;
-}
-
 #${PANEL_ID} .playlistToggleLabel{
 display:none;
 }
 
-#${PANEL_ID} .tapToggleIcon{
+#${PANEL_ID} .toggleIcon{
 display:block;
-width:16px;
-height:16px;
+width:20px;
+height:20px;
 object-fit:contain;
-image-rendering:auto;
-}
-
-#${PANEL_ID} .tapToggleGlyph{
-position:relative;
-display:none;
-width:16px;
-height:16px;
-flex:0 0 auto;
-}
-
-#${PANEL_ID} .tapToggleGlyph .palm{
-position:absolute;
-left:4px;
-top:6px;
-width:8px;
-height:8px;
-border:1px solid currentColor;
-border-radius:3px 3px 2px 2px;
-background:linear-gradient(135deg, #111 0 48%, #fff 48% 100%);
-box-sizing:border-box;
-}
-
-#${PANEL_ID} .tapToggleGlyph .finger{
-position:absolute;
-top:1px;
-width:2px;
-height:7px;
-border:1px solid currentColor;
-border-bottom:none;
-border-radius:2px 2px 0 0;
-background:#fff;
-box-sizing:border-box;
-}
-
-#${PANEL_ID} .tapToggleGlyph .f1{ left:3px; }
-#${PANEL_ID} .tapToggleGlyph .f2{ left:6px; }
-#${PANEL_ID} .tapToggleGlyph .f3{ left:9px; }
-#${PANEL_ID} .tapToggleGlyph .f4{ left:12px; }
-
-#${PANEL_ID} .tapToggleGlyph .thumb{
-position:absolute;
-left:1px;
-top:8px;
-width:4px;
-height:2px;
-border:1px solid currentColor;
-border-right:none;
-border-radius:2px 0 0 2px;
-background:#111;
-box-sizing:border-box;
+pointer-events:none;
 }
 
 #${PANEL_ID} .playlistWrap{
@@ -2786,7 +2712,7 @@ background:transparent;
 display:grid;
 grid-template-columns:minmax(0,1fr) var(--playlist-bpm-col) var(--playlist-time-col);
 gap:10px;
-font-size:11px;
+font-size:14px;
 letter-spacing:0.05em;
 text-transform:uppercase;
 opacity:1;
@@ -2811,7 +2737,7 @@ display:block;
 width:100%;
 text-align:left;
 font:inherit;
-font-size:11px;
+font-size:14px;
 letter-spacing:0.05em;
 text-transform:uppercase;
 font-weight:700;
@@ -2879,7 +2805,7 @@ gap:4px;
 }
 
 #${PANEL_ID} .playlistStatus{
-font-size:13px;
+font-size:14px;
 opacity:0.75;
 padding:6px;
 display:none;
@@ -2900,7 +2826,7 @@ width:100%;
 box-sizing:border-box;
 box-shadow:inset 0 0 0 1px transparent;
 font-weight:400;
-font-size:13px;
+font-size:14px;
 }
 
 #${PANEL_ID} .playlistRow:hover{
@@ -2919,13 +2845,13 @@ min-width:0;
 overflow:hidden;
 text-overflow:ellipsis;
 white-space:nowrap;
-font-size:13px;
+font-size:14px;
 font-weight:400;
 }
 
 #${PANEL_ID} .playlistBpm,
 #${PANEL_ID} .playlistTime{
-font-size:12px;
+font-size:14px;
 font-variant-numeric:tabular-nums;
 opacity:0.85;
 white-space:nowrap;
@@ -3146,24 +3072,18 @@ justify-self:start;
   playlistBtnEl.title = 'Show playlist';
   playlistBtnEl.setAttribute('aria-label', 'Toggle playlist');
 
-  const playlistGlyphEl = document.createElement('span');
-  playlistGlyphEl.className = 'playlistToggleGlyph';
-  const playlistGlyphLine1El = document.createElement('span');
-  playlistGlyphLine1El.className = 'line line1';
-  const playlistGlyphLine2El = document.createElement('span');
-  playlistGlyphLine2El.className = 'line line2';
-  const playlistGlyphLine3El = document.createElement('span');
-  playlistGlyphLine3El.className = 'line line3';
-  playlistGlyphEl.appendChild(playlistGlyphLine1El);
-  playlistGlyphEl.appendChild(playlistGlyphLine2El);
-  playlistGlyphEl.appendChild(playlistGlyphLine3El);
+  const playlistIconEl = document.createElement('img');
+  playlistIconEl.className = 'toggleIcon';
+  playlistIconEl.alt = '';
+  playlistIconEl.setAttribute('aria-hidden', 'true');
+  playlistIconEl.src = getPanelIconUrl('playlist.svg');
 
   const playlistLabelEl = document.createElement('span');
   playlistLabelEl.className = 'playlistToggleLabel';
   playlistLabelEl.setAttribute('data-role', 'playlistToggleLabel');
   playlistLabelEl.textContent = '';
 
-  playlistBtnEl.appendChild(playlistGlyphEl);
+  playlistBtnEl.appendChild(playlistIconEl);
   playlistBtnEl.appendChild(playlistLabelEl);
   playlistBtnEl.addEventListener(
     'click',
@@ -3186,44 +3106,11 @@ justify-self:start;
   tapToggleBtnEl.title = 'Show BPM tapper';
 
   const tapToggleIconEl = document.createElement('img');
-  tapToggleIconEl.className = 'tapToggleIcon';
+  tapToggleIconEl.className = 'toggleIcon';
   tapToggleIconEl.alt = '';
   tapToggleIconEl.setAttribute('aria-hidden', 'true');
-  const tapToggleGlyphEl = document.createElement('span');
-  tapToggleGlyphEl.className = 'tapToggleGlyph';
-  const palmEl = document.createElement('span');
-  palmEl.className = 'palm';
-  const f1El = document.createElement('span');
-  f1El.className = 'finger f1';
-  const f2El = document.createElement('span');
-  f2El.className = 'finger f2';
-  const f3El = document.createElement('span');
-  f3El.className = 'finger f3';
-  const f4El = document.createElement('span');
-  f4El.className = 'finger f4';
-  const thumbEl = document.createElement('span');
-  thumbEl.className = 'thumb';
-  tapToggleGlyphEl.appendChild(f1El);
-  tapToggleGlyphEl.appendChild(f2El);
-  tapToggleGlyphEl.appendChild(f3El);
-  tapToggleGlyphEl.appendChild(f4El);
-  tapToggleGlyphEl.appendChild(palmEl);
-  tapToggleGlyphEl.appendChild(thumbEl);
-
-  tapToggleIconEl.addEventListener(
-    'load',
-    () => {
-      if (imageIsSolidDark(tapToggleIconEl)) {
-        tapToggleIconEl.style.display = 'none';
-        tapToggleGlyphEl.style.display = 'inline-block';
-      }
-    },
-    true
-  );
-
-  tapToggleIconEl.src = getExtensionAssetUrl('public/hand_icon.jpg');
+  tapToggleIconEl.src = getPanelIconUrl('hand.svg');
   tapToggleBtnEl.appendChild(tapToggleIconEl);
-  tapToggleBtnEl.appendChild(tapToggleGlyphEl);
   tapToggleBtnEl.addEventListener(
     'click',
     (ev) => {
@@ -3243,7 +3130,7 @@ justify-self:start;
   tapInlineBpmValueEl = document.createElement('span');
   tapInlineBpmValueEl.className = 'tapInlineBpmValue';
   tapInlineBpmValueEl.setAttribute('data-role', 'tapInlineBpmValue');
-  tapInlineBpmValueEl.textContent = '--- BPM';
+  tapInlineBpmValueEl.textContent = '--- bpm';
   tapInlineConfEl = document.createElement('div');
   tapInlineConfEl.className = 'confLabel tapInlineConf level-unknown';
   tapInlineConfEl.setAttribute('data-role', 'tapInlineConf');
@@ -3556,6 +3443,8 @@ justify-self:start;
   ensurePanelDraggable([topRowEl]);
   ensurePanelResizable();
   ensureWaveformSeeking();
+  // First render baseline: default to "paused" icon until live state arrives.
+  currentIsPlaying = false;
   refreshTransportUI();
   drawWaveform(null, '', NaN, false);
   resetTapper();

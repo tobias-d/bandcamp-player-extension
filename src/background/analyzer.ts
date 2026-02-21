@@ -215,16 +215,17 @@ function scheduleWaveformComputation(
     url: string;
     audioBuffer: AudioBuffer;
     cacheKey: string;
+    waveformCacheIdentity?: string;
     out: AnalysisResult;
     signal?: AbortSignal | null;
     onUpdate?: UpdateCallback | null;
   }
 ): void {
-  const { url, audioBuffer, cacheKey, out, signal, onUpdate } = params;
+  const { url, audioBuffer, cacheKey, waveformCacheIdentity, out, signal, onUpdate } = params;
 
   setTimeout(() => {
     if (signal?.aborted) return;
-    computeAndCacheWaveformForUrlFromAudioBuffer(url, audioBuffer)
+    computeAndCacheWaveformForUrlFromAudioBuffer(url, audioBuffer, waveformCacheIdentity)
       .then((wf: WaveformBands) => {
         if (signal?.aborted) return;
         out.waveform = wf;
@@ -363,7 +364,15 @@ export async function analyzeUrl(
         cache.set(cacheKey, out);
         schedulePersistedCacheFlush();
         safeCallUpdate(onUpdate, out);
-        scheduleWaveformComputation({ url, audioBuffer, cacheKey, out, signal, onUpdate });
+        scheduleWaveformComputation({
+          url,
+          audioBuffer,
+          cacheKey,
+          waveformCacheIdentity: cacheIdentity,
+          out,
+          signal,
+          onUpdate,
+        });
 
         return out;
       }
@@ -403,7 +412,15 @@ export async function analyzeUrl(
           });
       }, 0);
 
-      scheduleWaveformComputation({ url, audioBuffer, cacheKey, out, signal, onUpdate });
+      scheduleWaveformComputation({
+        url,
+        audioBuffer,
+        cacheKey,
+        waveformCacheIdentity: cacheIdentity,
+        out,
+        signal,
+        onUpdate,
+      });
 
       return out;
     } catch (error) {

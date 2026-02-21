@@ -130,6 +130,7 @@ let pendingSeekFraction: number | null = null;
 let renderScheduled = false;
 let rafId = 0;
 const audioBound = new WeakSet<HTMLAudioElement>();
+let lastKeyboardSkipAt = 0;
 const META_REFRESH_INTERVAL_MS = 350;
 const PLAYLIST_REFRESH_INTERVAL_MS = 350;
 let cachedMeta = {
@@ -291,8 +292,11 @@ function getTralbumData(): BandcampTralbumData | null {
 }
 
 function extractTrackIdFromSrc(src: string): string {
-  const m = String(src || '').match(/\/(\d+)(?:\?|$)/);
-  return m?.[1] || '';
+  const value = String(src || '');
+  const pathMatch = value.match(/\/(\d+)(?:\?|$)/);
+  if (pathMatch?.[1]) return pathMatch[1];
+  const queryMatch = value.match(/[?&](?:track_id|id)=(\d+)(?:&|$)/i);
+  return queryMatch?.[1] || '';
 }
 
 function normalizeTrackUrl(raw: string): string {
@@ -343,6 +347,11 @@ function getCurrentTrackIndex(tracks: BandcampTrackInfo[], currentAudioSrc: stri
 }
 
 function getTrackStableCacheKey(currentAudioSrc: string): string {
+  // Always prefer the currently playing source ID so cache identity is global
+  // across album/collection/feed/recommendation contexts.
+  const srcTrackId = extractTrackIdFromSrc(currentAudioSrc);
+  if (srcTrackId) return `bandcamp-track-id:${srcTrackId}`;
+
   const tralbum = getTralbumData();
   const tracks = Array.isArray(tralbum?.trackinfo) ? tralbum.trackinfo : [];
 
@@ -356,9 +365,6 @@ function getTrackStableCacheKey(currentAudioSrc: string): string {
       if (trackUrl) return `bandcamp-track-url:${trackUrl}`;
     }
   }
-
-  const srcTrackId = extractTrackIdFromSrc(currentAudioSrc);
-  if (srcTrackId) return `stream-track-id:${srcTrackId}`;
 
   const normalized = normalizeTrackUrl(currentAudioSrc);
   if (normalized) return `stream-url:${normalized}`;
@@ -374,7 +380,7 @@ function getTrackCacheKey(track: BandcampTrackInfo, fallbackUrl: string): string
   if (trackUrl) return `bandcamp-track-url:${trackUrl}`;
 
   const srcTrackId = extractTrackIdFromSrc(fallbackUrl);
-  if (srcTrackId) return `stream-track-id:${srcTrackId}`;
+  if (srcTrackId) return `bandcamp-track-id:${srcTrackId}`;
 
   const normalized = normalizeTrackUrl(fallbackUrl);
   if (normalized) return `stream-url:${normalized}`;
@@ -461,6 +467,7 @@ function maybeKickoffPreload(): void {
       sendRuntimeMessage<WaveformData>({
         type: 'GETWAVEFORM',
         url: target.url,
+        cacheKey: target.cacheKey,
       }).catch(() => {
         // Ignore waveform preload errors.
       })
@@ -809,6 +816,79 @@ function skipTrack(direction: number): void {
   }
 }
 
+function isTypingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = (el.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+  return false;
+}
+
+function handleKeyboardSkip(direction: number): void {
+  const playlistState = playlistController.getState();
+  if (!Array.isArray(playlistState?.tracks) || playlistState.tracks.length < 2) return;
+
+  const now = Date.now();
+  if (now - lastKeyboardSkipAt < 140) return;
+  lastKeyboardSkipAt = now;
+
+  if (!playlistController.jumpRelative(direction)) {
+    skipTrack(direction);
+  }
+  setTimeout(() => {
+    ensureActiveAudio();
+    scheduleRender();
+  }, 50);
+}
+
+function listenForKeyboardShortcuts(): void {
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.defaultPrevented) return;
+      if (isTypingTarget(event.target)) return;
+
+      // Native media keys first.
+      const key = String(event.key || '');
+      const code = String((event as KeyboardEvent).code || '');
+      const isMediaNext = key === 'MediaTrackNext' || key === 'MediaNextTrack' || code === 'MediaTrackNext';
+      const isMediaPrev = key === 'MediaTrackPrevious' || key === 'MediaPreviousTrack' || code === 'MediaTrackPrevious';
+
+      if (isMediaNext) {
+        event.preventDefault();
+        handleKeyboardSkip(1);
+        return;
+      }
+      if (isMediaPrev) {
+        event.preventDefault();
+        handleKeyboardSkip(-1);
+        return;
+      }
+
+      // No additional fallback shortcuts by request.
+    },
+    true
+  );
+}
+
+function listenForMediaSessionActions(): void {
+  const nav = navigator as Navigator & {
+    mediaSession?: {
+      setActionHandler?: (action: string, handler: (() => void) | null) => void;
+    };
+  };
+  const mediaSession = nav.mediaSession;
+  if (!mediaSession || typeof mediaSession.setActionHandler !== 'function') return;
+
+  try {
+    mediaSession.setActionHandler('nexttrack', () => handleKeyboardSkip(1));
+    mediaSession.setActionHandler('previoustrack', () => handleKeyboardSkip(-1));
+  } catch (_) {
+    // Ignore media session action binding errors.
+  }
+}
+
 function listenForPartialUpdates(): void {
   const listener = api?.runtime?.onMessage?.addListener;
   if (!listener) return;
@@ -879,6 +959,7 @@ async function analyzeCurrentTrack(): Promise<void> {
           const waveform = await sendRuntimeMessage<WaveformData>({
             type: 'GETWAVEFORM',
             url: fallbackUrl,
+            cacheKey: getTrackStableCacheKey(fallbackUrl),
           });
 
           if (waveform && (waveform.peaksLow || waveform.peaks)) {
@@ -1083,6 +1164,8 @@ async function waitForAudio(timeoutMs = 20000): Promise<void> {
 async function init(): Promise<void> {
   listenForPartialUpdates();
   listenForPlayEvents();
+  listenForKeyboardShortcuts();
+  listenForMediaSessionActions();
   await restoreBeatMode();
   await waitForAudio();
 
