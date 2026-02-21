@@ -1381,7 +1381,7 @@ function refreshTransportUI() {
   }
 
   if (tapInlineBpmEl) {
-    tapInlineBpmEl.style.display = tapperBoxVisible ? 'none' : 'inline-flex';
+    tapInlineBpmEl.style.display = 'inline-flex';
   }
 
   if (tapInlineBpmValueEl) {
@@ -2423,7 +2423,7 @@ gap:10px;
 height:36px;
 min-width:98px;
 padding:0 6px;
-margin-left:auto !important;
+margin-left:0 !important;
 border:1px solid rgba(0,0,0,0.14);
 border-radius:12px;
 background:rgba(255,255,255,0.16);
@@ -2712,6 +2712,10 @@ overflow:hidden;
 justify-self:start;
 }
 
+#${PANEL_ID} .transportControls > *{
+position:relative;
+}
+
 #${PANEL_ID} .transportControls button{
 flex:1;
 display:flex;
@@ -2767,7 +2771,7 @@ font-weight:750;
 }
 
 /* Vertical dividers between buttons */
-#${PANEL_ID} .transportControls button:not(:last-child)::after{
+#${PANEL_ID} .transportControls > *:not(:last-child)::after{
 content:'';
 position:absolute;
 right:0;
@@ -2820,7 +2824,44 @@ outline:2px solid rgba(0,0,0,0.22);
 outline-offset:1px;
 }
 
-#${PANEL_ID} button.playlistToggle{
+#${PANEL_ID} .transportControls.infoControls button.timebox{
+flex:0 0 auto;
+height:100%;
+border:none;
+border-radius:0;
+background:transparent;
+transition:none;
+}
+
+#${PANEL_ID} .transportControls.infoControls button.timebox::before{
+content:none;
+}
+
+#${PANEL_ID} .transportControls.infoControls button.timebox:hover{
+background:transparent;
+border-color:transparent;
+}
+
+#${PANEL_ID} .transportControls.infoControls button.timebox:active{
+background:transparent;
+}
+
+#${PANEL_ID} .transportControls.infoControls .tapInlineBpm{
+flex:0 0 auto;
+height:100%;
+padding:0 12px;
+border:none;
+border-radius:0;
+background:transparent;
+transition:none;
+}
+
+#${PANEL_ID} .transportControls.infoControls .tapInlineBpm:hover{
+background:transparent;
+border-color:transparent;
+}
+
+#${PANEL_ID} .transportRow > button.playlistToggle{
 appearance:none;
 position:relative;
 right:auto;
@@ -2847,17 +2888,17 @@ box-shadow:none;
 transition:background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-#${PANEL_ID} button.playlistToggle.active{
+#${PANEL_ID} .transportRow > button.playlistToggle.active{
 color:#111;
 }
 
-#${PANEL_ID} button.playlistToggle:hover{
+#${PANEL_ID} .transportRow > button.playlistToggle:hover{
 background:rgba(255,255,255,0.24);
 border-color:rgba(0,0,0,0.18);
 color:rgba(64,64,64,0.96);
 }
 
-#${PANEL_ID} button.playlistToggle:active{
+#${PANEL_ID} .transportRow > button.playlistToggle:active{
 background:rgba(255,255,255,0.12);
 }
 
@@ -3421,11 +3462,19 @@ justify-self:start;
   transportControlsEl.appendChild(prevTrackBtnEl);
   transportControlsEl.appendChild(nextTrackBtnEl);
 
+  const infoControlsEl = document.createElement('div');
+  infoControlsEl.className = 'transportControls infoControls';
+  infoControlsEl.appendChild(timeBtnEl);
+  infoControlsEl.appendChild(tapInlineBpmEl);
+
+  const toggleControlsEl = document.createElement('div');
+  toggleControlsEl.className = 'transportControls toggleControls';
+  toggleControlsEl.appendChild(playlistBtnEl);
+  toggleControlsEl.appendChild(tapToggleBtnEl);
+
   transportRowEl.appendChild(transportControlsEl);
-  transportRowEl.appendChild(timeBtnEl);
-  transportRowEl.appendChild(playlistBtnEl);
-  transportRowEl.appendChild(tapToggleBtnEl);
-  transportRowEl.appendChild(tapInlineBpmEl);
+  transportRowEl.appendChild(infoControlsEl);
+  transportRowEl.appendChild(toggleControlsEl);
 
   bpmSectionEl = document.createElement('div');
   bpmSectionEl.className = 'lower';
