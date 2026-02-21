@@ -1,18 +1,20 @@
 # Bandcamp Player Extension
 
-Bandcamp Player Extension is a floating player add-on for Bandcamp.
-Its main goal is to provide accurate BPM readings and make music digging more fun.
+Bandcamp Player Extension is a floating music companion for Bandcamp.
+Built with a lot of dedicated work and the help of AI-assisted development.
 
 ![Bandcamp Player Screenshot](image.png)
 
-## Main Features
+## Features
 
-- Floating player overlay on Bandcamp pages
-- Accurate BPM detection via `essentia.js` (WASM)
-- 3-band waveform visualization (low / mid / high)
-- Playlist UI with track list, BPM, duration, sorting, and direct track jump
-- Previous/next/play controls plus media key support
-- Background analysis caching reused across pages
+- 🎯 **BPM Detection** — Powered by [Essentia](https://essentia.upf.edu/)
+  for accurate, real-time tempo readings
+- 🥁 **Tap Tempo** — Manually tap out the BPM when you want
+  to double-check by ear
+- ✨ **Clean Playback UI** — A minimal floating player that stays
+  out of your way while you browse
+- 📂 **Extended Playlist Controls** — Smarter navigation to make
+  digging for tracks faster and more fun
 
 ## Latest Changes (v2.5)
 
