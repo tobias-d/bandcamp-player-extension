@@ -30,8 +30,8 @@
     "persistent": true
   },
   "icons": {
-    "48": "public/icon48-v2.png",
-    "96": "public/icon96-v2.png"
+    "48": "public/hand.svg",
+    "96": "public/hand.svg"
   },
   "content_security_policy": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
   "web_accessible_resources": [

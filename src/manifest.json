@@ -28,8 +28,8 @@
     "service_worker": "background.js"
   },
   "icons": {
-    "48": "public/icon48-v2.png",
-    "96": "public/icon96-v2.png"
+    "48": "public/hand.svg",
+    "96": "public/hand.svg"
   },
   "web_accessible_resources": [
     {

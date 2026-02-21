@@ -85,11 +85,13 @@ let playlistWrapEl: HTMLDivElement | null = null;
 let playlistScrollEl: HTMLDivElement | null = null;
 let playlistBodyEl: HTMLDivElement | null = null;
 let playlistStatusEl: HTMLDivElement | null = null;
+let playlistResizeHandleEl: HTMLDivElement | null = null;
 let playlistHeadTrackBtnEl: HTMLButtonElement | null = null;
 let playlistHeadBpmBtnEl: HTMLButtonElement | null = null;
 let infoBtnEl: HTMLButtonElement | null = null;
 let infoPanelEl: HTMLDivElement | null = null;
 let closeBtnEl: HTMLButtonElement | null = null;
+let interactionShieldEl: HTMLDivElement | null = null;
 let bpmMainEl: HTMLDivElement | null = null;
 let bpmConfLabelEl: HTMLDivElement | null = null;
 let tapBpmEl: HTMLDivElement | null = null;
@@ -125,12 +127,16 @@ let currentPlaylistLoading = false;
 let currentPlaylistSortMode: 'track' | 'bpm' = 'track';
 let currentPlaylistSortDir: 1 | -1 = 1;
 let lastPlaylistRenderKey = '';
+let lastPlaylistInputRowsRef: PlaylistRowInput[] | null = null;
+let lastPlaylistInputIndex = -1;
+let lastPlaylistInputExpanded = false;
+let lastPlaylistInputLoading = false;
 let pendingPlaylistAutoCenter = false;
 let skipNextAutoCenterFromPlaylistClick = false;
 let playlistClickTargetIndex = -1;
 
 const PANEL_ID = 'bc-bpm-panel';
-const PANEL_UI_VERSION = 'alt-v43-svg-play-fix';
+const PANEL_UI_VERSION = 'alt-v44-playlist-handle-resize';
 const PLAYED_BLUE = '#5aa7ff';
 const TAP_LONG_PRESS_MS = 2000;
 const CLOSED_FLAG = '__BC_BPM_PANEL_CLOSED__';
@@ -143,6 +149,12 @@ const INFO_NUDGE_AFTER_ACTIVE_DAYS = 7;
 const PANEL_MIN_SCALE = 0.6;
 const PANEL_MAX_SCALE = 1;
 const PANEL_DEFAULT_SCALE = 0.8;
+const PANEL_REF_VIEWPORT_W = 1600;
+const PANEL_REF_VIEWPORT_H = 900;
+const PLAYLIST_DEFAULT_MAX_HEIGHT_PX = 220;
+const PLAYLIST_DEFAULT_HEADER_HEIGHT_PX = 36;
+const PLAYLIST_DEFAULT_ROW_PITCH_PX = 34;
+const PLAYLIST_MAX_VISIBLE_TRACKS = 20;
 let panelScale = PANEL_MAX_SCALE;
 let savedPosMem: { left: number; top: number } | null = null;
 let savedScaleMem = PANEL_DEFAULT_SCALE;
@@ -158,6 +170,8 @@ let welcomeOverlayLoadPromise: Promise<void> | null = null;
 let lastInfoUsageDay = '';
 let welcomeOverlayEl: HTMLDivElement | null = null;
 let welcomeOverlayCtaEl: HTMLButtonElement | null = null;
+let prevBodyUserSelect = '';
+let prevDocCursor = '';
 
 type InfoNudgeState = {
   activeDays: string[];
@@ -211,12 +225,12 @@ function readLegacyScale(): number {
     const fromLocal = localStorage.getItem(SCALE_KEY);
     const fromSession = sessionStorage.getItem(SCALE_KEY);
     const rawStr = fromLocal != null ? fromLocal : fromSession;
-    if (rawStr == null) return PANEL_DEFAULT_SCALE;
+    if (rawStr == null) return getSuggestedInitialScale();
     const raw = Number(rawStr);
-    if (!Number.isFinite(raw)) return PANEL_DEFAULT_SCALE;
+    if (!Number.isFinite(raw)) return getSuggestedInitialScale();
     return clamp(raw, PANEL_MIN_SCALE, PANEL_MAX_SCALE);
   } catch (_) {
-    return PANEL_DEFAULT_SCALE;
+    return getSuggestedInitialScale();
   }
 }
 
@@ -583,6 +597,111 @@ function applyPanelScale(scale: number): void {
 
 function clamp(x: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, x));
+}
+
+function getSuggestedInitialScale(): number {
+  const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+  const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+  if (!Number.isFinite(vw) || !Number.isFinite(vh) || vw <= 0 || vh <= 0) {
+    return PANEL_DEFAULT_SCALE;
+  }
+
+  const widthRatio = vw / PANEL_REF_VIEWPORT_W;
+  const heightRatio = vh / PANEL_REF_VIEWPORT_H;
+  const fitRatio = Math.min(widthRatio, heightRatio);
+  const suggested = PANEL_DEFAULT_SCALE + (fitRatio - 1) * 0.35;
+  return clamp(suggested, PANEL_MIN_SCALE, PANEL_MAX_SCALE);
+}
+
+function parsePx(value: string | null | undefined, fallback: number): number {
+  const raw = Number.parseFloat(String(value || '').trim());
+  return Number.isFinite(raw) ? raw : fallback;
+}
+
+function ensureInteractionShield(cursor = ''): void {
+  if (!interactionShieldEl || !document.contains(interactionShieldEl)) {
+    const shield = document.createElement('div');
+    shield.setAttribute('data-bc-panel-shield', '1');
+    shield.style.position = 'fixed';
+    shield.style.left = '0';
+    shield.style.top = '0';
+    shield.style.width = '100vw';
+    shield.style.height = '100vh';
+    shield.style.zIndex = '2147483646';
+    shield.style.background = 'transparent';
+    shield.style.pointerEvents = 'auto';
+    shield.style.touchAction = 'none';
+    (document.body || document.documentElement).appendChild(shield);
+    interactionShieldEl = shield;
+
+    if (document.body) {
+      prevBodyUserSelect = document.body.style.userSelect || '';
+      document.body.style.userSelect = 'none';
+    }
+    prevDocCursor = document.documentElement.style.cursor || '';
+  }
+
+  const nextCursor = cursor || 'default';
+  if (interactionShieldEl) {
+    interactionShieldEl.style.cursor = nextCursor;
+  }
+  document.documentElement.style.cursor = nextCursor;
+}
+
+function removeInteractionShield(): void {
+  if (interactionShieldEl) {
+    interactionShieldEl.remove();
+    interactionShieldEl = null;
+  }
+  if (document.body) {
+    document.body.style.userSelect = prevBodyUserSelect || '';
+  }
+  document.documentElement.style.cursor = prevDocCursor || '';
+}
+
+function getPlaylistViewportElement(): HTMLElement | null {
+  const parent = playlistScrollEl?.parentElement || null;
+  return parent instanceof HTMLElement ? parent : null;
+}
+
+function getPlaylistHeaderHeightPx(): number {
+  if (!playlistWrapEl) return PLAYLIST_DEFAULT_HEADER_HEIGHT_PX;
+  const styles = getComputedStyle(playlistWrapEl);
+  return parsePx(styles.getPropertyValue('--playlist-header-h'), PLAYLIST_DEFAULT_HEADER_HEIGHT_PX);
+}
+
+function getPlaylistRowPitchPx(): number {
+  const body = playlistBodyEl;
+  const firstRow = body?.querySelector('.playlistRow') as HTMLElement | null;
+  const gapValue = body ? getComputedStyle(body).rowGap || getComputedStyle(body).gap : '';
+  const gap = parsePx(gapValue, 4);
+  if (firstRow) {
+    return Math.max(1, firstRow.offsetHeight + gap);
+  }
+  return PLAYLIST_DEFAULT_ROW_PITCH_PX;
+}
+
+function getPlaylistMaxHeightPx(): number {
+  const viewport = getPlaylistViewportElement();
+  if (viewport) {
+    const styles = getComputedStyle(viewport);
+    const maxHeight = parsePx(styles.maxHeight, Number.NaN);
+    if (Number.isFinite(maxHeight) && maxHeight > 0) {
+      return maxHeight;
+    }
+  }
+  return PLAYLIST_DEFAULT_MAX_HEIGHT_PX;
+}
+
+function setPlaylistMaxHeightPx(maxHeightPx: number): void {
+  if (!playlistWrapEl) return;
+  const safeHeight = Math.max(1, Math.round(maxHeightPx));
+  playlistWrapEl.style.setProperty('--playlist-max-h', `${safeHeight}px`);
+  const viewport = getPlaylistViewportElement();
+  if (viewport && playlistScrollEl) {
+    const scrollbarW = Math.max(0, playlistScrollEl.offsetWidth - playlistScrollEl.clientWidth);
+    viewport.style.setProperty('--playlist-scrollbar-w', `${scrollbarW}px`);
+  }
 }
 
 function pad2(n: number): string {
@@ -1276,8 +1395,6 @@ function refreshTransportUI() {
     tapInlineConfEl.classList.remove('level-low', 'level-medium', 'level-high', 'level-unknown');
     tapInlineConfEl.classList.add('confLabel', 'tapInlineConf', confLevelClassForState(currentTrackBpmConfidence, currentIsAnalyzing));
   }
-
-  renderPlaylistUI();
 }
 
 function setTapperHintDefault() {
@@ -1369,17 +1486,49 @@ function ensureWaveformSeeking() {
   waveformCanvasEl.dataset.seekBound = '1';
   waveformCanvasEl.style.cursor = 'pointer';
 
-  const seekFromEvent = (ev) => {
-    if (!waveformCanvasEl) return;
+  const getSeekFractionFromEvent = (ev) => {
+    if (!waveformCanvasEl) return 0;
     const r = waveformCanvasEl.getBoundingClientRect();
     const x = clamp(ev.clientX - r.left, 0, r.width);
-    const frac = r.width > 1 ? x / r.width : 0;
-    currentPlayheadFraction = frac;
+    return r.width > 1 ? x / r.width : 0;
+  };
+
+  const applySeekFraction = (frac) => {
+    const numeric = Number(frac);
+    const nextFraction = Number.isFinite(numeric) ? clamp(numeric, 0, 1) : 0;
+    currentPlayheadFraction = nextFraction;
     drawWaveform(currentWaveform, currentWaveformStatus, currentPlayheadFraction, currentIsAnalyzing);
-    if (typeof currentHandlers.onSeekToFraction === 'function') currentHandlers.onSeekToFraction(frac);
+    if (typeof currentHandlers.onSeekToFraction === 'function') currentHandlers.onSeekToFraction(nextFraction);
   };
 
   let dragging = false;
+  let dragSeekRafId = 0;
+  let pendingDragFraction = NaN;
+
+  const flushQueuedDragSeek = () => {
+    dragSeekRafId = 0;
+    if (!Number.isFinite(pendingDragFraction)) return;
+    const nextFraction = pendingDragFraction;
+    pendingDragFraction = NaN;
+    applySeekFraction(nextFraction);
+  };
+
+  const queueDragSeek = (ev) => {
+    pendingDragFraction = getSeekFractionFromEvent(ev);
+    if (dragSeekRafId) return;
+    dragSeekRafId = requestAnimationFrame(flushQueuedDragSeek);
+  };
+
+  const flushPendingSeekNow = () => {
+    if (dragSeekRafId) {
+      cancelAnimationFrame(dragSeekRafId);
+      dragSeekRafId = 0;
+    }
+    if (!Number.isFinite(pendingDragFraction)) return;
+    const nextFraction = pendingDragFraction;
+    pendingDragFraction = NaN;
+    applySeekFraction(nextFraction);
+  };
 
   waveformCanvasEl.addEventListener('pointerdown', (ev) => {
     ev.preventDefault();
@@ -1388,22 +1537,28 @@ function ensureWaveformSeeking() {
     try {
       waveformCanvasEl.setPointerCapture(ev.pointerId);
     } catch (_) {}
-    seekFromEvent(ev);
+    applySeekFraction(getSeekFractionFromEvent(ev));
   });
 
   waveformCanvasEl.addEventListener('pointermove', (ev) => {
     if (!dragging) return;
     ev.preventDefault();
-    seekFromEvent(ev);
+    queueDragSeek(ev);
   });
 
   waveformCanvasEl.addEventListener('pointerup', (ev) => {
     ev.preventDefault();
     dragging = false;
+    flushPendingSeekNow();
   });
 
   waveformCanvasEl.addEventListener('pointercancel', () => {
     dragging = false;
+    pendingDragFraction = NaN;
+    if (dragSeekRafId) {
+      cancelAnimationFrame(dragSeekRafId);
+      dragSeekRafId = 0;
+    }
   });
 }
 
@@ -1419,6 +1574,7 @@ function ensurePanelDraggable(handleEls) {
     if (t && t.closest && t.closest('button')) return;
 
     ev.preventDefault();
+    ensureInteractionShield('move');
 
     const r0 = containerEl.getBoundingClientRect();
     const offsetX = ev.clientX - r0.left;
@@ -1450,6 +1606,7 @@ function ensurePanelDraggable(handleEls) {
       window.removeEventListener('pointermove', onMove, true);
       window.removeEventListener('pointerup', onUp, true);
       window.removeEventListener('pointercancel', onUp, true);
+      removeInteractionShield();
 
       if (!containerEl) return;
       const r = containerEl.getBoundingClientRect();
@@ -1497,10 +1654,13 @@ function ensurePanelResizable() {
   const startResize = (ev) => {
     if (!containerEl) return;
     if (ev.button != null && ev.button !== 0) return;
+    const target = ev.target as HTMLElement | null;
+    if (target?.closest?.('[data-role="playlistResizeHandle"]')) return;
     const dir = getResizeDir(ev.clientX, ev.clientY);
     if (!dir) return;
     ev.preventDefault();
     ev.stopPropagation();
+    ensureInteractionShield(cursorForDir(dir));
 
     const startRect = containerEl.getBoundingClientRect();
     const startScale = panelScale || PANEL_MAX_SCALE;
@@ -1554,6 +1714,7 @@ function ensurePanelResizable() {
       window.removeEventListener('pointermove', onMove, true);
       window.removeEventListener('pointerup', onUp, true);
       window.removeEventListener('pointercancel', onUp, true);
+      removeInteractionShield();
 
       if (!containerEl) return;
       const r = containerEl.getBoundingClientRect();
@@ -1582,8 +1743,54 @@ function ensurePanelResizable() {
   containerEl.addEventListener('pointerdown', startResize, true);
 }
 
+function ensurePlaylistResizeHandle() {
+  if (!playlistResizeHandleEl || playlistResizeHandleEl.dataset.resizeBound === '1') return;
+  playlistResizeHandleEl.dataset.resizeBound = '1';
+
+  const startResize = (ev) => {
+    if (!playlistResizeHandleEl) return;
+    if (ev.button != null && ev.button !== 0) return;
+    if (!currentPlaylistExpanded) return;
+    if (!playlistWrapEl || playlistWrapEl.style.display === 'none') return;
+
+    ev.preventDefault();
+    ev.stopPropagation();
+    ensureInteractionShield('ns-resize');
+
+    const startY = ev.clientY;
+    const startScale = Math.max(0.01, panelScale || PANEL_MAX_SCALE);
+    const startPlaylistMaxHeightPx = getPlaylistMaxHeightPx();
+    const playlistHeaderHeightPx = getPlaylistHeaderHeightPx();
+    const playlistRowPitchPx = getPlaylistRowPitchPx();
+
+    const onMove = (e) => {
+      const dy = e.clientY - startY;
+      const targetPlaylistMaxHeightPx = startPlaylistMaxHeightPx + (dy / startScale);
+      const rawRows = (targetPlaylistMaxHeightPx - playlistHeaderHeightPx) / Math.max(1, playlistRowPitchPx);
+      const clampedRows = Math.round(clamp(rawRows, 1, PLAYLIST_MAX_VISIBLE_TRACKS));
+      const nextPlaylistMaxHeightPx = playlistHeaderHeightPx + clampedRows * playlistRowPitchPx;
+      setPlaylistMaxHeightPx(nextPlaylistMaxHeightPx);
+      drawWaveform(currentWaveform, currentWaveformStatus, currentPlayheadFraction, currentIsAnalyzing);
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onUp, true);
+      removeInteractionShield();
+    };
+
+    window.addEventListener('pointermove', onMove, true);
+    window.addEventListener('pointerup', onUp, true);
+    window.addEventListener('pointercancel', onUp, true);
+  };
+
+  playlistResizeHandleEl.addEventListener('pointerdown', startResize, true);
+}
+
 function closePanel() {
   setPanelClosed(true);
+  removeInteractionShield();
   if (containerEl && containerEl.remove) containerEl.remove();
 
   containerEl = null;
@@ -1611,6 +1818,7 @@ function closePanel() {
   playlistScrollEl = null;
   playlistBodyEl = null;
   playlistStatusEl = null;
+  playlistResizeHandleEl = null;
   playlistHeadTrackBtnEl = null;
   playlistHeadBpmBtnEl = null;
   infoBtnEl = null;
@@ -1638,6 +1846,10 @@ function closePanel() {
   currentPlaylistSortMode = 'track';
   currentPlaylistSortDir = 1;
   lastPlaylistRenderKey = '';
+  lastPlaylistInputRowsRef = null;
+  lastPlaylistInputIndex = -1;
+  lastPlaylistInputExpanded = false;
+  lastPlaylistInputLoading = false;
   pendingPlaylistAutoCenter = false;
   skipNextAutoCenterFromPlaylistClick = false;
   playlistClickTargetIndex = -1;
@@ -1672,6 +1884,7 @@ function bindRefsFromContainer() {
   playlistScrollEl = byRole<HTMLDivElement>('playlistScroll');
   playlistBodyEl = byRole<HTMLDivElement>('playlistBody');
   playlistStatusEl = byRole<HTMLDivElement>('playlistStatus');
+  playlistResizeHandleEl = byRole<HTMLDivElement>('playlistResizeHandle');
   playlistHeadTrackBtnEl = byRole<HTMLButtonElement>('playlistHeadTrackSort');
   playlistHeadBpmBtnEl = byRole<HTMLButtonElement>('playlistHeadBpmSort');
   infoBtnEl = byRole<HTMLButtonElement>('infoBtn');
@@ -1704,6 +1917,7 @@ function ensurePanel() {
         containerEl?.querySelector('[data-role="topRow"]') as HTMLDivElement | null,
       ]);
       ensurePanelResizable();
+      ensurePlaylistResizeHandle();
       applyStoredPrefsToPanel();
       ensureWaveformSeeking();
       ensureWelcomeOverlayLoaded();
@@ -1925,6 +2139,25 @@ background:rgba(245,245,245,0.95);
 backdrop-filter:blur(8px);
 box-shadow:0 8px 18px rgba(0,0,0,0.16);
 z-index:20;
+}
+
+#${PANEL_ID} .infoPanel .byline{
+display:block;
+padding:6px 8px 4px 8px;
+font-size:11px;
+font-weight:700;
+line-height:1.2;
+letter-spacing:0.04em;
+text-transform:none;
+opacity:0.72;
+color:#111;
+}
+
+#${PANEL_ID} .infoPanel .byline::after{
+content:'';
+display:block;
+margin-top:6px;
+border-bottom:1px solid rgba(0,0,0,0.16);
 }
 
 #${PANEL_ID} .welcomeOverlay{
@@ -2647,7 +2880,42 @@ pointer-events:none;
 --playlist-header-h:36px;
 --playlist-max-h:220px;
 margin-top:10px;
+padding-bottom:2px;
 display:none;
+}
+
+#${PANEL_ID} .playlistResizeHandle{
+position:relative;
+display:block;
+width:100%;
+height:18px;
+margin-top:7px;
+cursor:ns-resize;
+touch-action:none;
+}
+
+#${PANEL_ID} .playlistResizeHandle::before{
+content:'';
+position:absolute;
+left:50%;
+top:36%;
+transform:translate(-50%, -50%);
+width:66px;
+height:3px;
+border-radius:999px;
+background:rgba(0,0,0,0.18);
+}
+
+#${PANEL_ID} .playlistResizeHandle::after{
+content:'';
+position:absolute;
+left:50%;
+top:74%;
+transform:translate(-50%, -50%);
+width:60px;
+height:3px;
+border-radius:999px;
+background:rgba(0,0,0,0.18);
 }
 
 #${PANEL_ID} .playlistViewport{
@@ -2926,6 +3194,10 @@ justify-self:start;
   infoPanelEl.className = 'infoPanel';
   infoPanelEl.setAttribute('data-role', 'infoPanel');
 
+  const bylineEl = document.createElement('div');
+  bylineEl.className = 'byline';
+  bylineEl.textContent = 'By L//Y';
+
   const feedbackLinkEl = document.createElement('a');
   feedbackLinkEl.href = 'https://forms.gle/CMyrodpNPThdr5Aw8';
   feedbackLinkEl.target = '_blank';
@@ -2938,6 +3210,7 @@ justify-self:start;
   coffeeLinkEl.rel = 'noopener noreferrer';
   coffeeLinkEl.textContent = 'Buy me a coffee ☕';
 
+  infoPanelEl.appendChild(bylineEl);
   infoPanelEl.appendChild(feedbackLinkEl);
   infoPanelEl.appendChild(coffeeLinkEl);
   ensureInfoPanelGlobalListeners();
@@ -3353,6 +3626,12 @@ justify-self:start;
   playlistWrapEl.appendChild(playlistViewportEl);
   playlistWrapEl.appendChild(playlistStatusEl);
 
+  playlistResizeHandleEl = document.createElement('div');
+  playlistResizeHandleEl.className = 'playlistResizeHandle';
+  playlistResizeHandleEl.setAttribute('data-role', 'playlistResizeHandle');
+  playlistResizeHandleEl.setAttribute('aria-hidden', 'true');
+  playlistWrapEl.appendChild(playlistResizeHandleEl);
+
   noteEl = document.createElement('div');
   noteEl.className = 'note';
   noteEl.setAttribute('data-role', 'note');
@@ -3442,6 +3721,7 @@ justify-self:start;
   applyStoredPrefsToPanel();
   ensurePanelDraggable([topRowEl]);
   ensurePanelResizable();
+  ensurePlaylistResizeHandle();
   ensureWaveformSeeking();
   // First render baseline: default to "paused" icon until live state arrives.
   currentIsPlaying = false;
@@ -3508,6 +3788,11 @@ export default function showResultsPanel(input: PanelInput = {}, handlers: Panel
   currentPlaylistIndex = Number.isFinite(input?.playlistCurrentIndex) ? Number(input.playlistCurrentIndex) : -1;
   currentPlaylistExpanded = Boolean(input?.playlistExpanded);
   currentPlaylistLoading = Boolean(input?.playlistLoading);
+  const playlistNeedsRender =
+    currentPlaylistRows !== lastPlaylistInputRowsRef ||
+    currentPlaylistIndex !== lastPlaylistInputIndex ||
+    currentPlaylistExpanded !== lastPlaylistInputExpanded ||
+    currentPlaylistLoading !== lastPlaylistInputLoading;
 
   const indexChangedToValid = Number.isFinite(currentPlaylistIndex) && currentPlaylistIndex >= 0 && prevPlaylistIndex !== currentPlaylistIndex;
   const playlistOpened = currentPlaylistExpanded && !prevPlaylistExpanded;
@@ -3555,5 +3840,12 @@ export default function showResultsPanel(input: PanelInput = {}, handlers: Panel
   }
 
   refreshTransportUI();
+  if (playlistNeedsRender) {
+    renderPlaylistUI();
+    lastPlaylistInputRowsRef = currentPlaylistRows;
+    lastPlaylistInputIndex = currentPlaylistIndex;
+    lastPlaylistInputExpanded = currentPlaylistExpanded;
+    lastPlaylistInputLoading = currentPlaylistLoading;
+  }
   drawWaveform(currentWaveform, currentWaveformStatus, currentPlayheadFraction, currentIsAnalyzing);
 }

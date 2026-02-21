@@ -143,6 +143,10 @@ let lastMetaAt = 0;
 let lastPlaylistRefreshSrc = '';
 let lastPlaylistRefreshLocation = '';
 let lastPlaylistRefreshAt = 0;
+let playIntentToken = 0;
+const UI_PLAYPAUSE_COOLDOWN_MS = 120;
+const UI_ACTION_COOLDOWN_MS = 140;
+const uiActionAt = new Map<string, number>();
 
 function getCachedMeta(sourceKey: string): { artistName: string; trackTitle: string; combined: string } {
   const now = Date.now();
@@ -193,6 +197,14 @@ function norm(s: string | null | undefined): string {
 
 function canMessage(): boolean {
   return Boolean(api?.runtime?.sendMessage);
+}
+
+function allowUiAction(key: string, cooldownMs: number = UI_ACTION_COOLDOWN_MS): boolean {
+  const now = Date.now();
+  const last = uiActionAt.get(key) || 0;
+  if ((now - last) < cooldownMs) return false;
+  uiActionAt.set(key, now);
+  return true;
 }
 
 function sendRuntimeMessage<T = any>(message: any): Promise<T> {
@@ -458,7 +470,7 @@ function maybeKickoffPreload(): void {
   activePreloadSrc = target.url;
 
   void sendRuntimeMessage<AnalysisResult>({
-    type: 'ANALYZE_TRACK',
+    type: 'ANALYZE_TRACK_SILENT',
     url: target.url,
     beatMode,
     cacheKey: target.cacheKey,
@@ -619,14 +631,18 @@ function togglePlayPause(): void {
   }
 
   if (el.paused) {
+    const playToken = ++playIntentToken;
     const maybePromise = el.play();
     if (maybePromise && typeof maybePromise.catch === 'function') {
       maybePromise.catch(() => {
+        if (playToken !== playIntentToken) return;
+        if (!el.paused) return;
         tryClickBandcampPlayButton();
       });
     }
     startRafPlayheadLoop();
   } else {
+    playIntentToken += 1;
     el.pause();
     stopRafPlayheadLoop();
   }
@@ -1072,25 +1088,34 @@ function renderPanel(): void {
   const state = buildPanelState();
 
   const callbacks: PanelCallbacks = {
-    onTogglePlayPause: () => togglePlayPause(),
+    onTogglePlayPause: () => {
+      if (!allowUiAction('playPause', UI_PLAYPAUSE_COOLDOWN_MS)) return;
+      togglePlayPause();
+    },
     onSeekToFraction: (fraction: number) => {
       const audio = ensureActiveAudio();
       if (!audio) return;
       seekToFraction(audio, fraction);
     },
     onPrevTrack: () => {
+      if (!allowUiAction('skip')) return;
       if (!playlistController.jumpRelative(-1)) {
         skipTrack(-1);
       }
     },
     onNextTrack: () => {
+      if (!allowUiAction('skip')) return;
       if (!playlistController.jumpRelative(1)) {
         skipTrack(1);
       }
     },
-    onTogglePlaylist: () => playlistController.toggleExpanded(),
+    onTogglePlaylist: () => {
+      if (!allowUiAction('playlistToggle')) return;
+      playlistController.toggleExpanded();
+    },
     onSelectPlaylistTrack: (index: number) => {
       if (!Number.isFinite(index)) return;
+      if (!allowUiAction('playlistSelect')) return;
       const jumped = playlistController.jumpToTrack(index);
       if (jumped) {
         setTimeout(() => {

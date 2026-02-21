@@ -83,6 +83,7 @@ const LINKED_PLAYLIST_CACHE_TTL_MS = 15 * 60 * 1000;
 const LINKED_PLAYLIST_MIN_FETCH_INTERVAL_MS = 2500;
 const LINKED_PLAYLIST_MAX_FETCHES_PER_MIN = 8;
 const LINKED_PLAYLIST_BACKOFF_MS = 10 * 60 * 1000;
+let selectedPlaybackRunId = 0;
 
 function norm(input: string | null | undefined): string {
   return String(input || '').replace(/\s+/g, ' ').trim();
@@ -1110,6 +1111,7 @@ function ensureSelectedTrackPlayback(
   preferImmediateFallback = false,
   allowDirectSrcFallback = true
 ): void {
+  const runId = ++selectedPlaybackRunId;
   const maxRetries = preferImmediateFallback ? 6 : 12;
   const retryMs = preferImmediateFallback ? 70 : 120;
   const fallbackAttempt = preferImmediateFallback ? 4 : maxRetries;
@@ -1118,13 +1120,17 @@ function ensureSelectedTrackPlayback(
   let fallbackTriggered = false;
 
   const tick = () => {
+    if (runId !== selectedPlaybackRunId) return;
     attempt += 1;
     const targetAudio = normalizedTarget ? findAudioByStreamUrl(normalizedTarget) : null;
 
     if (targetAudio) {
       tryPlayAudio(targetAudio);
       if (attempt < maxRetries && targetAudio.paused) {
-        setTimeout(tick, retryMs);
+        setTimeout(() => {
+          if (runId !== selectedPlaybackRunId) return;
+          tick();
+        }, retryMs);
       }
       return;
     }
@@ -1137,7 +1143,10 @@ function ensureSelectedTrackPlayback(
       }
 
       if (attempt < maxRetries) {
-        setTimeout(tick, retryMs);
+        setTimeout(() => {
+          if (runId !== selectedPlaybackRunId) return;
+          tick();
+        }, retryMs);
       } else {
         if (allowDirectSrcFallback && !fallbackTriggered) {
           jumpByAudioSource(normalizedTarget);
@@ -1149,7 +1158,10 @@ function ensureSelectedTrackPlayback(
     const active = pickActiveAudio();
     if (!active) {
       if (attempt < maxRetries) {
-        setTimeout(tick, retryMs);
+        setTimeout(() => {
+          if (runId !== selectedPlaybackRunId) return;
+          tick();
+        }, retryMs);
       }
       return;
     }
@@ -1157,11 +1169,17 @@ function ensureSelectedTrackPlayback(
     tryPlayAudio(active);
 
     if (attempt < maxRetries && active.paused) {
-      setTimeout(tick, retryMs);
+      setTimeout(() => {
+        if (runId !== selectedPlaybackRunId) return;
+        tick();
+      }, retryMs);
     }
   };
 
-  setTimeout(tick, 0);
+  setTimeout(() => {
+    if (runId !== selectedPlaybackRunId) return;
+    tick();
+  }, 0);
 }
 
 function jumpByAudioSource(streamUrl: string): boolean {
