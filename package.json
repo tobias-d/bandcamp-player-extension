@@ -3,24 +3,29 @@
   "version": "3.6.1",
   "description": "Bandcamp Deck rebuild (v3)",
   "license": "AGPL-3.0-or-later",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "build": "npm run build:firefox",
-    "prebuild:firefox": "node tools/build/preflight-build-guard.js && node tools/build/copy-custom-essentia-wasm.js && node tools/build/patch-essentia-no-eval.js && node tools/build/generate-signalsmith-worklet.js",
+    "prep": "node tools/build/preflight-build-guard.js && node tools/build/copy-custom-essentia-wasm.js && node tools/build/patch-essentia-no-eval.js && node tools/build/generate-signalsmith-worklet.js && node tools/build/verify-signalsmith-worklet-feeding.js",
+    "prebuild:firefox": "npm run prep",
     "build:firefox": "webpack --env target=firefox --mode production",
     "postbuild:firefox": "node tools/build/patch-webpack-no-eval.js firefox",
-    "prebuild:chrome": "node tools/build/preflight-build-guard.js && node tools/build/copy-custom-essentia-wasm.js && node tools/build/patch-essentia-no-eval.js && node tools/build/generate-signalsmith-worklet.js",
+    "prebuild:chrome": "npm run prep",
     "build:chrome": "webpack --env target=chrome --mode production",
     "postbuild:chrome": "node tools/build/patch-webpack-no-eval.js chrome",
-    "prebuild:dev": "node tools/build/preflight-build-guard.js && node tools/build/copy-custom-essentia-wasm.js && node tools/build/patch-essentia-no-eval.js && node tools/build/generate-signalsmith-worklet.js",
+    "prebuild:dev": "npm run prep",
     "build:dev": "webpack --env target=firefox --mode development",
     "postbuild:dev": "node tools/build/patch-webpack-no-eval.js firefox",
     "release:firefox": "npm run build:firefox && node tools/build/capture-release.js firefox",
     "release:chrome": "npm run build:chrome && node tools/build/capture-release.js chrome",
     "release:all": "npm run release:firefox && npm run release:chrome",
-    "prewatch": "node tools/build/preflight-build-guard.js && node tools/build/copy-custom-essentia-wasm.js && node tools/build/patch-essentia-no-eval.js && node tools/build/generate-signalsmith-worklet.js",
+    "prewatch": "npm run prep",
     "watch": "webpack --env target=firefox --watch",
     "clean": "rm -rf dist",
     "check:bpm-offset": "node tools/check-bpm-offset.mjs",
+    "verify:worklet": "node tools/build/verify-signalsmith-worklet-feeding.js",
     "bump": "node tools/build/bump-version.js"
   },
   "devDependencies": {
@@ -41,6 +46,6 @@
     "buffer": "^6.0.3",
     "essentia.js": "0.1.3",
     "process": "^0.11.10",
-    "signalsmith-stretch": "^1.3.2"
+    "signalsmith-stretch": "1.3.2"
   }
 }
