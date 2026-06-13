@@ -108,6 +108,11 @@ const WELCOME_CSS = `
   gap: 5px;
 }
 
+/* Slide 1 has fewer bullets, so give them more breathing room between lines. */
+.bc-welcome-gate-copy.is-slide-1 .bc-welcome-gate-bullets {
+  gap: 10px;
+}
+
 /* Slide 2 ("What's new") shows version badges per section, so the header's own
    version number is redundant there. */
 .bc-welcome-gate-copy:not(.is-slide-1) .bc-welcome-gate-version {
@@ -123,6 +128,7 @@ const WELCOME_CSS = `
 }
 
 .bc-welcome-gate-bullet.is-feedback {
+  margin-top: 14px;
   color: #1d5fd1;
   font-weight: 800;
 }
@@ -344,14 +350,14 @@ export function createWelcomeGate(): WelcomeGateController {
     dom('p', { class: 'bc-welcome-gate-ver-label' }, ['3.6.1']),
     dom('p', { class: 'bc-welcome-gate-bullet' }, [
       dom('strong', {}, ['Liquid-glass look']),
-      ' — the panel is now real frosted glass. Fine-tune it under ',
+      ' (Chrome only) — the panel is now real frosted glass. Fine-tune it under ',
       dom('strong', {}, ['Settings → Glass effect']),
       '.'
     ]),
     dom('p', { class: 'bc-welcome-gate-ver-label is-section-gap' }, ['3.6.0']),
     dom('p', { class: 'bc-welcome-gate-bullet' }, [
       dom('strong', {}, ['More accurate BPM']),
-      ' — may be a bit slower.'
+      ' — analysis is more thorough now, so it takes a little longer.'
     ]),
     dom('p', { class: 'bc-welcome-gate-bullet' }, [
       dom('strong', {}, ['Reworked waveform']),
@@ -359,15 +365,14 @@ export function createWelcomeGate(): WelcomeGateController {
     ])
   ];
 
-  // Performance mode is Chrome-only, so its bullet is removed from the Firefox bundle.
-  if (__BUILD_TARGET__ === 'chrome') {
-    slide2Content.push(dom('p', { class: 'bc-welcome-gate-bullet' }, [
-      dom('strong', {}, ['Performance mode']),
-      ' — preloads further ahead for instant skips. Activate it under ',
-      dom('strong', {}, ['Settings']),
-      '.'
-    ]));
-  }
+  // Performance mode only exists on Chrome, but we announce it on both browsers
+  // (clearly labelled) so Firefox users know the capability exists on Chrome.
+  slide2Content.push(dom('p', { class: 'bc-welcome-gate-bullet' }, [
+    dom('strong', {}, ['Performance mode']),
+    ' (Chrome only) — preloads further ahead for instant skips. Activate it under ',
+    dom('strong', {}, ['Settings']),
+    '.'
+  ]));
 
   // The feedback note closes slide 2 on both browsers.
   slide2Content.push(dom('p', { class: 'bc-welcome-gate-bullet is-separated is-feedback' }, [
