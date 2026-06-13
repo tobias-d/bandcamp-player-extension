@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bandcamp // Deck — The DJ-ready player for Bandcamp</title>
+<meta name="description" content="A floating player that follows your listening across all of Bandcamp — real BPM analysis, key detection, tempo adjust, and waveform seeking. Even on Discover.">
+<meta property="og:title" content="Bandcamp // Deck — The DJ-ready player for Bandcamp">
+<meta property="og:description" content="Real BPM analysis, key detection, tempo adjust, and waveform seeking — on every Bandcamp page, even Discover.">
+<meta property="og:image" content="assets/panel.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============ Hero ============ -->
+<header class="hero">
+  <div class="hero-text">
+    <p class="kicker">BCD&#8211;036 &middot; Berlin &middot; browser extension for Chrome &amp; Firefox</p>
+    <h1>Bandcamp <span class="slashes">//</span> Deck</h1>
+    <p class="tagline">The DJ-ready player for Bandcamp.</p>
+    <p class="sub">
+      A floating player that follows your listening across all of Bandcamp —
+      real BPM analysis, key detection, tempo adjust, and waveform seeking.
+      Even on Discover.
+    </p>
+    <div class="cta-row">
+      <a class="cta cta-primary" href="https://chromewebstore.google.com/detail/bandcamp-deck/kgdfbnakchalhfmkiajllbkgflpcolij">
+        Add to Chrome
+      </a>
+      <a class="cta cta-secondary" href="https://addons.mozilla.org/en-US/firefox/addon/bandcamp-deck/">
+        Add to Firefox
+      </a>
+    </div>
+    <p class="trust">Free &middot; open source &middot; no account, no servers</p>
+  </div>
+</header>
+
+<!-- ============ Live demo: stock player vs the Deck panel ============ -->
+<section class="demo" id="demo">
+  <p class="side-label">Live demo &middot; same album, two players</p>
+  <div class="demo-pair">
+    <div class="demo-col">
+      <p class="demo-tag">Bandcamp's player</p>
+      <iframe class="demo-embed" id="bcd-embed" title="Bandcamp official player — Origin [SK11X038] by Holden Federico"
+        src="https://bandcamp.com/EmbeddedPlayer/v=2/album=2552164158/track=4016257926/size=large/bgcol=f3f2f0/linkcol=7c6bb8/tracklist=true/transparent=true/"
+        seamless loading="lazy"></iframe>
+    </div>
+    <div class="demo-col">
+      <p class="demo-tag">With Bandcamp <span class="slashes">//</span> Deck</p>
+      <div class="bcd-panel" id="bcd-panel">
+        <div class="bcd-head">
+          <div class="bcd-artist">Holden Federico</div>
+          <div class="bcd-album-row">
+            <span class="bcd-album">Origin [SK11X038]</span>
+            <span class="bcd-head-icons">
+              <span class="bcd-heart" title="Wishlist sync works in the extension">&#9829;</span>
+              <a class="bcd-ext" href="https://holdenfederico.bandcamp.com/album/origin-sk11x038" title="Open on Bandcamp">&#8599;</a>
+            </span>
+          </div>
+          <div class="bcd-track-row">
+            <span class="bcd-track" id="bcd-track-title">Crux</span>
+            <span class="bcd-released">Released: 05.06.26</span>
+          </div>
+        </div>
+        <canvas class="bcd-wave" id="bcd-wave" width="752" height="184"></canvas>
+        <div class="bcd-meta">
+          <span class="bcd-time" id="bcd-time">05:59</span>
+          <span class="bcd-bpm">BPM <span class="bcd-dot"></span> <span id="bcd-bpm">137</span></span>
+          <span class="bcd-key">KEY <span class="bcd-keydot"></span> &#8211;&#8211;&#8211; <span class="bcd-keydot"></span> &#8211;&#8211;&#8211;</span>
+        </div>
+        <div class="bcd-transport" title="Transport, tempo adjust &amp; volume work in the extension">
+          <span class="bcd-tbtn">&#9198;</span>
+          <span class="bcd-tbtn bcd-play">&#9654;</span>
+          <span class="bcd-tbtn">&#9197;</span>
+          <span class="bcd-vol">&#128266;</span>
+          <span class="bcd-slider"><span class="bcd-slider-knob"></span></span>
+          <span class="bcd-tbtn bcd-ticon">&#9678;</span>
+          <span class="bcd-tbtn bcd-ticon">&#9737;</span>
+        </div>
+        <table class="bcd-list">
+          <thead><tr><th class="c-num">#</th><th class="c-title">Title</th><th class="c-bpm">BPM</th><th class="c-t">T</th><th class="c-ic"></th></tr></thead>
+          <tbody id="bcd-rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <p class="bcd-caption">Play the album in Bandcamp's official player on the left. The panel on the right is the extension's UI with this album's real analysis &mdash; waveforms &amp; BPM precomputed by the extension's pipeline. Pick a track in the panel and the Bandcamp player loads it; on Bandcamp, the panel does all of this live and follows playback by itself.</p>
+</section>
+
+<!-- ============ Features ============ -->
+<section class="features" id="features">
+  <p class="side-label">Side A &middot; Features</p>
+  <div class="grid">
+    <article class="card">
+      <h3><span class="tno">A1</span>Real BPM, not a guess</h3>
+      <p>Tempo is analyzed from the actual audio with Essentia — the same signal-analysis library used in MIR research. No metadata scraping.</p>
+    </article>
+    <article class="card">
+      <h3><span class="tno">A2</span>Key detection</h3>
+      <p>An electronic-music-tuned key pipeline that's honest: one key, two candidates, or nothing when the evidence is weak.</p>
+    </article>
+    <article class="card">
+      <h3><span class="tno">A3</span>Tempo Adjust</h3>
+      <p>Preview any track at your set's tempo. Hear how it'll actually sit in the mix before you buy.</p>
+    </article>
+    <article class="card">
+      <h3><span class="tno">A4</span>Waveform seeking</h3>
+      <p>A real rendered waveform. Skip the intro, jump to the drop, check the breakdown.</p>
+    </article>
+    <article class="card wide">
+      <h3><span class="tno">A5</span>Wishlist that keeps up</h3>
+      <p>Heart albums and tracks from the panel — synced against Bandcamp's own collection data, so state is never stale.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ============ Built for digging ============ -->
+<section class="digging">
+  <div class="narrative">
+    <p class="side-label">Intermission</p>
+    <h2>Stop losing your place.</h2>
+    <p>
+      Digging on Bandcamp means twenty open tabs and a player that dies on every
+      page load. Bandcamp Deck keeps one persistent panel pinned to whatever's
+      playing: browse on, queue the next find, check the BPM, heart it, move on.
+      Your flow never breaks.
+    </p>
+  </div>
+</section>
+
+<!-- ============ How it's engineered ============ -->
+<section class="engineering" id="engineering">
+  <p class="side-label">Side B &middot; Engineering</p>
+  <h2>How it's engineered</h2>
+  <p class="lede">Most player extensions wrap the page's <code>&lt;audio&gt;</code> tag. Bandcamp Deck runs its own audio engine.</p>
+  <div class="grid grid-2">
+    <article class="card">
+      <h3><span class="tno">B1</span>Real time-stretching, not playback-rate</h3>
+      <p>Tempo Adjust runs SignalSmith Stretch inside an AudioWorklet on the real-time audio thread — tempo changes, pitch stays. The browser's <code>playbackRate</code> shortcut is never used, not even as a fallback: if the worklet can't run, the control disables itself instead of degrading silently.</p>
+    </article>
+    <article class="card">
+      <h3><span class="tno">B2</span>Gapless, like a DJ deck</h3>
+      <p>Two complete audio hosts run at all times. The next track is decoded and loaded on the silent one while the current track keeps playing, then the two swap — the expensive work never touches the audible path.</p>
+    </article>
+    <article class="card">
+      <h3><span class="tno">B3</span>Instant seeking</h3>
+      <p>The full track is decoded to PCM in memory, so dragging the waveform just moves a read position. No rebuffering, no spinner.</p>
+    </article>
+    <article class="card">
+      <h3><span class="tno">B4</span>Analysis on your machine</h3>
+      <p>BPM and key come from Essentia (WebAssembly) running on the decoded audio in your browser. Nothing is uploaded anywhere.</p>
+    </article>
+  </div>
+  <p class="deep-dive">
+    Want the full story — underruns, drain timing, the two-host ping-pong?
+    <a href="audio-engine.html">Read the audio-engine deep dive →</a>
+  </p>
+</section>
+
+<!-- ============ Footer ============ -->
+<script src="assets/origin-data.js"></script>
+<script src="demo-player.js"></script>
+
+<footer>
+  <nav>
+    <a href="https://github.com/tobias-d/bandcamp-player-extension/blob/main/CHANGELOG.md">Changelog</a>
+    <a href="https://github.com/tobias-d/bandcamp-player-extension">GitHub</a>
+    <a href="https://github.com/tobias-d/bandcamp-player-extension/blob/main/LICENSE">License</a>
+    <a href="https://essentia.upf.edu/">Built with Essentia.js</a>
+  </nav>
+  <p class="disclaimer">BCD&#8211;036 &middot; cut in Berlin &middot; an independent project, not affiliated with Bandcamp</p>
+</footer>
+
+</body>
+</html>

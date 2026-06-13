@@ -1,0 +1,54 @@
+# Changelog
+
+All notable changes to Bandcamp Deck are recorded here, one entry per released version. It is written for people rebuilding the extension, so entries carry the technical detail needed to understand what changed and why. This file reflects version updates only — entries are added when the version number is bumped, not per commit.
+
+## 3.6.1 — 2026-06-13
+
+Version `3.6.1` gives the panel a real liquid-glass surface and the tooling to tune it, plus task-manager-style resource diagnostics in the debug panel.
+
+Main improvements:
+- Liquid-glass panel surface: the panel now renders as frosted glass (backdrop blur + tint on both browsers; Chrome additionally runs an inline SVG edge-refraction filter). Panel drag moves the surface via a compositor-only translate so the glass stays live during the drag.
+- Glass tuning: a single "Frost" control replaces the earlier per-effect sliders. Tint and blur are coupled on one 0..1 position (`tint = pos`, `blur = pos * 10`), so one slider drives the look from clear to full frost; the calibrated default sits at 0.65. It is reachable from the Alt+G tuner and from a new Settings → Glass effect entry.
+- Resource diagnostics: the debug panel's Performance area now reports per-context event-loop lag, JS heap (where available), worker busy fraction, WASM/cache bytes, and audio-host underruns. Sampling is gated entirely on the panel being open, so there is no idle overhead during normal playback.
+- Idle placeholder polish: the "BANDCAMP // DECK" idle text is slightly larger and semi-transparent, with the "//" separator tinted a dark grey.
+
+## 3.6.0 — 2026-06-10
+
+Version `3.6.0` focuses on BPM analysis accuracy and the waveform visualization.
+
+Main improvements:
+- BPM detection now runs two independent algorithms and cross-checks their results, so the reported tempo is more accurate. Analysis takes slightly longer in exchange for fewer wrong or half/double-tempo readings.
+- The waveform visualization was reworked to sit much closer to Rekordbox, so the shape reads against a familiar reference.
+
+## 3.5.0
+
+Version `3.5.0` adds Performance mode, a Chrome-only opt-in that preloads more of the playlist ahead so skipping between tracks stays instant on machines with plenty of memory.
+
+Main improvements:
+- Performance mode (Chrome only): an optional higher preload tier that keeps more of the playlist decoded and ready, so jumping between tracks is near-instant. It uses noticeably more memory and is meant for machines with 16 GB+ of RAM. The page reloads when you toggle it so the audio engine picks up the new policy.
+- Why it stays a manual opt-in (not automatic): reserving that much memory for a browser extension should be the user's deliberate choice, not something the extension switches on by itself. On top of that, Chrome reports at most 8 GB through `navigator.deviceMemory`, so the extension can't reliably detect that a 16/32/64 GB machine has spare headroom anyway.
+- Why Chrome only (not Firefox): Firefox runs the extension's runtime audio on a shared audio thread, so a much larger preload/decoded-audio working set would compete with playback instead of staying off the audible path. The aggressive tier is therefore intentionally Chrome-only.
+
+## 3.4.5
+
+Version `3.4.5` keeps the current-track waveform path deterministic after partial BPM analysis. The current track now hydrates waveform data through the same explicit `GET_WAVEFORM` request path used by preload, so Firefox no longer waits on a delayed background update that may arrive after the tempo listener has detached.
+
+Main improvements:
+- Current-track waveforms settle reliably after BPM analysis, including on fan feed and wishlist playback.
+- Partial BPM results no longer publish partial waveform data as if it were a complete waveform.
+- Preload remains unblocked while the current waveform hydrates, so nearby track BPM and waveform preparation can continue.
+
+## 3.4.2
+
+Version `3.4.2` builds on the reliability work for moving between release pages, fan pages, feed/recommendation pages, and Discover, while adding configurable keyboard controls for faster playback and tempo workflows.
+
+Main improvements:
+- Keyboard shortcuts can be customized from the panel settings, including play/pause, playlist navigation, seeking, tap tempo, and tempo adjustment controls.
+- Metadata is resolved API-first, so track titles, artists, albums, and release identity come from Bandcamp's structured data whenever possible.
+- Discover playback is tracked through a page bridge, so the panel can follow the currently playing audio even when Bandcamp does not expose the same globals used on release pages.
+- Long artist, album, and track names now gently scroll inside the panel header instead of being cut off permanently.
+- BPM, waveform, and optional key analysis are cached per track and preloaded for nearby playlist rows.
+- Tempo Adjust uses SignalSmith-powered time-stretching so BPM changes can keep playback usable instead of only changing the browser playback rate.
+- Wishlist and collection state are synchronized against Bandcamp inventory before the panel decides whether an item is liked, disliked, or bought; feed and recommendation track mutations also use the page-context mutation path Bandcamp expects.
+- Download pages are excluded from the player script so Bandcamp purchase/download flows stay clean.
+- The security boundary is tighter: playback-audio background fetches are limited to HTTPS Bandcamp/Bcbits hosts, and Firefox no longer rewrites Bandcamp CSP headers.

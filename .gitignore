@@ -1,0 +1,15 @@
+# macOS Finder metadata
+**/.DS_Store
+
+# Local dependencies
+node_modules/
+
+# Build output
+dist/
+/releases/
+
+# Local archived docs
+.local-docs/
+
+# Ignore project docs folder
+docs/

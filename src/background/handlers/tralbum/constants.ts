@@ -1,0 +1,13 @@
+export const TRALBUM_CACHE_TTL_MS = 15 * 60 * 1000;
+
+export const MIN_FETCH_INTERVAL_MS = 2_000;
+
+export const RATE_BACKOFF_MS = 90_000;
+export const ERROR_BACKOFF_MS = 60_000;
+
+export const MAX_ATTEMPTS_PER_REQUEST = 6;
+export const MAX_TRACK_ONLY_ATTEMPTS_PER_REQUEST = 2;
+
+export const FETCH_ATTEMPT_TIMEOUT_MS = 3500;
+export const HTML_FALLBACK_FETCH_TIMEOUT_MS = 15000;
+export const HTML_FALLBACK_RETRY_TIMEOUT_MS = 25000;

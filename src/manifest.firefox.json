@@ -1,0 +1,74 @@
+{
+  "manifest_version": 2,
+  "name": "Bandcamp Deck",
+  "version": "3.6.1",
+  "description": "The most complete DJ-ready Bandcamp player, with accurate BPM analysis, tempo adjust, waveform visualization, and more.",
+  "permissions": [
+    "storage",
+    "*://*.bandcamp.com/*",
+    "*://bandcamp.com/*",
+    "*://*.bcbits.com/*",
+    "*://*/album/*",
+    "*://*/track/*"
+  ],
+  "background": {
+    "scripts": ["background/index.js"]
+  },
+  "commands": {
+    "media-play-pause": {
+      "suggested_key": {
+        "default": "MediaPlayPause"
+      },
+      "description": "Play or pause Bandcamp Deck"
+    },
+    "media-previous-track": {
+      "suggested_key": {
+        "default": "MediaPrevTrack"
+      },
+      "description": "Play the previous Bandcamp Deck track"
+    },
+    "media-next-track": {
+      "suggested_key": {
+        "default": "MediaNextTrack"
+      },
+      "description": "Play the next Bandcamp Deck track"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.bandcamp.com/*", "*://bandcamp.com/*"],
+      "exclude_matches": [
+        "*://bandcamp.com/discover*",
+        "*://www.bandcamp.com/discover*",
+        "*://bandcamp.com/download*",
+        "*://www.bandcamp.com/download*",
+        "*://bandcamp.com/lani_d/playlist/*",
+        "*://www.bandcamp.com/lani_d/playlist/*",
+        "*://*.bandcamp.com/cart/checkout*",
+        "*://bandcamp.com/cart/checkout*",
+        "*://www.bandcamp.com/cart/checkout*",
+        "*://daily.bandcamp.com/*",
+        "*://bandcamp.com/",
+        "*://www.bandcamp.com/"
+      ],
+      "js": ["content/player/index.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://bandcamp.com/discover*", "*://www.bandcamp.com/discover*"],
+      "js": ["content/discover/index.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": ["public/*", "public/fonts/*", "public/signalsmith/*", "essentia-wasm.wasm", "content/discover/origin-bridge.js"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "bandcamp-bpm-analyzer-listed@tobias-d.github",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  }
+}
