@@ -1,32 +1,18 @@
 # Bandcamp Deck v3
 
-> This README is written for developers reading the source on GitHub. It focuses on
-> architecture, the build pipeline, and the non-obvious engineering. If you just want to
-> *use* the extension, the panel is self-explanatory once loaded — start at
-> [Build and install](#build-and-install).
-
 Bandcamp Deck is a cross-browser extension (Firefox MV2 + Chrome MV3 from one source tree)
 that overlays Bandcamp with a persistent floating player panel. The panel follows the
 currently playing track across release pages, fan/feed/recommendation pages, and Discover,
 and keeps transport, waveform seeking, playlist context, real audio analysis, and
 wishlist state in one place.
 
-The parts worth reading the code for:
+For developers, the two parts worth reading are its **audio engine and signal analysis** and its
+**Bandcamp-API identity work** — see [Architecture](#architecture). The rest is a thin UI over them.
 
-- **Real DSP, not DOM heuristics.** BPM, musical key, and waveform data come from decoding
-  the actual audio in the background and running a custom [Essentia](https://essentia.upf.edu/)
-  WebAssembly build over the PCM — see [Audio analysis](#audio-analysis-essentiajs).
-- **API-first identity resolution.** Before the panel updates, the extension resolves *which*
-  Bandcamp track/album/artist is playing from structured JSON endpoints rather than scraped
-  page text — see [Bandcamp API usage](#bandcamp-api-usage). This is what keeps Discover and
-  collection views attached to the right track and prevents wishlist writes hitting the wrong item.
-- **Extension-owned runtime audio.** Tempo Adjust (BPM-based playback-rate change) plays through
-  an extension-owned audio host using a patched SignalSmith stretch worklet, instead of patching
-  Bandcamp's page CSP via `webRequest`.
-- **One source tree, two manifests.** Firefox (MV2) and Chrome (MV3) are built as separate
-  products with build-time target branching and per-target release guards.
+## Download
 
-Firefox-first during development; Chrome builds are fully supported.
+- **Chrome / Chromium** — [Chrome Web Store](https://chromewebstore.google.com/detail/bandcamp-deck/kgdfbnakchalhfmkiajllbkgflpcolij)
+- **Firefox** — [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/bandcamp-deck/)
 
 ## Key capabilities
 
@@ -44,64 +30,60 @@ Release notes live in [`CHANGELOG.md`](CHANGELOG.md) — one entry per version, 
 
 ## Architecture
 
-### Audio analysis (Essentia.js)
+The two systems below are what make Bandcamp Deck more than a UI skin, and they're the parts
+worth reading the source for: a **self-contained audio engine with signal analysis**, and
+**deep Bandcamp-API identity work**.
 
-[Essentia.js](https://essentia.upf.edu/) is a JavaScript/WebAssembly port of the Essentia
-audio-analysis library. It gives the extension real signal analysis instead of metadata guesses.
+### Audio: our own engine
 
-The extension fetches the current audio source, decodes it in the background, and runs Essentia
-over the decoded buffer for:
+Bandcamp Deck does not rely on Bandcamp's built-in page player for anything past starting a
+stream. To actually control audio — change tempo, render an accurate waveform, seek precisely,
+and preload upcoming tracks — it runs its **own audio engine** and hands playback over to it.
 
-- BPM detection (feeds the main tempo display)
-- waveform-related preprocessing
-- musical key detection (a stricter, electronic-music-oriented scoring flow that returns one
-  key, two candidates, or no result when evidence is weak)
+The heart of that engine is
+**[Signalsmith Stretch](https://github.com/Signalsmith-Audio/signalsmith-stretch)**, a
+time-stretching library. Time-stretching is what lets *Tempo Adjust* speed a track up or down to
+a target BPM **without changing its pitch** — the artefact a naïve playback-rate change would
+introduce, and something the page player cannot do at all. Running the engine in an
+extension-owned host also means the extension never has to fight or rewrite Bandcamp's page
+player, and it gives tempo, waveform, and analysis one consistent place to live.
 
-This project ships a **custom Essentia WASM build** (Essentia C++ `v2.1_beta5`, CSP-safe with
-`DYNAMIC_EXECUTION=0`, a HarmonicPeaks fix, and added EDM key profiles) that is copied over the
-stock `essentia.js` package at build time. Details and provenance are in
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md); the analysis-area design rules are in
-[`rules/bpm-analysis-rules.md`](rules/bpm-analysis-rules.md).
-
-### Runtime audio (SignalSmith)
-
-[SignalSmith Stretch](https://github.com/Signalsmith-Audio/signalsmith-stretch)
-(`signalsmith-stretch`, pinned exactly to `1.3.2`) is the time-stretching engine behind
-**Tempo Adjust** — changing playback speed by BPM without the pitch artefacts of a naïve
-rate change. It runs as an `AudioWorklet` inside an **extension-owned runtime audio host**
-(`src/runtime-audio-host.ts`), so tempo changes never require patching Bandcamp's page CSP
-via `webRequest`.
-
-The worklet is **generated and patched at build time**
-(`generate-signalsmith-worklet.js` → `vendor/signalsmith/worklet.js`) rather than loaded from
-the package directly, for two reasons:
-
-- **Firefox blob-URL worklets hang.** SignalSmith normally loads its processor from a `blob:`
-  URL; in Firefox extension pages `audioWorklet.addModule()` on a blob URL never resolves. The
-  build captures the generated worklet code and writes it as a static file loaded via a real
-  `moz-extension://` URL.
-- **Three correctness patches** are applied to the captured source, each guarded so the build
-  fails loudly if upstream changes: a dead-code crash fix for `numberOfInputs: 0`, a host-only
-  `clearBuffers` reset that avoids transferring discarded PCM on track change, and a multi-chunk
-  feeding-loop fix that makes incremental/chunked feeding safe. The last is proven byte-correct
-  by `verify-signalsmith-worklet-feeding.js` (run in every build).
-
-This is why `signalsmith-stretch` is version-pinned. The runtime-audio design — handoff gating,
-chunked feeding, and two-host ping-pong switching — is documented in
+The big-picture flow: the extension fetches the real audio stream, decodes it in the background,
+analyses it, and plays it back through its own host — switching over from Bandcamp's player at
+the moment it needs that control. The handoff and playback design is documented in
 [`rules/audio-rules.md`](rules/audio-rules.md).
+
+### Audio: analysis
+
+Because the engine already holds the decoded audio, it can run real DSP on the signal instead of
+guessing from page markup. Analysis runs in the background through
+**[Essentia](https://essentia.upf.edu/)** (a WebAssembly port of the Essentia audio-analysis
+library) and produces:
+
+- **BPM** — the main tempo readout, and the target for Tempo Adjust
+- **musical key** — optional, using a stricter electronic-music-oriented scoring flow that returns
+  one key, two candidates, or nothing when the evidence is weak
+- **waveform** data for the seek bar
+
+The project ships a **custom Essentia WASM build** (CSP-safe, with a HarmonicPeaks fix and added
+EDM key profiles) copied over the stock package at build time — provenance in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), analysis design rules in
+[`rules/bpm-analysis-rules.md`](rules/bpm-analysis-rules.md).
 
 ### Bandcamp API usage
 
 Bandcamp Deck does substantial *identity* work before touching the panel — knowing which
 Bandcamp track, album, and artist are actually playing, not just what text is on the page. It
-follows an API-first rule wherever Bandcamp exposes a stable JSON source, falling back to limited
-HTML parsing only where no structured equivalent exists. No external service is involved.
+follows an API-first rule wherever Bandcamp exposes a stable JSON source, and uses limited HTML
+parsing of the release page only where no structured equivalent exists — as a fallback when API
+attempts fail, or up front for custom-domain releases whose API host can't be derived. No external
+service is involved.
 
-The four jobs the APIs do:
+The API work falls into two areas:
 
-**1. Release metadata and tracklists.** Bandcamp's tralbum endpoints resolve artist/album
-titles, release dates, track lists, track identity, durations, and stream details.
-(`Tralbum` = Bandcamp's combined track-or-album record.)
+**1. Metadata.** Bandcamp's tralbum endpoints resolve artist/album titles, release dates, track
+lists, track identity, durations, and stream details. (`Tralbum` = Bandcamp's combined
+track-or-album record.)
 
 - `/api/tralbum/2/info` — primary structured source
 - `/api/mobile/24/tralbum_details` — secondary source for fuller track arrays, durations, and
@@ -110,15 +92,18 @@ titles, release dates, track lists, track identity, durations, and stream detail
   > Android app logs (2026-04-24) show `/api/mobile/26/tralbum_details`, but spot checks returned
   > the same payload shape as v24, so the extension stays on v24 until a concrete difference appears.
 
-**2. Discover and non-release playback.** Discover does not expose normal album-page data. The
-extension listens to page audio through an injected bridge, then resolves the playing stream back
-to Bandcamp API data — matching the stream to a track ID, building the correct playlist, keeping
-BPM/waveform/key/like state on the right row, and recovering album identity from partial metadata.
-While API data loads, the panel may briefly use safe bootstrap metadata from the media session or
-page, then replace it once the resolver confirms the match.
+The hard case is anywhere the page doesn't expose normal album data — Discover, feeds, and other
+non-release playback. There the extension listens to the page audio through an injected bridge and
+resolves the playing stream back to Bandcamp API data: matching the stream to a track ID, building
+the correct playlist, keeping BPM/waveform/key/like state on the right row, and recovering album
+identity from partial metadata. While API data loads, the panel may briefly show safe bootstrap
+metadata from the media session or page, then replace it once the resolver confirms the match.
 
-**3. Wishlist and collection inventory.** To know whether an item is `liked`, `disliked`, or
-`bought`, the extension reads fan/fancollection endpoints rather than trusting a single button state.
+**2. Wishlist and collection.** Both reading and writing the heart state go through the same
+API-first model — the extension never trusts a button's appearance.
+
+*Reading:* to know whether an item is `liked`, `disliked`, or `bought`, it reads the fan and
+fancollection endpoints rather than the page UI.
 
 - `/api/fan/2/collection_summary`
 - `/api/fancollection/1/wishlist_items`
@@ -127,12 +112,12 @@ page, then replace it once the resolver confirms the match.
 Album-level and track-level state are kept separate: a bought/liked album can make every track look
 available while the extension still tracks whether an individual track is separately wishlisted.
 
-**4. Safe wishlist mutations.** A `mutation` is the write request that adds/removes a wishlist item.
-It is prepared only after identity and safety checks pass (fan ID, item ID, item type, page URL,
-request context, and crumb resolved first). The prepared `collect_item_cb` / `uncollect_item_cb`
-POST is sent through the page-context bridge in the context Bandcamp expects; the bridge normalizes
-IDs, retries once on a replacement crumb, and reports back. A successful write forces a fresh sync so
-the UI reflects Bandcamp's real state instead of a long-lived optimistic guess.
+*Writing:* clicking a heart prepares a mutation — the write that adds or removes a wishlist item —
+only after identity and safety checks pass (fan ID, item ID, item type, page URL, request context,
+and crumb all resolved first). The prepared `collect_item_cb` / `uncollect_item_cb` POST is sent
+through the page-context bridge in the context Bandcamp expects; the bridge normalizes IDs, retries
+once on a replacement crumb, and reports back. A successful write forces a fresh sync so the UI
+reflects Bandcamp's real state instead of a long-lived optimistic guess.
 
 See [`rules/metadata-rules.md`](rules/metadata-rules.md) and
 [`rules/likes-playlist-rules.md`](rules/likes-playlist-rules.md) for the full constraints.
@@ -213,7 +198,7 @@ Packaging fails loudly if a build carries the other browser's manifest shape.
 
 ```text
 src/        Extension source (content scripts, background, UI, shared, per-target wrappers)
-vendor/     Third-party shipped code: custom Essentia WASM build + generated SignalSmith worklet
+vendor/     Third-party shipped code: custom Essentia WASM build + generated Signalsmith worklet
 tools/      Build pipeline (tools/build/*) and maintenance scripts (tools/check-bpm-offset.mjs)
 rules/      Area design-rule docs — read before changing that area
 website/    Marketing/demo site (deployed via .github/workflows)
@@ -240,7 +225,7 @@ detailed directory index.
 npx tsc --noEmit      # type-check (no test framework; strict TS is the primary correctness gate)
 npm run build         # Firefox production
 npm run build:chrome  # Chrome production
-npm run verify:worklet # SignalSmith feeding-patch proof (also runs inside every build)
+npm run verify:worklet # Signalsmith feeding-patch proof (also runs inside every build)
 ```
 
 Manual smoke checklist:
