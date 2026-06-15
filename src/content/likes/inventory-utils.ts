@@ -50,16 +50,6 @@ export function createEmptyEndpointSnapshot(): EndpointSnapshot {
   };
 }
 
-export function cloneEndpointSnapshot(snapshot: EndpointSnapshot): EndpointSnapshot {
-  return {
-    albumIds: new Set(snapshot.albumIds),
-    trackIds: new Set(snapshot.trackIds),
-    albumUrls: new Set(snapshot.albumUrls),
-    trackUrls: new Set(snapshot.trackUrls),
-    albumIdByUrl: new Map(snapshot.albumIdByUrl)
-  };
-}
-
 function inferItemType(raw: Record<string, unknown>): 'album' | 'track' | '' {
   const direct = String(raw.item_type ?? raw.tralbum_type ?? raw.type ?? '').trim().toLowerCase();
   if (direct === 'album' || direct === 'a') {
@@ -376,9 +366,11 @@ export function toBackoffMs(attempt: number, retryAfterMs = 0): number {
   if (retryAfterMs > 0) {
     return retryAfterMs;
   }
+  // Deterministic backoff (no random jitter): retry/pacing must be reproducible,
+  // and the defer-vs-sleep decision in syncEndpoint compares this against the
+  // remaining budget. A single client has no thundering herd to jitter against.
   const exp = Math.max(1, attempt);
-  const jitter = Math.floor(Math.random() * 250);
-  return Math.min(5000, RETRY_BASE_MS * exp + jitter);
+  return Math.min(5000, RETRY_BASE_MS * exp);
 }
 
 export function buildSyntheticStartToken(endpoint: FanEndpoint): string {

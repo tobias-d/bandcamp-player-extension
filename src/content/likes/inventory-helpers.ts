@@ -4,35 +4,10 @@ import {
   normalizeLikeId,
   toCanonicalLikeUrl
 } from '@/content/likes/state';
-import type { EndpointSnapshot } from '@/content/likes/inventory-utils';
 
 export function isRootNonDiscoverContext(contextFamily: string): boolean {
   const normalized = String(contextFamily || '').trim().toLowerCase();
   return normalized === 'feed' || normalized === 'recommendations' || normalized === 'fan-root';
-}
-
-export function snapshotContainsIdentity(snapshot: EndpointSnapshot, identity: LikeIdentityInput): boolean {
-  const itemId = normalizeLikeId(identity.itemId || '');
-  if (identity.itemType === 'track') {
-    if (itemId && snapshot.trackIds.has(itemId)) {
-      return true;
-    }
-    return identity.urls.some((url) => snapshot.trackUrls.has(toCanonicalLikeUrl(url)));
-  }
-  if (itemId && snapshot.albumIds.has(itemId)) {
-    return true;
-  }
-  return identity.urls.some((url) => snapshot.albumUrls.has(toCanonicalLikeUrl(url)));
-}
-
-export function snapshotContainsAnyIdentity(
-  snapshot: EndpointSnapshot,
-  identities: LikeIdentityInput[]
-): boolean {
-  if (!identities.length) {
-    return false;
-  }
-  return identities.some((identity) => snapshotContainsIdentity(snapshot, identity));
 }
 
 export function buildFocusTruthKey(identity: LikeIdentityInput | null | undefined): string {
@@ -51,17 +26,6 @@ export function buildFocusTruthKey(identity: LikeIdentityInput | null | undefine
     return `${itemType}:u=${primaryUrl}`;
   }
   return '';
-}
-
-export function buildFocusTruthKeys(identities: Array<LikeIdentityInput | null | undefined>): string[] {
-  const keys = new Set<string>();
-  identities.forEach((identity) => {
-    const key = buildFocusTruthKey(identity);
-    if (key) {
-      keys.add(key);
-    }
-  });
-  return Array.from(keys);
 }
 
 export function formatLikeIdentityForDebug(identity: LikeIdentity | LikeIdentityInput | null | undefined): string {
