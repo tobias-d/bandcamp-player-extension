@@ -1,7 +1,7 @@
 import { extractRhythmEvidence, type EssentiaTempoResult, type RhythmEvidenceResult } from '@/background/audio/tempo';
 
-const RHYTHM_MIN_BPM = 70;
-const RHYTHM_MAX_BPM = 170;
+export const RHYTHM_MIN_BPM = 70;
+export const RHYTHM_MAX_BPM = 170;
 
 export const HIGH_CORRECTION_MIN_BPM = 150;
 export const HIGH_CORRECTION_MAX_BPM = 170;
@@ -408,6 +408,11 @@ export function resolveCorrectionMode(baseTempo: EssentiaTempoResult): Correctio
     return 'high-overread-nonclassic';
   }
 
+  // low-ambiguous and mid-underread deliberately share the 85–100 band. Order
+  // matters: a low-confidence track (≤ 40) takes the low-ambiguous path (5/4 +
+  // rhythm candidates); everything else in the band falls through to mid-underread
+  // (3/2 + rhythm). This is safe because mid-underread only *tests* 3/2 against
+  // beat evidence — a genuine 90 BPM track won't support 135 and keeps base.
   if (
     baseTempo.bpm >= LOW_CORRECTION_MIN_BPM
     && baseTempo.bpm <= LOW_CORRECTION_MAX_BPM

@@ -1,5 +1,6 @@
 import { correctTempoByBeatEvidence } from '@/background/audio/tempo-beat-correction';
 import { estimateTempo, estimateTempoConfidence, getPreprocessedSignal, extractRhythmEvidence, refineTempoToBeatGrid } from '@/background/audio/tempo';
+import { RHYTHM_MIN_BPM, RHYTHM_MAX_BPM } from '@/background/audio/tempo-correction-support';
 import type { EssentiaTempoResult, TempoEstimateOptions } from '@/background/audio/tempo';
 import { computeWaveformBands } from '@/background/audio/waveform-core';
 import { getWorkerPool } from '@/background/audio/worker-pool';
@@ -195,8 +196,7 @@ export async function resolveTempoForAnalysis(
   let finalBpm = correction?.bpm ?? baseTempo.bpm;
   let precisionSummary = '';
   if (!correctionChangedTempo) {
-    // Default rhythm range (50/210) — matches the validated panel experiment.
-    const rhythm = await extractRhythmEvidence(audioBuffer, { quality: 'fast' });
+    const rhythm = await extractRhythmEvidence(audioBuffer, { minBpm: RHYTHM_MIN_BPM, maxBpm: RHYTHM_MAX_BPM, quality: 'fast' });
     const precision = refineTempoToBeatGrid(baseTempo.rawBpm, rhythm.bpm);
     const applied = precision.agreed && Math.round(precision.refinedBpm) !== finalBpm;
     if (applied) {
@@ -382,6 +382,7 @@ export function scheduleTempoRefinement(
   provisionalResult: AnalysisResult,
   sourceUrl: string,
   fetchUrl: string,
+  enableKeyAnalysis: boolean,
   signal: AbortSignal | null | undefined,
   isCurrentEpoch: () => boolean,
   emitUpdate: (update: Partial<AnalysisResult>) => void
@@ -409,7 +410,7 @@ export function scheduleTempoRefinement(
       const { result: refined } = await analyzeAudioBuffer(
         fullAudioBuffer,
         sourceUrl,
-        false,
+        enableKeyAnalysis,
         Date.now(),
         {},
         {}

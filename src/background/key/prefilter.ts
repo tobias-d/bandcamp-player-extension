@@ -7,7 +7,10 @@ function largestPowerOfTwoAtMost(value: number): number {
   return 2 ** Math.floor(Math.log2(value));
 }
 
-function median(values: number[]): number {
+// Unlike the BPM-side median (tempo-correction-support.ts), this keeps zero and
+// negative values: pitch salience, HFC, and dissonance are legitimately allowed to
+// be zero, so filtering them out would bias the per-window medians.
+function medianRaw(values: number[]): number {
   if (!values.length) {
     return 0;
   }
@@ -149,9 +152,9 @@ export function computePrefilter(
   }
 
   return {
-    pitchSalience: median(pitchVals),
-    hfc: median(hfcVals),
-    dissonance: median(dissVals)
+    pitchSalience: medianRaw(pitchVals),
+    hfc: medianRaw(hfcVals),
+    dissonance: medianRaw(dissVals)
   };
 }
 

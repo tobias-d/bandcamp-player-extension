@@ -479,10 +479,20 @@ async function handleRequest(request: ChromeAnalysisHostRequest): Promise<Chrome
     case 'ANALYZE_KEY':
       {
         const url = String(request.payload.url || '').trim();
-        const bpm = Number(request.payload.bpm);
         if (!url) {
           return buildFailure(request, 'ANALYZE_KEY requires a url');
         }
+        // The client sends the BPM it last saw, which can be a provisional value
+        // from before correction landed. Key windows are sized from the BPM, so
+        // bind them to this host's own settled result when it has one — the
+        // offscreen analysis cache is authoritative over the client's copy.
+        const cachedAnalysis =
+          analysisCache.get(buildAnalysisCacheKey(url, request.payload.cacheKey, false))
+          ?? analysisCache.get(buildAnalysisCacheKey(url, request.payload.cacheKey, true));
+        const cachedBpm = Number(cachedAnalysis?.result?.bpm);
+        const bpm = Number.isFinite(cachedBpm) && cachedBpm > 0
+          ? cachedBpm
+          : Number(request.payload.bpm);
         if (!Number.isFinite(bpm) || bpm <= 0) {
           return buildFailure(request, 'ANALYZE_KEY requires a settled BPM');
         }

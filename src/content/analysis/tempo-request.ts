@@ -19,7 +19,6 @@ export interface TempoRequestOptions {
   sourceUrl: string;
   fetchUrl?: string;
   cacheKey?: string;
-  enableKeyAnalysis?: boolean;
   shouldApply(): boolean;
   onPending(statusText: string): void;
   onPartial(partial: Partial<AnalysisResult>): void;

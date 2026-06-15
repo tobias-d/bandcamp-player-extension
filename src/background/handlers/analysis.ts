@@ -82,11 +82,6 @@ function isRefiningTempoAnalysisStatus(status: string | undefined): boolean {
   return String(status || '').trim().toLowerCase().includes('refining');
 }
 
-function buildRefiningTempoStatus(bpm: number | undefined): string {
-  return Number.isFinite(bpm)
-    ? `BPM: ${Math.round(Number(bpm))}${TEMPO_REFINING_STATUS_SUFFIX}`
-    : `Estimating BPM${TEMPO_REFINING_STATUS_SUFFIX}`;
-}
 
 type AnalyzeTrackResponse = AnalysisResult | AnalysisErrorResponse | AnalysisCancelledResponse;
 type AnalyzeKeyResponse =
@@ -363,6 +358,7 @@ async function analyzeTrackInternal(
         cached,
         normalizedUrl,
         normalizedFetchUrl,
+        enableKeyAnalysis,
         signal,
         isCurrentEpoch,
         emitUpdate
@@ -740,12 +736,17 @@ export async function handleAnalyzeKey(
     return { error: 'ANALYZE_KEY requires a url', ts: Date.now() };
   }
 
-  const bpm = Number(msg.bpm);
+  const cacheIdentity = resolveAnalysisCacheIdentity(url, msg.cacheKey);
+  // The client sends the BPM it last saw, which may be a provisional first-paint
+  // value from before a correction landed. Key analysis windows are sized from the
+  // BPM, so bind them to the background's own settled value when it has one — the
+  // cache is authoritative over the client's copy.
+  const cachedTempo = await getCachedAnalysis(buildAnalysisCacheKey(cacheIdentity));
+  const cachedBpm = Number(cachedTempo?.bpm);
+  const bpm = Number.isFinite(cachedBpm) && cachedBpm > 0 ? cachedBpm : Number(msg.bpm);
   if (!Number.isFinite(bpm) || bpm <= 0) {
     return { error: 'ANALYZE_KEY requires a settled BPM', ts: Date.now() };
   }
-
-  const cacheIdentity = resolveAnalysisCacheIdentity(url, msg.cacheKey);
   const tabId = sender.tab?.id;
   if (!Number.isFinite(tabId)) {
     try {

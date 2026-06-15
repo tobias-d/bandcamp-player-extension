@@ -1,6 +1,7 @@
 import { estimateTempo, findAdaptiveAnalysisStartSample, type RhythmEvidenceResult } from '@/background/audio/tempo';
 import {
   evaluateTempoCorrectionCandidates,
+  median,
   roundScore,
   type TempoCorrectionEvaluation
 } from '@/background/audio/tempo-correction-support';
@@ -109,18 +110,6 @@ function closenessScore(candidateBpm: number, referenceBpm: number, toleranceRat
     return 0;
   }
   return clamp(1 - distance / tolerance, 0, 1);
-}
-
-function median(values: number[]): number {
-  const finite = values.filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
-  if (!finite.length) {
-    return 0;
-  }
-  const middle = Math.floor(finite.length / 2);
-  if (finite.length % 2 === 0) {
-    return (finite[middle - 1] + finite[middle]) / 2;
-  }
-  return finite[middle];
 }
 
 function createSlicedAudioBuffer(audioBuffer: AudioBuffer, startSeconds: number, endSeconds: number): AudioBuffer {

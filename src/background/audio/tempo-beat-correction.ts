@@ -645,7 +645,10 @@ export async function correctTempoByBeatEvidence(
 
   return {
     bpm: oneShotApplyCorrection ? selected.bpm : baseTempo.bpm,
-    beatTypeAuto: classifyBeatType(oneShotApplyCorrection ? selected.rawBpm : baseTempo.bpm),
+    // Classify from the rounded BPM both branches: classifyBeatType has a hard
+    // boundary at 120, so a raw float like 119.7 would land 'unknown' while its
+    // rounded 120 is 'straight'. Use the integer the user actually sees.
+    beatTypeAuto: classifyBeatType(oneShotApplyCorrection ? selected.bpm : baseTempo.bpm),
     summary,
     gateDebug,
     decisionConfidence,
