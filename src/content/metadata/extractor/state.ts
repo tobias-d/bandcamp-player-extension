@@ -18,7 +18,6 @@ export const PARENT_ALBUM_RETRY_DELAY_MS = API_MIN_REQUEST_INTERVAL_MS + 150;
 export const ROOT_PROBE_CANDIDATE_CAP = 10;
 export const ROOT_PROBE_DOM_PRIORITY_CAP = 6;
 export const ROOT_PROBE_SETTLE_MS = 200;
-export const PROBE_LOG_MIN_INTERVAL_MS = 1000;
 
 export interface TrackMetadataIndexEntry {
   releaseKey: string;
@@ -43,7 +42,6 @@ export const resolvedIdentityByTrackId = new Map<string, ReleaseIdentity>();
 export const triedReleaseKeysByTrackId = new Map<string, Set<string>>();
 export const nextProbeAtByTrackId = new Map<string, number>();
 export const lastProbeStateByTrackId = new Map<string, string>();
-export const lastProbeStateLogAtByTrackId = new Map<string, number>();
 export const strictDomProbeStateByTrackId = new Map<string, string>();
 export const warnedUnexpectedPayloadByRelease = new Set<string>();
 export const parentAlbumProbesByTrackId = new Map<string, Set<string>>();
@@ -67,7 +65,6 @@ export function clearMetadataRuntimeCaches(): void {
   triedReleaseKeysByTrackId.clear();
   nextProbeAtByTrackId.clear();
   lastProbeStateByTrackId.clear();
-  lastProbeStateLogAtByTrackId.clear();
   strictDomProbeStateByTrackId.clear();
   warnedUnexpectedPayloadByRelease.clear();
   parentAlbumProbesByTrackId.clear();

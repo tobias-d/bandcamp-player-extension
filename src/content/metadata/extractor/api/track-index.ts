@@ -179,7 +179,10 @@ export function upsertTrackMetadataIndexForRelease(releaseKey: string, tralbum: 
 
   for (const trackRaw of tracks) {
     const track = trackRaw as Record<string, unknown>;
-    const trackId = normalizeTrackId(track.track_id ?? track.id ?? '');
+    // Key only on track_id — the same field tralbumMatchesCurrentTrack/
+    // pickTrackArtistFromTralbum use. track.id can be the album/item id, which
+    // would register metadata under a non-track id the match guard never agrees with.
+    const trackId = normalizeTrackId(track.track_id ?? '');
     if (!trackId) {
       continue;
     }

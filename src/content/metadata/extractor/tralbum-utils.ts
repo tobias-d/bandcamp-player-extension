@@ -2,7 +2,11 @@ import { normalizeStreamMatchKey, readTrackIdFromUrl } from '@/content/metadata/
 import type { TralbumLike, TralbumTrack } from '@/content/metadata/extractor/types';
 
 export function getTrackList(tralbum: TralbumLike): TralbumTrack[] {
-  if (Array.isArray(tralbum.trackinfo)) {
+  // Prefer trackinfo (canonical), but fall through to tracks when trackinfo is
+  // an empty array — a merged payload can carry trackinfo:[] alongside a full
+  // tracks[], and returning [] here makes the match-guard and index see no
+  // tracks while the candidate scorer (which reads the longer array) sees them.
+  if (Array.isArray(tralbum.trackinfo) && tralbum.trackinfo.length > 0) {
     return tralbum.trackinfo;
   }
   if (Array.isArray(tralbum.tracks)) {

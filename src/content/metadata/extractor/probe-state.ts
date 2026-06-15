@@ -1,12 +1,10 @@
 import { normalizeReleaseUrl } from '@/content/metadata/common';
 import type { ReleaseIdentity } from '@/content/metadata/release';
 import {
-  PROBE_LOG_MIN_INTERVAL_MS,
   RELEASE_ALBUM_IDENTITY_TTL_MS,
   albumIdentityByReleaseUrl,
   ensureNextAllowedAtByKey,
   lastProbeStateByTrackId,
-  lastProbeStateLogAtByTrackId,
   nextProbeAtByTrackId,
   parentAlbumProbeRetryCount,
   parentAlbumProbesByTrackId,
@@ -70,20 +68,11 @@ function normalizeProbeState(state: string): string {
 export function logProbeState(trackIdRaw: string, state: string): void {
   const trackId = trackIdRaw || 'none';
   const normalizedState = normalizeProbeState(state);
-  const now = Date.now();
   const previous = lastProbeStateByTrackId.get(trackId);
-  const lastLoggedAt = lastProbeStateLogAtByTrackId.get(trackId) ?? 0;
-
-  if (previous === normalizedState && now - lastLoggedAt < PROBE_LOG_MIN_INTERVAL_MS) {
-    return;
-  }
-
   if (previous === normalizedState) {
     return;
   }
-
   lastProbeStateByTrackId.set(trackId, normalizedState);
-  lastProbeStateLogAtByTrackId.set(trackId, now);
 }
 
 export function getResolvedIdentityForTrack(trackId: string): ReleaseIdentity | null {
@@ -183,7 +172,6 @@ export function pruneTrackScopedState(activeTrackId: string): void {
   pruneByKey(triedReleaseKeysByTrackId as unknown as Map<string, unknown>);
   pruneByKey(nextProbeAtByTrackId as unknown as Map<string, unknown>);
   pruneByKey(lastProbeStateByTrackId as unknown as Map<string, unknown>);
-  pruneByKey(lastProbeStateLogAtByTrackId as unknown as Map<string, unknown>);
   pruneByKey(strictDomProbeStateByTrackId as unknown as Map<string, unknown>);
   pruneByKey(parentAlbumProbesByTrackId as unknown as Map<string, unknown>);
   pruneByKey(trackArtistNextProbeAtByTrackId as unknown as Map<string, unknown>);

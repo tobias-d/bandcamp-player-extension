@@ -535,6 +535,13 @@ export function ensureTralbumApiFetch(
           if (!trackId || !isCurrentRootGeneration(trackId, rootGeneration) || !result.tralbum) {
             return;
           }
+          // Never lock identity from a release-only hint: require the fetched
+          // tralbum to actually contain the current track, matching every other
+          // resolution path (and the discover "trust track id over release url" rule).
+          if (!tralbumMatchesCurrentTrack(result.tralbum, trackId, sourceUrl)) {
+            logProbeState(trackId, `discover-release-mismatch:${linkedReleaseUrl}`);
+            return;
+          }
           const linkedAlbumIdentity = getCachedAlbumIdentityForReleaseUrl(linkedReleaseUrl);
           if (!linkedAlbumIdentity) {
             logProbeState(trackId, 'discover-release-ready:url-only');
