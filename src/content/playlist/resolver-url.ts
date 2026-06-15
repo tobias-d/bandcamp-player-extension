@@ -1,3 +1,9 @@
+// NOTE: This is the *forgiving* track-id reader (numeric-tail + loose digit
+// scan + `id` param) used by the playlist/discover layers to match as many URL
+// shapes as possible. The metadata layer deliberately uses a STRICTER reader
+// (src/content/metadata/common.ts) that omits the loose scan so a timestamp or
+// token can never be mistaken for a track id during identity resolution. Do not
+// merge the two into one without re-validating identity strictness.
 export function readTrackIdFromUrl(url: string): string {
   const raw = String(url || '').trim();
   if (!raw) {
@@ -38,14 +44,7 @@ export function readTrackIdFromUrl(url: string): string {
   return fallback?.[0] ?? '';
 }
 
-export function normalizeUrl(url: string): string {
-  try {
-    const parsed = new URL(url, window.location.href);
-    return `${parsed.origin}${parsed.pathname}`.toLowerCase();
-  } catch {
-    return url.trim().toLowerCase();
-  }
-}
+export { normalizeUrl } from '@/utils/url';
 
 export function resolveStreamContentId(url: string): string {
   try {

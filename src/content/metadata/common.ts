@@ -225,6 +225,11 @@ export function toTralbumType(value: unknown): 'a' | 't' | '' {
   return '';
 }
 
+// NOTE: This is the *strict* track-id reader for identity resolution. Unlike the
+// playlist reader (src/content/playlist/resolver-url.ts) it omits the numeric-tail
+// match and the loose `(\d{6,})` whole-URL scan, so a timestamp or token in a URL
+// can never be mistaken for a track id. Do not add the loose fallback here — that
+// would weaken metadata identity strictness.
 export function readTrackIdFromUrl(url: string): string {
   const queryMatch = url.match(/[?&]track_id=(\d{4,})/i);
   if (queryMatch?.[1]) {
@@ -259,14 +264,7 @@ export function readTrackIdFromUrl(url: string): string {
   return '';
 }
 
-export function normalizeUrl(url: string): string {
-  try {
-    const parsed = new URL(url, window.location.href);
-    return `${parsed.origin}${parsed.pathname}`.toLowerCase();
-  } catch {
-    return url.trim().toLowerCase();
-  }
-}
+export { normalizeUrl } from '@/utils/url';
 
 export function normalizeStreamMatchKey(url: string): string {
   const raw = String(url || '').trim();
