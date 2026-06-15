@@ -22,7 +22,11 @@ export function normalizeReleaseUrl(value: unknown): string {
   }
 }
 
-export function normalizeUrl(value: unknown): string {
+// Discover keeps the FULL URL (query + hash) — deliberately different from the
+// canonical normalizeUrl in @/utils/url, which drops the query and returns only
+// origin+pathname. Discover stream URLs carry the track id / token in the query,
+// so they must survive. Distinct name so the two are never merged by mistake.
+export function normalizeFullUrl(value: unknown): string {
   const raw = String(value ?? '').trim();
   if (!raw) {
     return '';
@@ -61,22 +65,6 @@ export function readTrackIdFromUrl(url: string): string {
   return pathMatch[0] ?? '';
 }
 
-export function toId(value: unknown): string {
-  const raw = String(value ?? '').trim();
-  if (!raw) {
-    return '';
-  }
-  const match = raw.match(/\d+/);
-  return match?.[0] ?? '';
-}
-
-export function toType(value: unknown): 'a' | 't' | '' {
-  const raw = String(value ?? '').trim().toLowerCase();
-  if (raw === 'a' || raw === 'album') {
-    return 'a';
-  }
-  if (raw === 't' || raw === 'track') {
-    return 't';
-  }
-  return '';
-}
+// Byte-identical to the metadata-layer helpers; re-export the canonical ones so
+// discover's id/type parsing can't drift from the rest of the content layer.
+export { toIdString as toId, toTralbumType as toType } from '@/content/metadata/common';

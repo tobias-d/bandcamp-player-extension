@@ -8,7 +8,7 @@ import {
 import { pickApiIdentity } from '@/content/discover/metadata/hints';
 import {
   normalizeReleaseUrl,
-  normalizeUrl,
+  normalizeFullUrl,
   readTrackIdFromUrl
 } from '@/content/discover/metadata/normalize';
 import { readMediaSessionState, readPayloadMatches } from '@/content/discover/metadata/payload';
@@ -40,7 +40,7 @@ function pickStrictApiPayloadCandidate(trackId: string, releaseUrl: string): {
         artistName: String(fromBridge.artistName || '').trim(),
         albumTitle: String(fromBridge.albumTitle || '').trim(),
         releaseUrl: normalizeReleaseUrl(fromBridge.releaseUrl),
-        streamUrl: normalizeUrl(fromBridge.streamUrl),
+        streamUrl: normalizeFullUrl(fromBridge.streamUrl),
         trackId: wantedTrackId,
         identity: null
       };
@@ -65,7 +65,7 @@ export function getDiscoverNowPlaying(): DiscoverNowPlaying {
   const selection = getLatestObservedDiscoverSelection(60_000);
   const selectedRelease = normalizeReleaseUrl(selection?.url ?? '');
   const audioState = getLatestObservedDiscoverAudioState(30_000);
-  const audioStreamUrl = normalizeUrl(audioState?.src ?? '');
+  const audioStreamUrl = normalizeFullUrl(audioState?.src ?? '');
   const audioTrackId = readTrackIdFromUrl(audioStreamUrl);
   const mediaSession = audioState ? readMediaSessionState() : {
     title: '',
@@ -74,8 +74,11 @@ export function getDiscoverNowPlaying(): DiscoverNowPlaying {
     isPlaying: false
   };
   const hintedIdentity = pickApiIdentity(audioTrackId, selectedRelease);
-  const hintedTrackId = String(hintedIdentity?.trackId || '').trim();
-  const trackId = audioTrackId || hintedTrackId;
+  // The track key comes ONLY from the observed audio, never from a release-only
+  // hint's trackId. Seeding it from hintedIdentity would let a release-matched
+  // (not track-matched) hint masquerade as the playing track and lock identity —
+  // the exact release-only association the contract forbids.
+  const trackId = audioTrackId;
   const linkedRelease = normalizeReleaseUrl(getNowPlayingLinkedReleaseUrl());
   const domReleaseProbe = readDiscoverReleaseFromDom(
     mediaSession.title,
@@ -91,7 +94,7 @@ export function getDiscoverNowPlaying(): DiscoverNowPlaying {
   );
   const streamUrl =
     audioStreamUrl ||
-    normalizeUrl(payloadCandidate?.streamUrl || '') ||
+    normalizeFullUrl(payloadCandidate?.streamUrl || '') ||
     resolveObservedDiscoverStreamUrl(DEFAULT_TRACK_METADATA.trackTitle, DEFAULT_TRACK_METADATA.artistName) ||
     (trackId ? `https://bandcamp.com/stream_redirect?track_id=${encodeURIComponent(trackId)}` : '');
   const releaseUrl =
@@ -101,9 +104,13 @@ export function getDiscoverNowPlaying(): DiscoverNowPlaying {
     normalizeReleaseUrl(payloadCandidate?.releaseUrl || '') ||
     normalizeReleaseUrl(hintedIdentity?.url || '') ||
     '';
+  // Only lock identity from the structured payload or a track-matched hint.
+  // Passing '' for the release arg means pickApiIdentity can never take its
+  // release-only branch here; with no track id, identity stays null and the
+  // authoritative API/HTML resolution fills it in instead.
   const identity =
     payloadCandidate?.identity ||
-    pickApiIdentity(trackId, releaseUrl);
+    (trackId ? pickApiIdentity(trackId, '') : null);
   const isPlaying = Boolean(audioState && !audioState.paused);
   const fallbackTitle = String(mediaSession.title || '').trim();
   const fallbackArtist = String(mediaSession.artist || '').trim();
@@ -156,7 +163,7 @@ export function getDiscoverNowPlaying(): DiscoverNowPlaying {
 }
 
 function getStreamPathKey(value: string): string {
-  const normalized = normalizeUrl(value);
+  const normalized = normalizeFullUrl(value);
   if (!normalized) {
     return '';
   }

@@ -1,5 +1,5 @@
 import { getRecentApiIdentityHints } from '@/content/discover/origin-bridge';
-import { normalizeReleaseUrl, normalizeUrl } from '@/content/discover/metadata/normalize';
+import { normalizeFullUrl, normalizeReleaseUrl } from '@/content/discover/metadata/normalize';
 import type { DiscoverIdentity } from '@/content/discover/metadata/types';
 
 export function pickApiIdentity(trackIdHint: string, releaseUrlHint: string): DiscoverIdentity | null {
@@ -23,7 +23,7 @@ export function pickApiIdentity(trackIdHint: string, releaseUrlHint: string): Di
         tralbumId,
         tralbumType,
         trackId: String(hint.trackId || '').trim(),
-        url: normalizeReleaseUrl(hint.url) || normalizeUrl(hint.url)
+        url: normalizeReleaseUrl(hint.url) || normalizeFullUrl(hint.url)
       };
     }
     return null;

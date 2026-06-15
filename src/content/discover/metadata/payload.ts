@@ -1,8 +1,8 @@
 import { getLatestObservedDiscoverPayload } from '@/content/discover/origin-bridge';
 import {
+  normalizeFullUrl,
   normalizeReleaseUrl,
   normalizeText,
-  normalizeUrl,
   readTrackIdFromUrl,
   toId,
   toType
@@ -41,56 +41,6 @@ export function readMediaSessionState(): MediaSessionState {
   }
 }
 
-function scorePayloadItem(
-  item: PayloadMatch,
-  hints: { title: string; artist: string; album: string; releaseUrl: string; trackId: string }
-): number {
-  let score = 0;
-  const hintTitle = hints.title.toLowerCase();
-  const hintArtist = hints.artist.toLowerCase();
-  const hintAlbum = hints.album.toLowerCase();
-  const releaseUrl = hints.releaseUrl;
-  const trackId = hints.trackId;
-
-  if (releaseUrl && item.releaseUrl && releaseUrl === item.releaseUrl) {
-    score += 120;
-  }
-  if (trackId && item.trackId && trackId === item.trackId) {
-    score += 180;
-  }
-
-  if (hintTitle && item.trackTitle) {
-    const title = item.trackTitle.toLowerCase();
-    if (title === hintTitle) {
-      score += 35;
-    } else if (title.includes(hintTitle) || hintTitle.includes(title)) {
-      score += 18;
-    }
-  }
-  if (hintArtist && item.artistName) {
-    const artist = item.artistName.toLowerCase();
-    if (artist === hintArtist) {
-      score += 24;
-    } else if (artist.includes(hintArtist) || hintArtist.includes(artist)) {
-      score += 12;
-    }
-  }
-  if (hintAlbum && item.albumTitle) {
-    const album = item.albumTitle.toLowerCase();
-    if (album === hintAlbum) {
-      score += 14;
-    } else if (album.includes(hintAlbum) || hintAlbum.includes(album)) {
-      score += 7;
-    }
-  }
-
-  if (!hints.title && !hints.artist && !hints.album && item.streamUrl) {
-    score += 2;
-  }
-
-  return score;
-}
-
 export function readPayloadMatches(): PayloadMatch[] {
   const payload = getLatestObservedDiscoverPayload();
   const results = readDiscoverResults(payload);
@@ -113,11 +63,14 @@ export function readPayloadMatches(): PayloadMatch[] {
     const releaseUrl = normalizeReleaseUrl(
       item['item_url'] ?? item['itemUrl'] ?? item['tralbum_url'] ?? item['tralbumUrl'] ?? item['url'] ?? item['link']
     );
-    const streamUrl = normalizeUrl(featured['stream_url'] ?? featured['streamUrl']);
+    const streamUrl = normalizeFullUrl(featured['stream_url'] ?? featured['streamUrl']);
     const trackId = toId(item['track_id']) || toId(featured['track_id']) || readTrackIdFromUrl(streamUrl);
 
     const bandId = toId(item['band_id']) || toId(item['bandId']) || toId(item['selling_band_id']) || toId(featured['band_id']);
-    const tralbumId = toId(item['tralbum_id']) || toId(item['tralbumId']) || toId(item['item_id']) || toId(item['id']) || trackId;
+    // No `|| trackId` fallback: a track id is not a release id. If the item has no
+    // real tralbum/album id, leave it empty so the identity below resolves to null
+    // rather than locking a track id in as if it were the release.
+    const tralbumId = toId(item['tralbum_id']) || toId(item['tralbumId']) || toId(item['item_id']) || toId(item['id']);
     const tralbumType = toType(item['tralbum_type'] ?? item['tralbumType'] ?? item['item_type']) || (releaseUrl.includes('/track/') ? 't' : 'a');
     const identity: DiscoverIdentity | null =
       bandId && tralbumId
@@ -151,35 +104,4 @@ export function readPayloadMatches(): PayloadMatch[] {
   });
 
   return output;
-}
-
-export function pickPayloadMatch(hints: {
-  title: string;
-  artist: string;
-  album: string;
-  releaseUrl: string;
-  trackId: string;
-}): PayloadMatch | null {
-  const candidates = readPayloadMatches();
-  if (!candidates.length) {
-    return null;
-  }
-
-  let best: PayloadMatch | null = null;
-  let bestScore = -1;
-  for (const candidate of candidates) {
-    const score = scorePayloadItem(candidate, hints);
-    if (score > bestScore) {
-      best = candidate;
-      bestScore = score;
-    }
-  }
-
-  if (!best) {
-    return null;
-  }
-  if (hints.title || hints.artist || hints.album || hints.releaseUrl || hints.trackId) {
-    return bestScore > 0 ? best : null;
-  }
-  return best;
 }
