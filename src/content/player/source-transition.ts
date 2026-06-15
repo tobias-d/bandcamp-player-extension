@@ -73,7 +73,6 @@ export function classifySourceTransition(
     input.playlistJumpLockTrackId &&
     candidateTrackId === input.playlistJumpLockTrackId
   );
-  const recentUserSelectionMatchesCandidate = sourceMatchesJumpLock;
   const playbackPausedOrIdle = !input.activeAudioPlaying && !input.bridgeAudioPlaying;
   const sourceChanged = sourceIdentityChanged;
   const shouldIgnoreJumpLockRebound = Boolean(
@@ -101,7 +100,7 @@ export function classifySourceTransition(
     !input.candidateIsPageRelease;
   const shouldIgnorePausedSourceFlipFinal = !forceDetachCandidate && shouldIgnorePausedSourceFlip;
   const shouldIgnorePauseStaleSwitchFinal = !forceDetachCandidate && shouldIgnorePauseStaleSwitch;
-  const isOriginSwitch = sourceChanged && sourceOutsideCurrentPlaylist && !recentUserSelectionMatchesCandidate;
+  const isOriginSwitch = sourceChanged && sourceOutsideCurrentPlaylist && !sourceMatchesJumpLock;
   const isPlaylistTrackSwitch = sourceChanged && !sourceOutsideCurrentPlaylist;
   const transitionKind = !sourceChanged
     ? 'no-change'
@@ -121,7 +120,7 @@ export function classifySourceTransition(
     sourceOutsideCurrentPlaylist,
     jumpLockActive,
     sourceMatchesJumpLock,
-    recentUserSelectionMatchesCandidate,
+    recentUserSelectionMatchesCandidate: sourceMatchesJumpLock,
     playbackPausedOrIdle,
     sourceChanged,
     shouldIgnoreJumpLockRebound,

@@ -140,7 +140,6 @@ export function createRuntimeAudioController(input: CreateRuntimeAudioController
 
   let destroyed = false;
   let ownershipState: RuntimeAudioOwnershipState = 'origin-started';
-  let firstOriginAvailable = true;
   let currentSource = '';
   let currentSourceVersion = -1;
   let originAudio: HTMLAudioElement | null = null;
@@ -167,7 +166,6 @@ export function createRuntimeAudioController(input: CreateRuntimeAudioController
   let lastRuntimeSeekDispatchAtMs = 0;
   let pendingTempoHandover = false;
   let tempoHandoverTaskPending = false;
-  let runtimePlaylistStartPending = false;
   let runtimePlaylistStartSource = '';
   let pendingRuntimePlaylistSource = '';
   let pendingRuntimePlaylistToken = 0;
@@ -240,7 +238,15 @@ export function createRuntimeAudioController(input: CreateRuntimeAudioController
       return false;
     }
     if (currentSource && !sharesTrackIdentity(originSource, currentSource)) {
-      return false;
+      // A different track started natively while runtime owns the current one.
+      // Origin always wins: release runtime immediately so both don't play together.
+      invalidateTransition();
+      setOwner('origin-started');
+      enqueueControlTask(() => pauseHosts());
+      debug('runtime-owned-origin-play', 'origin-wins-different-track', {
+        detail: `event=${eventType} src=${originSource.slice(-80)}`
+      });
+      return true;
     }
     try {
       audio.pause();
@@ -269,22 +275,16 @@ export function createRuntimeAudioController(input: CreateRuntimeAudioController
   }
 
   function setOwner(nextOwner: RuntimeAudioOwnershipState): void {
-    const resolvedNextOwner = nextOwner;
-    const nextFirstOriginAvailable =
-      resolvedNextOwner === 'origin-started'
-        ? true
-        : false;
-    if (ownershipState === resolvedNextOwner && firstOriginAvailable === nextFirstOriginAvailable) {
+    if (ownershipState === nextOwner) {
       return;
     }
-    ownershipState = resolvedNextOwner;
-    firstOriginAvailable = nextFirstOriginAvailable;
-    if (resolvedNextOwner === 'runtime' && currentSource) {
+    ownershipState = nextOwner;
+    if (nextOwner === 'runtime' && currentSource) {
       input.claimRuntimePlayback?.(currentSource);
     }
-    input.onOwnershipChange?.(resolvedNextOwner === 'runtime', {
+    input.onOwnershipChange?.(nextOwner === 'runtime', {
       ownershipState,
-      firstOriginAvailable
+      firstOriginAvailable: nextOwner === 'origin-started'
     });
   }
 
@@ -311,7 +311,6 @@ export function createRuntimeAudioController(input: CreateRuntimeAudioController
     lastRuntimeSeekDispatchFraction = null;
     lastRuntimeSeekDispatchAtMs = 0;
     tempoHandoverTaskPending = false;
-    runtimePlaylistStartPending = false;
     runtimePlaylistStartSource = '';
     clearPendingRuntimePlaylistSelection();
     return transitionToken;
@@ -568,12 +567,10 @@ export function createRuntimeAudioController(input: CreateRuntimeAudioController
     }
     if (destroyed || options.token !== transitionToken) {
       debug(reason, 'stale-after-play');
-      if (target !== active) {
-        // Superseded after we already played into the idle host. Silence it (fade + drain,
-        // no crack) so it cannot double with the still-audible active host; the newer
-        // transition reuses the now-cleared idle host.
-        await target.stop({ drainOutputBeforeClear: true });
-      }
+      // Stop the scheduled host regardless of whether it is active or idle. An unstopped
+      // host will open its handoff gate and become audible even after the transition is
+      // cancelled, which would overlap with a concurrently-restored origin or a newer host.
+      await target.stop({ drainOutputBeforeClear: true });
       return false;
     }
     const retiring = target !== active ? active : null;
@@ -660,37 +657,36 @@ export function createRuntimeAudioController(input: CreateRuntimeAudioController
       restoreOrigin = await origin.silenceOrigin();
     }
 
-    const started = await startRuntimeFromPrepared(currentSource, reason, {
-      positionSec: targetTimeSec,
-      volume: origin.snapshot.volume,
-      muted: origin.snapshot.muted,
-      playbackRate: desiredPlaybackRate,
-      keyLockEnabled: desiredKeyLockEnabled,
-      handoffGate: shouldMuteOrigin,
-      token,
-      play: origin.snapshot.playing
-    });
-    if (!started) {
-      restoreOrigin?.();
-      return false;
-    }
-
-    debug(reason, 'runtime-ready-before-origin-pause', {
-      detail: `origin=${origin.snapshot.currentTimeSec.toFixed(2)} kind=${origin.snapshot.kind}`,
-      originSnapshotTimeSec: origin.snapshot.currentTimeSec,
-      seekTargetTimeSec: targetTimeSec
-    });
     try {
+      const started = await startRuntimeFromPrepared(currentSource, reason, {
+        positionSec: targetTimeSec,
+        volume: origin.snapshot.volume,
+        muted: origin.snapshot.muted,
+        playbackRate: desiredPlaybackRate,
+        keyLockEnabled: desiredKeyLockEnabled,
+        handoffGate: shouldMuteOrigin,
+        token,
+        play: origin.snapshot.playing
+      });
+      if (!started) {
+        return false;
+      }
+
+      debug(reason, 'runtime-ready-before-origin-pause', {
+        detail: `origin=${origin.snapshot.currentTimeSec.toFixed(2)} kind=${origin.snapshot.kind}`,
+        originSnapshotTimeSec: origin.snapshot.currentTimeSec,
+        seekTargetTimeSec: targetTimeSec
+      });
       await origin.pauseOrigin();
+      debug(reason, 'origin-paused-for-handover', {
+        detail: `origin=${origin.snapshot.currentTimeSec.toFixed(2)} kind=${origin.snapshot.kind}`,
+        originSnapshotTimeSec: origin.snapshot.currentTimeSec,
+        seekTargetTimeSec: targetTimeSec
+      });
+      return true;
     } finally {
       restoreOrigin?.();
     }
-    debug(reason, 'origin-paused-for-handover', {
-      detail: `origin=${origin.snapshot.currentTimeSec.toFixed(2)} kind=${origin.snapshot.kind}`,
-      originSnapshotTimeSec: origin.snapshot.currentTimeSec,
-      seekTargetTimeSec: targetTimeSec
-    });
-    return true;
   }
 
   async function loadCurrentPreparedTrack(reason: string): Promise<boolean> {
@@ -885,7 +881,8 @@ export function createRuntimeAudioController(input: CreateRuntimeAudioController
           return;
         }
         const transferred = await handoverToRuntime('tempo-adjust', {
-          muteOriginBeforeHandover: true
+          muteOriginBeforeHandover: true,
+          allowPaused: true
         });
         if (transferred) {
           pendingTempoHandover = false;
@@ -918,11 +915,10 @@ export function createRuntimeAudioController(input: CreateRuntimeAudioController
     source: string,
     token: number
   ): void {
-    if (runtimePlaylistStartPending) {
+    if (runtimePlaylistStartSource) {
       debug('direct-start', 'coalesced');
       return;
     }
-    runtimePlaylistStartPending = true;
     runtimePlaylistStartSource = source;
     if (sharesTrackIdentity(source, pendingRuntimePlaylistSource)) {
       clearPendingRuntimePlaylistSelection();
@@ -956,10 +952,11 @@ export function createRuntimeAudioController(input: CreateRuntimeAudioController
         });
         if (started) {
           debug('direct-start', 'runtime-playlist-ownership-taken');
+        } else {
+          setOwner('origin-started');
         }
       } finally {
         if (token === transitionToken) {
-          runtimePlaylistStartPending = false;
           runtimePlaylistStartSource = '';
         }
       }
@@ -1131,7 +1128,6 @@ export function createRuntimeAudioController(input: CreateRuntimeAudioController
             active.hasLoadedTrackForSource(preparedForDirectStart.track.url)
           )
         ) {
-          runtimePlaylistStartSource = targetSrc;
           currentSourceVersion = Number.isFinite(preparedForDirectStart.track.sourceVersion)
             ? preparedForDirectStart.track.sourceVersion
             : currentSourceVersion;
