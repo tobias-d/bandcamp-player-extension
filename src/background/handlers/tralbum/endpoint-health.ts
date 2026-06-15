@@ -9,7 +9,6 @@ interface EndpointHealth {
 interface PreparedAttemptUrls {
   urls: string[];
   suppressedInfoCount: number;
-  suppressedMobileCount: number;
 }
 
 interface EndpointHealthConfig {
@@ -94,8 +93,7 @@ export function prepareAttemptUrlsForEndpointHealth(urls: string[]): PreparedAtt
   if (!hasMobileCandidate) {
     return {
       urls,
-      suppressedInfoCount: 0,
-      suppressedMobileCount: 0
+      suppressedInfoCount: 0
     };
   }
 
@@ -117,15 +115,13 @@ export function prepareAttemptUrlsForEndpointHealth(urls: string[]): PreparedAtt
   if (!kept.length) {
     return {
       urls,
-      suppressedInfoCount: 0,
-      suppressedMobileCount: 0
+      suppressedInfoCount: 0
     };
   }
 
   return {
     urls: kept,
-    suppressedInfoCount,
-    suppressedMobileCount: 0
+    suppressedInfoCount
   };
 }
 

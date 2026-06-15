@@ -2,6 +2,7 @@ export type { PayloadTrackQuality } from '@/background/handlers/tralbum/payload-
 export {
   getPayloadTrackQuality,
   hasTrackArrays,
+  minExpectedCoverage,
   normalizePayloadData
 } from '@/background/handlers/tralbum/payload-track';
 export { readErrorFromPayload } from '@/background/handlers/tralbum/payload-error';

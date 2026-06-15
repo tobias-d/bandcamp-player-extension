@@ -9,20 +9,29 @@ import {
 } from '@/background/handlers/tralbum/endpoint-health';
 import { tryHtmlFallback } from '@/background/handlers/tralbum/html-fallback';
 import { getReleaseKey, parseIdsFromUrl, toId, toType } from '@/background/handlers/tralbum/identity';
-import { hasTrackArrays, normalizePayloadData, readErrorFromPayload, getPayloadTrackQuality } from '@/background/handlers/tralbum/payload';
+import { hasTrackArrays, minExpectedCoverage, normalizePayloadData, readErrorFromPayload, getPayloadTrackQuality } from '@/background/handlers/tralbum/payload';
 import { createTralbumRateLimiter } from '@/background/handlers/tralbum/rate-limiter';
 import { fetchWithTimeout } from '@/background/handlers/tralbum/request';
 import { isLikelyReleaseUrl, parseOriginFromUrl } from '@/background/handlers/tralbum/url';
+import { TTLCache } from '@/utils/cache';
 import { createLogger } from '@/utils/debug';
 
 const logger = createLogger('MESSAGING');
 
-interface TralbumCacheEntry {
+const TRALBUM_CACHE_MAX_ENTRIES = 200;
+
+interface TralbumCacheValue {
   data: unknown;
-  ts: number;
+  // Whether each enrichment dimension has already been attempted for this entry.
+  // Enrichment is bounded to once per dimension per cache lifetime so a release
+  // that legitimately stays below the coverage threshold does not re-fetch on
+  // every cache hit. htmlEnriched can still flip on a later request that newly
+  // permits HTML fallback.
+  durationEnriched: boolean;
+  htmlEnriched: boolean;
 }
 
-const tralbumCache = new Map<string, TralbumCacheEntry>();
+const tralbumCache = new TTLCache<string, TralbumCacheValue>(TRALBUM_CACHE_TTL_MS, TRALBUM_CACHE_MAX_ENTRIES);
 const tralbumInFlight = new Map<string, Promise<TralbumFetchResponse>>();
 const rateLimiter = createTralbumRateLimiter();
 
@@ -34,34 +43,46 @@ function shouldCountForEndpointHealth(status?: number): boolean {
   return code === 429 || code === 403 || code >= 500;
 }
 
+
 function shouldTryDurationEnrichment(data: unknown): boolean {
   const quality = getPayloadTrackQuality(data);
   if (quality.trackCount <= 1) {
     return false;
   }
 
-  const minExpectedDurations = Math.min(quality.trackCount, Math.ceil(quality.trackCount * 0.6));
-  return quality.tracksWithDuration < minExpectedDurations;
+  return quality.tracksWithDuration < minExpectedCoverage(quality.trackCount);
 }
 
-async function maybeEnrichCachedPayload(
-  data: unknown,
+// Enrich a cached entry, but only for dimensions not already attempted. Returns
+// the (possibly updated) entry and whether anything changed so the caller can
+// decide to re-store. This is what bounds enrichment to once per dimension.
+async function enrichCachedEntry(
+  entry: TralbumCacheValue,
   releaseUrl: string,
   origin: string,
   releaseKey: string,
   allowHtmlFallback: boolean
-): Promise<unknown> {
-  if (!shouldTryDurationEnrichment(data)) {
-    return maybeEnrichMissingStreams(data, releaseUrl, origin, releaseKey, allowHtmlFallback);
+): Promise<{ entry: TralbumCacheValue; changed: boolean }> {
+  let data = entry.data;
+  let durationEnriched = entry.durationEnriched;
+  let htmlEnriched = entry.htmlEnriched;
+  let changed = false;
+
+  if (!durationEnriched) {
+    if (shouldTryDurationEnrichment(data)) {
+      data = await maybeEnrichMissingDurations(data, releaseUrl, origin, rateLimiter, releaseKey);
+    }
+    durationEnriched = true;
+    changed = true;
   }
-  const enrichedDurations = await maybeEnrichMissingDurations(
-    data,
-    releaseUrl,
-    origin,
-    rateLimiter,
-    releaseKey
-  );
-  return maybeEnrichMissingStreams(enrichedDurations, releaseUrl, origin, releaseKey, allowHtmlFallback);
+
+  if (!htmlEnriched && allowHtmlFallback) {
+    data = await maybeEnrichMissingStreams(data, releaseUrl, origin, releaseKey, allowHtmlFallback);
+    htmlEnriched = true;
+    changed = true;
+  }
+
+  return { entry: { data, durationEnriched, htmlEnriched }, changed };
 }
 
 async function maybeEnrichMissingStreams(
@@ -80,10 +101,9 @@ async function maybeEnrichMissingStreams(
     return data;
   }
 
-  const minExpectedStreams = Math.min(quality.trackCount, Math.ceil(quality.trackCount * 0.6));
-  const minExpectedDirectStreams = minExpectedStreams;
+  const minExpectedStreams = minExpectedCoverage(quality.trackCount);
   const hasEnoughStreamCoverage = quality.tracksWithStream >= minExpectedStreams;
-  const hasEnoughDirectStreamCoverage = quality.tracksWithDirectStream >= minExpectedDirectStreams;
+  const hasEnoughDirectStreamCoverage = quality.tracksWithDirectStream >= minExpectedStreams;
   if (hasEnoughStreamCoverage && hasEnoughDirectStreamCoverage) {
     return data;
   }
@@ -116,9 +136,11 @@ async function buildSuccessFromFallback(
 
   let data = normalizePayloadData(fallback.data);
   data = await maybeEnrichMissingDurations(data, releaseUrl, origin, rateLimiter, releaseKey);
+  // Data is already HTML-sourced, so both enrichment dimensions are exhausted.
   tralbumCache.set(releaseKey, {
     data,
-    ts: Date.now()
+    durationEnriched: true,
+    htmlEnriched: true
   });
   return {
     ok: true,
@@ -165,19 +187,14 @@ export async function handleFetchTralbum(
 
   const now = Date.now();
   const cached = tralbumCache.get(releaseKey);
-  if (cached && now - cached.ts <= TRALBUM_CACHE_TTL_MS) {
-    let data = cached.data;
-    const enriched = await maybeEnrichCachedPayload(data, releaseUrl, origin, releaseKey, allowHtmlFallback);
-    if (enriched !== data) {
-      data = enriched;
-      tralbumCache.set(releaseKey, {
-        data,
-        ts: Date.now()
-      });
+  if (cached) {
+    const result = await enrichCachedEntry(cached, releaseUrl, origin, releaseKey, allowHtmlFallback);
+    if (result.changed) {
+      tralbumCache.set(releaseKey, result.entry);
     }
     return {
       ok: true,
-      data,
+      data: result.entry.data,
       debugDecision: 'cached'
     };
   }
@@ -205,10 +222,10 @@ export async function handleFetchTralbum(
   });
   const attemptUrlPlan = prepareAttemptUrlsForEndpointHealth(attemptUrls);
   const candidateAttemptUrls = attemptUrlPlan.urls;
-  if (attemptUrlPlan.suppressedInfoCount > 0 || attemptUrlPlan.suppressedMobileCount > 0) {
+  if (attemptUrlPlan.suppressedInfoCount > 0) {
     logger.debug(
       'FETCH_TRALBUM de-prioritized endpoints',
-      `suppressedMobile=${attemptUrlPlan.suppressedMobileCount} suppressedInfo=${attemptUrlPlan.suppressedInfoCount}`,
+      `suppressedInfo=${attemptUrlPlan.suppressedInfoCount}`,
       releaseKey
     );
   }
@@ -292,9 +309,12 @@ export async function handleFetchTralbum(
           data = await maybeEnrichMissingDurations(data, releaseUrl, origin, rateLimiter, releaseKey);
           data = await maybeEnrichMissingStreams(data, releaseUrl, origin, releaseKey, allowHtmlFallback);
           noteAttemptEndpointSuccess(attemptUrl);
+          // Duration enrichment always ran; HTML stream enrichment ran only when
+          // permitted, so a later HTML-permitted request can still upgrade it.
           tralbumCache.set(releaseKey, {
             data,
-            ts: Date.now()
+            durationEnriched: true,
+            htmlEnriched: allowHtmlFallback
           });
 
           return {

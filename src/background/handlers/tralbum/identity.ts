@@ -49,17 +49,6 @@ export function toType(value: unknown): 'a' | 't' | '' {
   return '';
 }
 
-function parseTralbumTypeFromUnknown(value: unknown): 'a' | 't' | '' {
-  const raw = toStringSafe(value).toLowerCase();
-  if (raw === 'album' || raw === 'a') {
-    return 'a';
-  }
-  if (raw === 'track' || raw === 't') {
-    return 't';
-  }
-  return '';
-}
-
 export function parseIdsFromUrl(urlRaw: string): TralbumIds {
   try {
     const parsed = new URL(urlRaw);
@@ -98,10 +87,10 @@ export function extractAlbumIdentityFromPayload(data: unknown): TralbumIdentity 
     ? toId(firstTrack['album_id'] ?? record['id'] ?? record['album_id'] ?? record['tralbum_id'] ?? current?.['id'])
     : toId(record['id'] ?? record['album_id'] ?? record['tralbum_id'] ?? current?.['id']);
   const tralbumType =
-    parseTralbumTypeFromUnknown(record['item_type']) ||
-    parseTralbumTypeFromUnknown(record['type']) ||
-    parseTralbumTypeFromUnknown(record['tralbum_type']) ||
-    parseTralbumTypeFromUnknown(current?.['type']);
+    toType(record['item_type']) ||
+    toType(record['type']) ||
+    toType(record['tralbum_type']) ||
+    toType(current?.['type']);
 
   return {
     bandId,

@@ -1,14 +1,10 @@
 import type { PayloadTrackQuality } from '@/background/handlers/tralbum/payload-types';
+import { asRecord, asTrackArray } from '@/background/handlers/tralbum/identity';
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
-}
-
-function asTrackArray(value: unknown): Array<Record<string, unknown>> {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((item) => item && typeof item === 'object') as Array<Record<string, unknown>>;
+// A payload is "covered" for a field once at least 60% of its tracks carry it.
+// ceil(0.6 * count) is always <= count for count >= 1, so no clamp is needed.
+export function minExpectedCoverage(trackCount: number): number {
+  return Math.ceil(trackCount * 0.6);
 }
 
 function parseClockDurationToSeconds(value: string): number {
@@ -30,10 +26,49 @@ function parseClockDurationToSeconds(value: string): number {
   return numeric[0] * 3600 + numeric[1] * 60 + numeric[2];
 }
 
-function parseDurationCandidate(candidate: unknown, depth = 0): number {
-  if (typeof candidate === 'number' && Number.isFinite(candidate)) {
-    const numeric = candidate > 20_000 ? candidate / 1000 : candidate;
-    return numeric > 0 ? numeric : 0;
+// Bandcamp durations are seconds; only *_ms / ms / milliseconds keys are
+// milliseconds. Tagging each key with its unit avoids guessing from magnitude,
+// which mis-scaled short clips with explicit ms fields (e.g. 15000ms read as
+// 15000s) and long mixes over ~5.5h (read as ms and divided).
+type DurationUnit = 'sec' | 'ms' | 'auto';
+
+const NESTED_DURATION_KEYS: ReadonlyArray<readonly [string, DurationUnit]> = [
+  ['duration', 'sec'],
+  ['duration_sec', 'sec'],
+  ['durationSecs', 'sec'],
+  ['duration_seconds', 'sec'],
+  ['duration_ms', 'ms'],
+  ['durationMs', 'ms'],
+  ['length', 'sec'],
+  ['length_sec', 'sec'],
+  ['track_duration', 'sec'],
+  ['time', 'sec'],
+  ['seconds', 'sec'],
+  ['secs', 'sec'],
+  ['sec', 'sec'],
+  ['ms', 'ms'],
+  ['milliseconds', 'ms'],
+  ['value', 'auto']
+];
+
+function normalizeDurationNumber(value: number, unit: DurationUnit): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  if (unit === 'ms') {
+    return value / 1000;
+  }
+  if (unit === 'sec') {
+    return value;
+  }
+  // Unit unknown (generic non-duration-named field): assume seconds, dividing
+  // only implausibly large values as a milliseconds last resort.
+  return value > 20_000 ? value / 1000 : value;
+}
+
+function parseDurationCandidate(candidate: unknown, unit: DurationUnit = 'auto', depth = 0): number {
+  if (typeof candidate === 'number') {
+    return normalizeDurationNumber(candidate, unit);
   }
 
   if (typeof candidate === 'string') {
@@ -43,7 +78,7 @@ function parseDurationCandidate(candidate: unknown, depth = 0): number {
     }
     const numeric = Number(text);
     if (Number.isFinite(numeric) && numeric > 0) {
-      return numeric > 20_000 ? numeric / 1000 : numeric;
+      return normalizeDurationNumber(numeric, unit);
     }
     const clock = parseClockDurationToSeconds(text);
     return clock > 0 ? clock : 0;
@@ -54,27 +89,8 @@ function parseDurationCandidate(candidate: unknown, depth = 0): number {
   }
 
   const record = candidate as Record<string, unknown>;
-  const nestedCandidates: unknown[] = [
-    record.duration,
-    record.duration_sec,
-    record.durationSecs,
-    record.duration_seconds,
-    record.duration_ms,
-    record.durationMs,
-    record.length,
-    record.length_sec,
-    record.track_duration,
-    record.time,
-    record.seconds,
-    record.secs,
-    record.sec,
-    record.ms,
-    record.milliseconds,
-    record.value
-  ];
-
-  for (const nested of nestedCandidates) {
-    const parsed = parseDurationCandidate(nested, depth + 1);
+  for (const [key, keyUnit] of NESTED_DURATION_KEYS) {
+    const parsed = parseDurationCandidate(record[key], keyUnit, depth + 1);
     if (parsed > 0) {
       return parsed;
     }
@@ -83,30 +99,41 @@ function parseDurationCandidate(candidate: unknown, depth = 0): number {
   return 0;
 }
 
+const TRACK_DURATION_KEYS: ReadonlyArray<readonly [string, DurationUnit]> = [
+  ['duration', 'sec'],
+  ['duration_sec', 'sec'],
+  ['durationSecs', 'sec'],
+  ['duration_seconds', 'sec'],
+  ['duration_ms', 'ms'],
+  ['durationMs', 'ms'],
+  ['length', 'sec'],
+  ['length_sec', 'sec'],
+  ['track_duration', 'sec'],
+  ['time', 'sec'],
+  ['seconds', 'sec'],
+  ['secs', 'sec']
+];
+
+const FILE_DURATION_KEYS: ReadonlyArray<readonly [string, DurationUnit]> = [
+  ['duration', 'sec'],
+  ['duration_ms', 'ms'],
+  ['durationMs', 'ms']
+];
+
 function readDurationSec(track: Record<string, unknown>): number {
   const file = asRecord(track.file);
-  const candidates: unknown[] = [
-    track.duration,
-    track.duration_sec,
-    track.durationSecs,
-    track.duration_seconds,
-    track.duration_ms,
-    track.durationMs,
-    track.length,
-    track.length_sec,
-    track.track_duration,
-    track.time,
-    track.seconds,
-    track.secs,
-    file?.duration,
-    file?.duration_ms,
-    file?.durationMs
-  ];
-
-  for (const candidate of candidates) {
-    const parsed = parseDurationCandidate(candidate);
+  for (const [key, unit] of TRACK_DURATION_KEYS) {
+    const parsed = parseDurationCandidate(track[key], unit);
     if (parsed > 0) {
       return parsed;
+    }
+  }
+  if (file) {
+    for (const [key, unit] of FILE_DURATION_KEYS) {
+      const parsed = parseDurationCandidate(file[key], unit);
+      if (parsed > 0) {
+        return parsed;
+      }
     }
   }
 
@@ -121,7 +148,8 @@ function readDurationSec(track: Record<string, unknown>): number {
     if (!looksDurationLike) {
       continue;
     }
-    const parsed = parseDurationCandidate(value);
+    const unit: DurationUnit = normalizedKey.includes('ms') || normalizedKey.includes('millisecond') ? 'ms' : 'auto';
+    const parsed = parseDurationCandidate(value, unit);
     if (parsed > 0) {
       return parsed;
     }
@@ -149,7 +177,7 @@ function hasStreamLikeValue(track: Record<string, unknown>): boolean {
     const nested = String(record['mp3-128'] ?? record['mp3-v0'] ?? record['mp3-320'] ?? '').trim();
     return nested.length > 0;
   }
-  return stream.length > 0;
+  return false;
 }
 
 function isDirectStreamUrl(url: string): boolean {

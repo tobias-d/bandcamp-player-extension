@@ -2,6 +2,7 @@ import { createTralbumRateLimiter } from '@/background/handlers/tralbum/rate-lim
 import {
   getPayloadTrackQuality,
   hasTrackArrays,
+  minExpectedCoverage,
   normalizePayloadData,
   readErrorFromPayload
 } from '@/background/handlers/tralbum/payload';
@@ -56,8 +57,7 @@ export async function maybeEnrichMissingDurations(
     return data;
   }
 
-  const minExpectedDurations = Math.min(quality.trackCount, Math.ceil(quality.trackCount * 0.6));
-  if (quality.tracksWithDuration >= minExpectedDurations) {
+  if (quality.tracksWithDuration >= minExpectedCoverage(quality.trackCount)) {
     return data;
   }
 
