@@ -58,8 +58,10 @@ export function decoratePlaylistTracks(
           && attempts >= caches.maxAttempts
         )
       : false;
-    const nextBpm = Number.isFinite(bpm) ? Number(bpm) : undefined;
-    const currentBpm = Number.isFinite(track.bpm) ? Number(track.bpm) : undefined;
+    // A real BPM is never 0; a degenerate/failed 0 is treated as missing ("--")
+    // rather than rendered as a literal "0" tempo.
+    const nextBpm = Number.isFinite(bpm) && Number(bpm) > 0 ? Number(bpm) : undefined;
+    const currentBpm = Number.isFinite(track.bpm) && Number(track.bpm) > 0 ? Number(track.bpm) : undefined;
     const isPreloadKeyLoading = Boolean(
       context.keyAnalysisEnabled
       && !keyAnalysis

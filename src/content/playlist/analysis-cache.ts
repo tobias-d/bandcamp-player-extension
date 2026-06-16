@@ -129,7 +129,10 @@ export function createPlaylistAnalysisCacheFacade(
       return cache.canAttempt(cacheKey);
     },
     hasCachedBpm(cacheKey) {
-      return Boolean(cacheKey && Number.isFinite(cache.bpmByCacheKey.get(cacheKey)));
+      // setCachedBpm stores under normalizeKey(cacheKey); read with the same
+      // normalization or a raw (un-normalized) key misses a cached value and
+      // forces a redundant re-analysis.
+      return Boolean(cacheKey && Number.isFinite(cache.bpmByCacheKey.get(normalizeKey(cacheKey))));
     },
     setCachedBpm(cacheKey, bpm) {
       const normalizedKey = normalizeKey(cacheKey);
