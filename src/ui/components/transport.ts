@@ -113,24 +113,24 @@ export function createTransport(container: HTMLElement, handlers: TransportHandl
   let lastAudibleVolumePercent = 100;
   let tapOpen = false;
 
-  const readSliderVolumePercent = (): number => {
-    const value = Number.parseFloat(volSlider.value);
-    return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 100;
-  };
+  const clampVolumePercent = (volumePercent: number): number =>
+    Number.isFinite(volumePercent) ? Math.min(100, Math.max(0, volumePercent)) : 100;
+
+  const readSliderVolumePercent = (): number => clampVolumePercent(Number.parseFloat(volSlider.value));
 
   const writeSliderVolumePercent = (volumePercent: number): void => {
-    const clamped = Number.isFinite(volumePercent) ? Math.min(100, Math.max(0, volumePercent)) : 100;
+    const clamped = clampVolumePercent(volumePercent);
     volSlider.value = String(Number(clamped.toFixed(4)));
   };
 
   const updateVolumeVisual = (volumePercent = readSliderVolumePercent()): void => {
-    const clamped = Number.isFinite(volumePercent) ? Math.min(100, Math.max(0, volumePercent)) : 100;
+    const clamped = clampVolumePercent(volumePercent);
     volSliderWrap.style.setProperty('--vol-level', `${clamped}%`);
     volSliderWrap.style.setProperty('--vol-thumb-left', `${clamped}%`);
   };
 
   const updateVolumeButtonState = (volumePercent = readSliderVolumePercent(), muted = false): void => {
-    const clamped = Number.isFinite(volumePercent) ? Math.min(100, Math.max(0, volumePercent)) : 100;
+    const clamped = clampVolumePercent(volumePercent);
     const levelClass = muted || clamped <= 0.5
       ? 'is-muted'
       : clamped < 66
@@ -142,7 +142,7 @@ export function createTransport(container: HTMLElement, handlers: TransportHandl
   };
 
   const applyVolumePercent = (volumePercent: number): void => {
-    const clamped = Number.isFinite(volumePercent) ? Math.min(100, Math.max(0, volumePercent)) : 100;
+    const clamped = clampVolumePercent(volumePercent);
     if (clamped > 0.5) {
       lastAudibleVolumePercent = clamped;
     }
