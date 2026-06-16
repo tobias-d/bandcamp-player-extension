@@ -3,10 +3,10 @@ import {
   normalizeFullUrl,
   normalizeReleaseUrl,
   normalizeText,
-  readTrackIdFromUrl,
   toId,
   toType
 } from '@/content/discover/metadata/normalize';
+import { readTrackIdFromUrl } from '@/content/playlist/resolver';
 import type { DiscoverIdentity, MediaSessionState, PayloadMatch } from '@/content/discover/metadata/types';
 
 function readDiscoverResults(payload: unknown): unknown[] {

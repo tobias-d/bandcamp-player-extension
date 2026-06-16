@@ -2,21 +2,9 @@ import { DEFAULT_TRACK_METADATA } from '@/shared/constants';
 import type { NonReleaseResolverSnapshot, TrackMetadata } from '@/shared/types';
 import { readTrackIdFromUrl } from '@/content/playlist/resolver';
 import { deriveConfidence } from '@/content/metadata/extractor/fields';
+import { isApiMetadataSource } from '@/content/discover/controller-helpers';
+import { isMissingMetadataValue } from '@/content/discover/helpers';
 import type { DiscoverNowPlaying } from '@/content/discover/metadata';
-
-function isApiMetadataSource(source: string): boolean {
-  const value = String(source || '').trim();
-  return (
-    value.startsWith('TralbumAPI') ||
-    value.startsWith('TralbumData') ||
-    value.startsWith('ApiCache')
-  );
-}
-
-function isMissingMetadataValue(value: string): boolean {
-  const normalized = String(value || '').trim();
-  return !normalized || normalized === DEFAULT_TRACK_METADATA.trackTitle;
-}
 
 function cloneDefaultMetadata(): TrackMetadata {
   return {
@@ -104,7 +92,7 @@ export function runDiscoverMetadataPhase(input: DiscoverMetadataPhaseInput): Dis
     String(targetNowPlaying.trackId || '').trim() || readTrackIdFromUrl(String(targetNowPlaying.streamUrl || '').trim());
   const ready = isResolverMetadataReady(snapshot);
   const playlistMetadata = ready ? null : buildPlaylistTrackMetadata(snapshot);
-  const resolvedMetadata = ready ? cloneMetadata(snapshot.metadata) : playlistMetadata;
+  const resolvedMetadata = ready ? snapshot.metadata : playlistMetadata;
 
   return {
     metadata: resolvedMetadata ? cloneMetadata(resolvedMetadata) : cloneDefaultMetadata(),

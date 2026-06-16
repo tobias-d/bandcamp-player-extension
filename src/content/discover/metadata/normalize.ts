@@ -38,33 +38,6 @@ export function normalizeFullUrl(value: unknown): string {
   }
 }
 
-export function readTrackIdFromUrl(url: string): string {
-  const raw = String(url || '').trim();
-  if (!raw) {
-    return '';
-  }
-
-  try {
-    const parsed = new URL(raw, window.location.href);
-    const streamPathMatch = parsed.pathname.match(/\/mp3-(?:128|v0|320)\/(\d{6,})(?:\/|$)/i);
-    if (streamPathMatch?.[1]) {
-      return streamPathMatch[1];
-    }
-    const trackParam = parsed.searchParams.get('track_id') || parsed.searchParams.get('id');
-    if (trackParam && /^\d{4,}$/.test(trackParam)) {
-      return trackParam;
-    }
-  } catch {
-    // Ignore malformed URLs.
-  }
-
-  const pathMatch = raw.match(/(\d{6,})/g);
-  if (!pathMatch?.length) {
-    return '';
-  }
-  return pathMatch[0] ?? '';
-}
-
 // Byte-identical to the metadata-layer helpers; re-export the canonical ones so
 // discover's id/type parsing can't drift from the rest of the content layer.
 export { toIdString as toId, toTralbumType as toType } from '@/content/metadata/common';

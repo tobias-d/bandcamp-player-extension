@@ -8,9 +8,9 @@ import {
 import { pickApiIdentity } from '@/content/discover/metadata/hints';
 import {
   normalizeReleaseUrl,
-  normalizeFullUrl,
-  readTrackIdFromUrl
+  normalizeFullUrl
 } from '@/content/discover/metadata/normalize';
+import { readTrackIdFromUrl } from '@/content/playlist/resolver';
 import { readMediaSessionState, readPayloadMatches } from '@/content/discover/metadata/payload';
 import { readDiscoverReleaseFromDom } from '@/content/discover/metadata/release';
 import { getNowPlayingLinkedReleaseUrl } from '@/content/metadata/release';
