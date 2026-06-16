@@ -92,8 +92,6 @@ export interface LikesMutationBridgeResult {
   status?: number;
   error?: string;
   reason?: string;
-  attempt?: string;
-  data?: unknown;
 }
 
 export interface PendingLikesMutation {

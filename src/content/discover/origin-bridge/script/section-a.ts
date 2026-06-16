@@ -607,9 +607,7 @@ export function buildOriginBridgeScriptSectionA(marker: string, source: string, 
               ok: false,
               status: response.status || 0,
               error: 'http-error',
-              reason: 'request-failed:origin=' + baseOrigin + ':ctx=' + (requestContextFamily || '-'),
-              attempt: 'single',
-              data: body
+              reason: 'request-failed:origin=' + baseOrigin + ':ctx=' + (requestContextFamily || '-')
             };
           }
 
@@ -628,26 +626,21 @@ export function buildOriginBridgeScriptSectionA(marker: string, source: string, 
               ok: false,
               status: response.status || 0,
               error: 'API error: ' + errorDetail,
-              reason: 'request-failed:origin=' + baseOrigin + ':ctx=' + (requestContextFamily || '-'),
-              attempt: 'single',
-              data: body
+              reason: 'request-failed:origin=' + baseOrigin + ':ctx=' + (requestContextFamily || '-')
             };
           }
 
           return {
             ok: true,
             status: response.status || 200,
-            reason: 'ok:origin=' + baseOrigin + ':ctx=' + (requestContextFamily || '-'),
-            attempt: 'single',
-            data: body
+            reason: 'ok:origin=' + baseOrigin + ':ctx=' + (requestContextFamily || '-')
           };
         }
         return {
           ok: false,
           status: 0,
           error: 'mutation-failed',
-          reason: 'request-failed',
-          attempt: 'single'
+          reason: 'request-failed'
         };
       };
 

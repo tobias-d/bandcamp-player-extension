@@ -146,9 +146,7 @@ export function requestLikesMutationViaBridge(
           ok: Boolean(payload.ok),
           status: Number.isFinite(Number(payload.status)) ? Number(payload.status) : undefined,
           error: payload.error ? String(payload.error) : undefined,
-          reason: payload.reason ? String(payload.reason) : undefined,
-          attempt: payload.attempt ? String(payload.attempt) : undefined,
-          data: payload.data
+          reason: payload.reason ? String(payload.reason) : undefined
         });
       },
       reject,
