@@ -223,6 +223,10 @@ export function initDiscoverController(): void {
 
   let extensionDeactivated = false;
   let nowPlaying = getDiscoverNowPlaying();
+  const resolveNowPlayingTrackId = (): string =>
+    normalizeLikeId(
+      nowPlaying.trackId || readTrackIdFromUrl(nowPlaying.streamUrl) || nowPlaying.identity?.trackId || ''
+    );
   let metadata = { ...DEFAULT_TRACK_METADATA };
   let analysis: AnalysisResult | null = null;
   const keyAnalysisTrace = [] as Array<{ ts: number; stage: string; detail: string }>;
@@ -290,7 +294,7 @@ export function initDiscoverController(): void {
       analysisReqCtrl.resetRequestKeys();
       preloadCtrl.applyPlaylistAnalysisDecorations();
       preloadCtrl.syncDiscoverPreloadQueue();
-      maybeStartNowPlayingAnalysis(`toggle:${Date.now()}`);
+      maybeStartNowPlayingAnalysis();
       render();
     },
     onAutoPlayChanged() {
@@ -548,9 +552,7 @@ export function initDiscoverController(): void {
   };
 
   const isCurrentTrackRepresentedInPlaylist = (): boolean => {
-    const currentTrackId = normalizeLikeId(
-      nowPlaying.trackId || readTrackIdFromUrl(nowPlaying.streamUrl) || nowPlaying.identity?.trackId || ''
-    );
+    const currentTrackId = resolveNowPlayingTrackId();
     if (!currentTrackId) {
       return false;
     }
@@ -618,9 +620,7 @@ export function initDiscoverController(): void {
     if (snapshotSrc && nowPlayingSrc && snapshotSrc !== nowPlayingSrc) {
       return { itemId: '', bandId: '' };
     }
-    const nowPlayingTrackId = normalizeLikeId(
-      nowPlaying.trackId || readTrackIdFromUrl(nowPlaying.streamUrl) || nowPlaying.identity?.trackId || ''
-    );
+    const nowPlayingTrackId = resolveNowPlayingTrackId();
     const sourceTrackId = normalizeLikeId(snapshot.activeTrack.sourceTrackId || '');
     const matchedTrackId = normalizeLikeId(snapshot.activeTrack.matchedTrackId || '');
     if (nowPlayingTrackId) {
@@ -716,9 +716,7 @@ export function initDiscoverController(): void {
     if (!hints.length) {
       return { itemId: '', bandId: '' };
     }
-    const wantedTrackId = normalizeLikeId(
-      nowPlaying.trackId || readTrackIdFromUrl(nowPlaying.streamUrl) || nowPlaying.identity?.trackId || ''
-    );
+    const wantedTrackId = resolveNowPlayingTrackId();
     const wantedReleaseUrl = toCanonicalLikeUrl(String(nowPlaying.releaseUrl || ''));
     if (!wantedTrackId && !wantedReleaseUrl) {
       return { itemId: '', bandId: '' };
@@ -809,9 +807,7 @@ export function initDiscoverController(): void {
       };
     }
 
-    const currentTrackId = normalizeLikeId(
-      nowPlaying.trackId || readTrackIdFromUrl(nowPlaying.streamUrl) || nowPlaying.identity?.trackId || ''
-    );
+    const currentTrackId = resolveNowPlayingTrackId();
 
     const nowPlayingIdentity = nowPlaying.identity;
     const nowPlayingIdentityTrackId = normalizeLikeId(nowPlayingIdentity?.trackId || '');
@@ -877,9 +873,7 @@ export function initDiscoverController(): void {
       return strict;
     };
 
-    const currentTrackId = normalizeLikeId(
-      nowPlaying.trackId || readTrackIdFromUrl(nowPlaying.streamUrl) || nowPlaying.identity?.trackId || ''
-    );
+    const currentTrackId = resolveNowPlayingTrackId();
     const cachedAlbumId = readCachedAlbumIdForRelease(releaseLikeUrl);
     if (cachedAlbumId) {
       const cachedBandId = readCachedAlbumBandIdForRelease(releaseLikeUrl);
@@ -957,9 +951,7 @@ export function initDiscoverController(): void {
     const resolvedTrackIdentity = getResolvedIdentityForTrack(trackId);
     const apiOnlyLikeIdentity = resolveApiOnlyLikeIdentityMode();
     const albumIdentity = resolveAlbumLikeIdentity(apiOnlyLikeIdentity);
-    const nowPlayingTrackId = normalizeLikeId(
-      nowPlaying.trackId || readTrackIdFromUrl(nowPlaying.streamUrl) || nowPlaying.identity?.trackId || ''
-    );
+    const nowPlayingTrackId = resolveNowPlayingTrackId();
     const bandId = normalizeLikeId(
       resolvedTrackIdentity?.bandId ||
       (nowPlayingTrackId && nowPlayingTrackId === trackId ? nowPlaying.identity?.bandId : '') ||
@@ -1014,15 +1006,17 @@ export function initDiscoverController(): void {
     likeViewState = resolved.likeState;
     if (resolved.playlistTracks !== playlistState.tracks) {
       const previousTracks = playlistState.tracks;
+      const keyOf = (track: PlaylistTrack, index: number): string =>
+        resolveTrackCacheKey(track) || String(track.trackId || '') || `idx:${index}`;
       const previousByKey = new Map<string, PlaylistTrack>();
       previousTracks.forEach((track, index) => {
-        const key = resolveTrackCacheKey(track) || String(track.trackId || '') || `idx:${index}`;
+        const key = keyOf(track, index);
         if (!previousByKey.has(key)) {
           previousByKey.set(key, track);
         }
       });
       const mergedTracks = resolved.playlistTracks.map((track, index) => {
-        const key = resolveTrackCacheKey(track) || String(track.trackId || '') || `idx:${index}`;
+        const key = keyOf(track, index);
         const previous = previousByKey.get(key);
         if (!previous) {
           return track;
@@ -1405,7 +1399,7 @@ export function initDiscoverController(): void {
     }
   });
 
-  const maybeStartNowPlayingAnalysis = (keySeed = `context:${playlistRunId}:${lastTrackKey}`): void => {
+  const maybeStartNowPlayingAnalysis = (): void => {
     const normalizedSource = String(nowPlaying.streamUrl || '').trim();
     if (!normalizedSource) {
       return;
@@ -2302,7 +2296,7 @@ export function initDiscoverController(): void {
       lastRenderAt: Date.now()
     };
     preloadCtrl.syncDiscoverPreloadQueue();
-    maybeStartNowPlayingAnalysis('render-context');
+    maybeStartNowPlayingAnalysis();
   };
 
   resourceDiagnostics = createResourceDiagnosticsController({
@@ -2378,7 +2372,7 @@ export function initDiscoverController(): void {
     });
     metadata = phaseResult.metadata;
     metadataDebugLastDecision = phaseResult.metadataDebugLastDecision;
-    maybeStartNowPlayingAnalysis(`metadata:${runId}`);
+    maybeStartNowPlayingAnalysis();
   };
   const resolvePlaylistAttemptGateReason = (input: {
     hasUsableTracks: boolean;
@@ -2538,7 +2532,7 @@ export function initDiscoverController(): void {
       warmRuntimeAudioForPlaylistTracks();
     }
 
-    maybeStartNowPlayingAnalysis(`playlist:${runId}`);
+    maybeStartNowPlayingAnalysis();
     render();
   };
 
@@ -2736,7 +2730,7 @@ export function initDiscoverController(): void {
         if (likeCtrl.getPendingLikeSyncAfterPlaylistReady()) {
           likeCtrl.requestLikeSyncIfActive();
         }
-        maybeStartNowPlayingAnalysis(trackKey);
+        maybeStartNowPlayingAnalysis();
         render();
         return;
       }
@@ -2760,6 +2754,7 @@ export function initDiscoverController(): void {
       playlistWaveformByCacheKey.clear();
       playlistFailedCacheKeys.clear();
       playlistAttemptCountByCacheKey.clear();
+      playlistConfidenceByCacheKey.clear();
       playlistState = {
         ...DEFAULT_PLAYLIST_STATE,
         tracks: [],
@@ -2814,6 +2809,7 @@ export function initDiscoverController(): void {
     playlistKeyAnalysisByCacheKey.clear();
     playlistFailedCacheKeys.clear();
     playlistAttemptCountByCacheKey.clear();
+    playlistConfidenceByCacheKey.clear();
     cancelPlaylistRetries();
     preloadCtrl.preloader.cancel();
     preloadCtrl.resetDiscoverPreloadBpmEpoch();
