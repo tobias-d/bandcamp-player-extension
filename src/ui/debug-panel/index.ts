@@ -470,7 +470,7 @@ function resolveStatusItems(areas: DebugTraceArea[], context: DebugStatusContext
   const metadataConfidence = findEntryValue(areas, 'Metadata confidence');
   const metadataSources = findEntryValue(areas, 'Metadata sources');
   const metadataText = `${metadata} ${metadataConfidence} ${metadataSources}`;
-  const metadataSignature = resolveMetadataSignature(areas);
+  const metadataSignature = [metadata, metadataConfidence, metadataSources].join(' | ');
 
   const runtimePrepare = findEntryValue(areas, 'Runtime prepare');
   const runtimePrepareKeys = findEntryValue(areas, 'Runtime prepare keys');
