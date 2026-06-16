@@ -15,8 +15,8 @@ import {
 } from '@/content/likes/state';
 
 const RETRY_BASE_MS = 700;
-// Must exceed the background fan-items fetch timeout so content doesn't give up
-// before the background request has a chance to return.
+// Default for quick likes messages. Fan-collection pagination uses a longer
+// endpoint-specific budget in inventory.ts.
 const MESSAGE_TIMEOUT_MS = 6_000;
 const MAX_LIKES_PROCESS_EVENTS = 120;
 

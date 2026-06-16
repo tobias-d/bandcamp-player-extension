@@ -14,6 +14,7 @@
 import {
   createDefaultLikeEndpointAttempts,
   createDefaultLikeEndpointStatus,
+  LIKES_FANCOLLECTION_MESSAGE_TIMEOUT_MS,
   LIKES_FANCOLLECTION_PAGE_SIZE,
   SHARED_LIKES_CACHE_MAX_AGE_MS
 } from '@/shared/constants';
@@ -90,8 +91,8 @@ const RAPID_ORIGIN_JUMP_WINDOW_MS = 5_000;
 const RAPID_ORIGIN_JUMP_COOLDOWN_MS = 60_000;
 const PAGE_REQUEST_SPACING_MS = 220;
 const FAN_ID_RETRY_BACKOFF_MS = 1_200;
-// Keep the inventory-side request timeout above the background fan-items fetch
-// timeout so likes sync can settle instead of self-timing out early.
+// Default for quick likes messages. Fan-collection endpoint calls use the
+// longer pagination budget below so cold syncs can settle deterministically.
 const MESSAGE_TIMEOUT_MS = 6_000;
 const SYNC_STALL_TIMEOUT_MS = 45_000;
 const MAX_LIKES_PROCESS_EVENTS = 120;
@@ -1327,9 +1328,6 @@ export class LikesStatusController {
         ...(input.focusTrackIdentities || [])
       ]);
 
-    // Release UI loading hold after cache hydration. Cached state can unblock
-    // rendering, but focused foreground sync still verifies the current items.
-    this.syncUiBlocking = false;
     if (!input.force && this.hasCompleteInventoryCoverage() && !shouldVerifyFocusedInventory) {
       this.pushProcessEvent('sync.success', `run=${runSeq} reason=shared-cache`);
       return true;
@@ -1536,7 +1534,7 @@ export class LikesStatusController {
             olderThanToken: token,
             count: LIKES_FANCOLLECTION_PAGE_SIZE
           },
-          MESSAGE_TIMEOUT_MS
+          LIKES_FANCOLLECTION_MESSAGE_TIMEOUT_MS
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error || 'request-timeout');

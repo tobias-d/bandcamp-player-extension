@@ -1,4 +1,8 @@
-import { COLLECTION_SUMMARY_API, LIKES_FANCOLLECTION_PAGE_SIZE } from '@/shared/constants';
+import {
+  COLLECTION_SUMMARY_API,
+  LIKES_FANCOLLECTION_FETCH_TIMEOUT_MS,
+  LIKES_FANCOLLECTION_PAGE_SIZE
+} from '@/shared/constants';
 import type { ContentMessage, FanEndpoint } from '@/shared/types';
 import { readSharedLikesCache, writeSharedLikesCache } from '@/background/likes-cache';
 import {
@@ -62,12 +66,23 @@ async function parseResponseBody(response: Response): Promise<unknown> {
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, Math.max(1, timeoutMs));
   try {
     return await fetch(url, {
       ...init,
       signal: controller.signal
     });
+  } catch (error) {
+    const name = error && typeof error === 'object' ? String((error as { name?: unknown }).name || '') : '';
+    const message = error instanceof Error ? error.message : String(error);
+    if (timedOut && (name === 'AbortError' || message.toLowerCase().includes('aborted'))) {
+      throw new Error('fetch-timeout');
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }
@@ -337,15 +352,19 @@ export async function handleFetchFancollectionItems(
 
   fanItemsLastRequestAtByEndpoint.set(endpoint, now);
   try {
-    const response = await fetchWithTimeout(url, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        accept: 'application/json, text/plain, */*',
-        'content-type': 'application/json; charset=UTF-8'
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          accept: 'application/json, text/plain, */*',
+          'content-type': 'application/json; charset=UTF-8'
+        },
+        body: JSON.stringify(payload)
       },
-      body: JSON.stringify(payload)
-    });
+      LIKES_FANCOLLECTION_FETCH_TIMEOUT_MS
+    );
 
     const body = await parseResponseBody(response);
     if (!response.ok) {
@@ -393,11 +412,16 @@ export async function handleFetchFancollectionItems(
       ts: Date.now()
     };
   } catch (error) {
-    fanItemsBackoffUntil = Math.max(fanItemsBackoffUntil, Date.now() + FAN_ITEMS_ERROR_BACKOFF_MS);
     const message = error instanceof Error ? error.message : String(error);
+    const timedOut = message === 'fetch-timeout';
+    if (!timedOut) {
+      fanItemsBackoffUntil = Math.max(fanItemsBackoffUntil, Date.now() + FAN_ITEMS_ERROR_BACKOFF_MS);
+    }
     return {
       ok: false,
       endpoint,
+      status: timedOut ? 408 : undefined,
+      retryAfterMs: 0,
       error: `network-error:${message}`,
       ts: Date.now()
     };
