@@ -151,7 +151,6 @@ export interface DiscoverPreloadControllerCallbacks {
   canAttemptAnalysis(cacheKey: string): boolean;
   registerAnalysisAttempt(cacheKey: string): void;
   setPlaylistTrackAnalyzing(cacheKey: string, analyzing: boolean): boolean;
-  clearPlaylistTrackAnalyzing(): void;
 
   // Cache maps (direct access for decorations and debug)
   getPlaylistBpmByCacheKey(): Map<string, number>;
@@ -659,16 +658,7 @@ export function createDiscoverPreloadController(
         return;
       }
       discoverPreloadIdleSyncSignature = idleSignature;
-    } else {
-      discoverPreloadIdleSyncSignature = '';
-    }
 
-    if (
-      discoverPreloadBpmBatchSettled
-      && discoverPreloadKeyBatchSettled
-      && bpmPassIdle
-      && keyPassIdle
-    ) {
       const nextEpochTargets = buildNextDiscoverPreloadBpmEpochTargets();
       const nextEpochSignature = buildDiscoverPreloadEpochSignature(nextEpochTargets);
       if (nextEpochTargets.length > 0 && nextEpochSignature !== discoverPreloadSignature) {
@@ -678,6 +668,8 @@ export function createDiscoverPreloadController(
         syncDiscoverPreloadKeyQueue();
         return;
       }
+    } else {
+      discoverPreloadIdleSyncSignature = '';
     }
 
     // Once the BPM epoch is fully terminal, let the key pass finish without

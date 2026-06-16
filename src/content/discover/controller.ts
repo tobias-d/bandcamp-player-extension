@@ -424,7 +424,6 @@ export function initDiscoverController(): void {
     canAttemptAnalysis: (cacheKey) => canAttemptAnalysis(cacheKey),
     registerAnalysisAttempt: (cacheKey) => registerAnalysisAttempt(cacheKey),
     setPlaylistTrackAnalyzing: (cacheKey, analyzing) => setTrackAnalyzing(cacheKey, analyzing),
-    clearPlaylistTrackAnalyzing: () => clearTrackAnalyzing(),
     getPlaylistBpmByCacheKey: () => playlistBpmByCacheKey,
     getPlaylistKeyAnalysisByCacheKey: () => playlistKeyAnalysisByCacheKey,
     getPlaylistWaveformByCacheKey: () => playlistWaveformByCacheKey,

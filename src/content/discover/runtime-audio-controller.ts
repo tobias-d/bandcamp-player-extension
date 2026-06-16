@@ -39,7 +39,6 @@ interface CreateDiscoverRuntimeAudioControllerInput {
  */
 function createDiscoverStubAudioBridge(callbacks: {
   onSkipTrack: (dir: 1 | -1) => void;
-  getCurrentSource: () => string;
 }): AudioBridge {
   return {
     ensureActiveAudio: () => null,
@@ -96,10 +95,8 @@ function getDiscoverDetachedAudioState(): DetachedAudioState | null {
 export function createDiscoverRuntimeAudioController(
   input: CreateDiscoverRuntimeAudioControllerInput
 ): RuntimeAudioController {
-  let currentRuntimeSource = '';
   const bridge = createDiscoverStubAudioBridge({
-    onSkipTrack: input.onSkipTrack,
-    getCurrentSource: () => currentRuntimeSource
+    onSkipTrack: input.onSkipTrack
   });
 
   const controller = createRuntimeAudioController({
@@ -117,11 +114,5 @@ export function createDiscoverRuntimeAudioController(
     requestCurrentRuntimePrepare: input.requestCurrentRuntimePrepare
   });
 
-  return {
-    ...controller,
-    setCurrentSource(src, sourceVersion) {
-      currentRuntimeSource = String(src || '').trim();
-      controller.setCurrentSource(src, sourceVersion);
-    }
-  };
+  return controller;
 }
