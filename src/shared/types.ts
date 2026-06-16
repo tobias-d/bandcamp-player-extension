@@ -555,18 +555,6 @@ export type ContentMessage =
       olderThanToken?: string;
       count?: number;
     }
-  | {
-      type: 'TOGGLE_WISHLIST_ITEM';
-      action: 'collect' | 'uncollect';
-      fanId: string | number;
-      itemId: string | number;
-      itemType: 'album' | 'track';
-      crumb: string;
-      bandId?: string | number;
-      pageUrl?: string;
-      requestContextFamily?: string;
-      requestContextVariant?: string;
-    }
   | { type: 'OPEN_RESOURCE_DIAGNOSTICS_SESSION'; sessionId: string }
   | { type: 'CLOSE_RESOURCE_DIAGNOSTICS_SESSION'; sessionId: string }
   | { type: 'GET_RESOURCE_DIAGNOSTICS'; sessionId: string }

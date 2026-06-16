@@ -16,8 +16,7 @@ import {
   handleGetSharedLikesCache,
   handleResolveFanId,
   handleSetPersistentBoughtLikesCache,
-  handleSetSharedLikesCache,
-  handleToggleWishlistItem
+  handleSetSharedLikesCache
 } from '@/background/handlers/likes';
 import { handleNotifyPlaybackStarted } from '@/background/handlers/playback-handoff';
 import {
@@ -67,8 +66,6 @@ function dispatch(
       return handleSetPersistentBoughtLikesCache(message);
     case 'FETCH_FANCOLLECTION_ITEMS':
       return handleFetchFancollectionItems(message);
-    case 'TOGGLE_WISHLIST_ITEM':
-      return handleToggleWishlistItem(message);
     case 'CANCEL_PLAYBACK_AUDIO':
       return handleCancelPlaybackAudio(message);
     case 'FETCH_PLAYBACK_AUDIO':

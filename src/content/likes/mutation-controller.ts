@@ -99,6 +99,27 @@ export class LikeMutationController {
     });
     pushLikeProcessEvent(this.likesDebug, 'click.received', `${this.context}:${input.target}:${key}`);
 
+    // Reject a concurrent toggle synchronously, before any await. inFlightCount is
+    // incremented just below (still synchronously), so a second rapid click on the
+    // same heart reads inFlight=true here and bails instead of racing a second POST.
+    // Previously the increment happened only after `await resolveLikeMutationPreflight`,
+    // leaving a window where two clicks both passed the gate and fired collect+uncollect.
+    if (inFlight) {
+      setLikeMutationGate(this.likesDebug, 'blocked', 'blocked_in_flight');
+      setLikeMutationAction(this.likesDebug, input.target, action, 'blocked', 'blocked_in_flight');
+      pushLikeProcessEvent(this.likesDebug, 'gate.blocked', `${key}:blocked_in_flight`);
+      this.render?.();
+      return {
+        ok: false,
+        blocked: true,
+        reasonCode: 'blocked_in_flight',
+        action
+      };
+    }
+    this.inFlightKeys.add(key);
+    this.inFlightCount += 1;
+
+    try {
     const preflight = await resolveLikeMutationPreflight(action, input.identity);
     const hasFanId = Boolean(preflight.details.fanId);
     const hasCrumb = Boolean(preflight.details.crumbPresent);
@@ -157,7 +178,7 @@ export class LikeMutationController {
       identity: input.identity,
       syncLoading: input.syncLoading,
       syncError: input.syncError,
-      inFlight,
+      inFlight: false,
       cooldownMsRemaining,
       hasFanId,
       hasCrumb,
@@ -177,8 +198,6 @@ export class LikeMutationController {
       };
     }
 
-    this.inFlightKeys.add(key);
-    this.inFlightCount += 1;
     this.keyLastAt.set(key, now);
     patchLikeMutationDebug(this.likesDebug, {
       inFlight: true,
@@ -202,9 +221,6 @@ export class LikeMutationController {
         reason: 'wishlist-mutation-failed',
         error: error instanceof Error ? error.message : String(error)
       };
-    } finally {
-      this.inFlightKeys.delete(key);
-      this.inFlightCount = Math.max(0, this.inFlightCount - 1);
     }
     const completedAt = Date.now();
     const dispatchAt = Number(this.likesDebug.mutation.dispatchAt || 0);
@@ -256,6 +272,10 @@ export class LikeMutationController {
       reasonCode: 'mutation_request_success',
       action
     };
+    } finally {
+      this.inFlightKeys.delete(key);
+      this.inFlightCount = Math.max(0, this.inFlightCount - 1);
+    }
   }
 
   public reset(): void {
