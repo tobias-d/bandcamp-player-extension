@@ -906,10 +906,14 @@ export function createAnalysisRequestController(
     const cached = readCachedAnalysisSnapshot(sourceCacheKey);
 
     if (sourceCacheKey) {
-      cb.registerAttempt(sourceCacheKey);
       cb.clearFailed(sourceCacheKey);
       activeTempoTrackCacheKey = sourceCacheKey;
       if (!cached.hasBpm) {
+        // Only count an attempt when a real analysis will run. A cache hit (and
+        // the cancel-retry that re-enters with cleared dedup key) must not inflate
+        // the attempt counter toward the per-track max — that previously made the
+        // now-playing track show attempts=2-3 with zero extra analysis.
+        cb.registerAttempt(sourceCacheKey);
         cb.setTrackAnalyzing(sourceCacheKey, true);
       }
     }
