@@ -442,20 +442,3 @@ export function paletteSignature(palette: WavePalette): string {
     palette.outline
   ].join('|');
 }
-
-export function setupCanvasForDevicePixelRatio(
-  canvas: HTMLCanvasElement,
-  cssWidth: number,
-  cssHeight: number
-): CanvasRenderingContext2D | null {
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return null;
-  }
-
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
-  canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
-  context.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return context;
-}

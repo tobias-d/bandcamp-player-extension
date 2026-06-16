@@ -24,7 +24,6 @@ interface WaveformHandlers {
 interface WaveformVisualState {
   waveformRef: WaveformBands | null;
   waveformStatus: string;
-  statusText: string;
   showLoading: boolean;
   seekPending: boolean;
   seekPendingFraction: number | null;
@@ -81,10 +80,6 @@ function isIdleInput(input: PanelInput): boolean {
   return !input.isPlaying && noLoadedDuration;
 }
 
-function toStatusText(_input: PanelInput): string {
-  return '';
-}
-
 function resolveWaveformSeekMode(input: PanelInput | null): NonNullable<PanelInput['waveformSeekMode']> {
   return input?.waveformSeekMode === 'continuous' ? 'continuous' : 'commit-on-release';
 }
@@ -101,12 +96,10 @@ export function createWaveformCanvas(container: HTMLElement, handlers: WaveformH
   }) as HTMLCanvasElement;
   const seekOverlay = dom('div', { class: 'bc-waveform-seek-overlay', 'aria-hidden': 'true' });
   const loading = dom('div', { class: 'bc-waveform-loading', 'aria-hidden': 'true' });
-  const status = dom('div', { class: 'bc-waveform-status' }, ['']);
 
   root.appendChild(canvas);
   root.appendChild(seekOverlay);
   root.appendChild(loading);
-  root.appendChild(status);
   container.appendChild(root);
 
   let lastInput: PanelInput | null = null;
@@ -248,7 +241,6 @@ export function createWaveformCanvas(container: HTMLElement, handlers: WaveformH
     return {
       waveformRef: waveform,
       waveformStatus,
-      statusText: toStatusText(input),
       showLoading,
       seekPending,
       seekPendingFraction,
@@ -269,7 +261,6 @@ export function createWaveformCanvas(container: HTMLElement, handlers: WaveformH
 
     return prev.waveformRef !== next.waveformRef
       || prev.waveformStatus !== next.waveformStatus
-      || prev.statusText !== next.statusText
       || prev.showLoading !== next.showLoading
       || prev.seekPending !== next.seekPending
       || prev.seekPendingFraction !== next.seekPendingFraction
@@ -587,10 +578,6 @@ export function createWaveformCanvas(container: HTMLElement, handlers: WaveformH
       waveformLayersKey = '';
       context.clearRect(0, 0, width, height);
     }
-
-    const statusText = toStatusText(input);
-    status.textContent = statusText;
-    status.style.display = statusText ? 'block' : 'none';
 
     const analysisStatus = String(input.analysis?.waveformStatus || '');
     const isIdle = isIdleInput(input);

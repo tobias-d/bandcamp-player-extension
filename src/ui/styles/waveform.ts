@@ -125,22 +125,6 @@ export const WAVEFORM_CSS = `
   box-shadow: 0 0 9px rgba(var(--dot-rgb, 113,106,169), 0.56);
 }
 
-.bc-waveform-status {
-  position: absolute;
-  left: 10px;
-  bottom: 8px;
-  font-size: 11px;
-  line-height: 1.25;
-  letter-spacing: 0.2px;
-  color: rgba(20, 23, 29, 0.72);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
-  pointer-events: none;
-}
-
-.bc-waveform-ready .bc-waveform-status {
-  color: rgba(20, 23, 29, 0.5);
-}
-
 @keyframes bcWaveDotStream {
   0% {
     opacity: 0;
