@@ -199,6 +199,13 @@ function resolvePlayerCurrentIndex(params: {
   }
 
   if (normalizedSrc) {
+    // CAUTION (latent): normalizeUrl drops the query string, so every
+    // `stream_redirect?track=ID&ts=…` URL on a host collapses to the same
+    // `/stream_redirect` key — this match is query-blind and can hit the wrong
+    // (first) redirect-stream row. It is shadowed in practice by the audio.trackId
+    // match above; the audio.streamContentId path below is the correct
+    // discriminator. Reordering/merging these belongs in the planned resolver
+    // track-array/stream-reader unification.
     const byStream = tracks.findIndex((track) => normalizeUrl(track.streamUrl || '') === normalizedSrc);
     if (byStream >= 0) {
       return { currentIndex: byStream, reason: 'audio.streamUrl' };
@@ -226,6 +233,12 @@ function resolvePlayerCurrentIndex(params: {
     metadataResolution.selectedTrackIndex >= 0 &&
     metadataResolution.selectedTrackIndex < tracks.length
   ) {
+    // CAUTION (latent): selectedTrackIndex is computed by the metadata extractor
+    // against its trackinfo-first array (getTrackList), but `tracks` here is this
+    // resolver's score-selected primary (getTrackLists), which can be the `tracks`
+    // array in a different order/length. When they diverge this index points at the
+    // wrong row. It only matters when every id/stream lookup above misses, and the
+    // real fix is unifying the two track-array selectors (planned resolver refactor).
     return {
       currentIndex: metadataResolution.selectedTrackIndex,
       reason: `metadata.selectedTrackIndex(${metadataResolution.selectedTrackReason})`

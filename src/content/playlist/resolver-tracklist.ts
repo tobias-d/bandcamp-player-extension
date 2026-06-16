@@ -326,10 +326,50 @@ function readStreamUrlFromTrack(trackRaw: Record<string, unknown>): string {
   return '';
 }
 
-function parseDurationCandidate(candidate: unknown, depth = 0): number {
-  if (typeof candidate === 'number' && Number.isFinite(candidate)) {
-    const numeric = candidate > 20_000 ? candidate / 1000 : candidate;
-    return numeric > 0 ? numeric : 0;
+// Bandcamp durations are seconds; only *_ms / ms / milliseconds keys are
+// milliseconds. Tagging each key with its unit avoids guessing from magnitude,
+// which mis-scaled short clips with explicit ms fields (15000ms read as 15000s)
+// and long mixes over ~5.5h. Mirrors the background parser in
+// background/handlers/tralbum/payload-track.ts.
+type DurationUnit = 'sec' | 'ms' | 'auto';
+
+const NESTED_DURATION_KEYS: ReadonlyArray<readonly [string, DurationUnit]> = [
+  ['duration', 'sec'],
+  ['duration_sec', 'sec'],
+  ['durationSecs', 'sec'],
+  ['duration_seconds', 'sec'],
+  ['duration_ms', 'ms'],
+  ['durationMs', 'ms'],
+  ['length', 'sec'],
+  ['length_sec', 'sec'],
+  ['track_duration', 'sec'],
+  ['time', 'sec'],
+  ['seconds', 'sec'],
+  ['secs', 'sec'],
+  ['sec', 'sec'],
+  ['ms', 'ms'],
+  ['milliseconds', 'ms'],
+  ['value', 'auto']
+];
+
+function normalizeDurationNumber(value: number, unit: DurationUnit): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  if (unit === 'ms') {
+    return value / 1000;
+  }
+  if (unit === 'sec') {
+    return value;
+  }
+  // Unit unknown (generic non-duration-named field): assume seconds, dividing
+  // only implausibly large values as a milliseconds last resort.
+  return value > 20_000 ? value / 1000 : value;
+}
+
+function parseDurationCandidate(candidate: unknown, unit: DurationUnit = 'auto', depth = 0): number {
+  if (typeof candidate === 'number') {
+    return normalizeDurationNumber(candidate, unit);
   }
 
   if (typeof candidate === 'string') {
@@ -339,7 +379,7 @@ function parseDurationCandidate(candidate: unknown, depth = 0): number {
     }
     const numeric = Number(text);
     if (Number.isFinite(numeric) && numeric > 0) {
-      return numeric > 20_000 ? numeric / 1000 : numeric;
+      return normalizeDurationNumber(numeric, unit);
     }
     const clockValue = parseClockDurationToSeconds(text);
     return clockValue > 0 ? clockValue : 0;
@@ -350,27 +390,8 @@ function parseDurationCandidate(candidate: unknown, depth = 0): number {
   }
 
   const candidateRecord = candidate as Record<string, unknown>;
-  const nestedCandidates: unknown[] = [
-    candidateRecord.duration,
-    candidateRecord.duration_sec,
-    candidateRecord.durationSecs,
-    candidateRecord.duration_seconds,
-    candidateRecord.duration_ms,
-    candidateRecord.durationMs,
-    candidateRecord.length,
-    candidateRecord.length_sec,
-    candidateRecord.track_duration,
-    candidateRecord.time,
-    candidateRecord.seconds,
-    candidateRecord.secs,
-    candidateRecord.sec,
-    candidateRecord.ms,
-    candidateRecord.milliseconds,
-    candidateRecord.value
-  ];
-
-  for (const nested of nestedCandidates) {
-    const value = parseDurationCandidate(nested, depth + 1);
+  for (const [key, keyUnit] of NESTED_DURATION_KEYS) {
+    const value = parseDurationCandidate(candidateRecord[key], keyUnit, depth + 1);
     if (value > 0) {
       return value;
     }
@@ -379,31 +400,41 @@ function parseDurationCandidate(candidate: unknown, depth = 0): number {
   return 0;
 }
 
+const TRACK_DURATION_KEYS: ReadonlyArray<readonly [string, DurationUnit]> = [
+  ['duration', 'sec'],
+  ['duration_sec', 'sec'],
+  ['durationSecs', 'sec'],
+  ['duration_seconds', 'sec'],
+  ['duration_ms', 'ms'],
+  ['durationMs', 'ms'],
+  ['length', 'sec'],
+  ['length_sec', 'sec'],
+  ['track_duration', 'sec'],
+  ['time', 'sec'],
+  ['seconds', 'sec'],
+  ['secs', 'sec']
+];
+
+const FILE_DURATION_KEYS: ReadonlyArray<readonly [string, DurationUnit]> = [
+  ['duration', 'sec'],
+  ['duration_ms', 'ms'],
+  ['durationMs', 'ms']
+];
+
 function readDurationSec(trackRaw: Record<string, unknown>): number {
   const file = (trackRaw.file ?? null) as Record<string, unknown> | null;
-  const fileDuration = file && typeof file === 'object' ? file.duration : null;
-  const candidates: unknown[] = [
-    trackRaw.duration,
-    trackRaw.duration_sec,
-    trackRaw.durationSecs,
-    trackRaw.duration_seconds,
-    trackRaw.duration_ms,
-    trackRaw.durationMs,
-    trackRaw.length,
-    trackRaw.length_sec,
-    trackRaw.track_duration,
-    trackRaw.time,
-    trackRaw.seconds,
-    trackRaw.secs,
-    fileDuration,
-    file?.duration_ms,
-    file?.durationMs
-  ];
-
-  for (const candidate of candidates) {
-    const resolved = parseDurationCandidate(candidate);
+  for (const [key, unit] of TRACK_DURATION_KEYS) {
+    const resolved = parseDurationCandidate(trackRaw[key], unit);
     if (resolved > 0) {
       return resolved;
+    }
+  }
+  if (file) {
+    for (const [key, unit] of FILE_DURATION_KEYS) {
+      const resolved = parseDurationCandidate(file[key], unit);
+      if (resolved > 0) {
+        return resolved;
+      }
     }
   }
 
@@ -418,7 +449,8 @@ function readDurationSec(trackRaw: Record<string, unknown>): number {
     if (!looksDurationLike) {
       continue;
     }
-    const resolved = parseDurationCandidate(value);
+    const unit: DurationUnit = normalizedKey.includes('ms') || normalizedKey.includes('millisecond') ? 'ms' : 'auto';
+    const resolved = parseDurationCandidate(value, unit);
     if (resolved > 0) {
       return resolved;
     }
