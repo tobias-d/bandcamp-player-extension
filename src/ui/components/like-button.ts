@@ -13,7 +13,6 @@ export function createLikeButton(
   }
 ): LikeButtonComponent {
   let hardDisabled = false;
-  let softDisabled = false;
   const heart = dom('span', { class: 'bc-heart-symbol', 'aria-hidden': 'true' }, ['♥']);
   const btn = dom(
     'button',
@@ -47,7 +46,6 @@ export function createLikeButton(
       const idleState = !loadingState && !likeError && input.playlist.tracks.length === 0;
       const showErrorSymbol = likeError;
       hardDisabled = inCollection;
-      softDisabled = syncDisabled;
 
       setText(heart, showErrorSymbol ? '!' : '♥');
       btn.classList.toggle('bc-btn-album-like-active', albumLiked);
@@ -64,7 +62,6 @@ export function createLikeButton(
       btn.classList.toggle('bc-btn-album-like-disabled', likeDisabled);
       btn.disabled = hardDisabled;
       btn.setAttribute('aria-disabled', likeDisabled ? 'true' : 'false');
-      btn.dataset.softDisabled = softDisabled ? '1' : '0';
       btn.title = inCollection
         ? 'You own this'
         : loadingState
