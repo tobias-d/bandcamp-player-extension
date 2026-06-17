@@ -20,10 +20,6 @@ export function dom<K extends keyof HTMLElementTagNameMap>(
   return element;
 }
 
-export function css(el: HTMLElement, styles: Partial<CSSStyleDeclaration>): void {
-  Object.assign(el.style, styles);
-}
-
 export function injectStylesheet(id: string, cssText: string): void {
   const existing = document.getElementById(id);
   if (existing) {

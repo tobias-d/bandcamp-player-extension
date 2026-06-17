@@ -31,13 +31,6 @@ export function clampTempoAdjustOffsetBpm(value: unknown): number {
   return clamp(Math.round(parsed), TEMPO_ADJUST_OFFSET_MIN_BPM, TEMPO_ADJUST_OFFSET_MAX_BPM);
 }
 
-export function createDefaultTempoAdjustControlState(): TempoAdjustControlState {
-  return {
-    offsetBpm: 0,
-    masterTempoEnabled: TEMPO_ADJUST_DEFAULT_MASTER_TEMPO
-  };
-}
-
 function readCurrentPlaylistTrackBpm(playlist: PlaylistState | null | undefined): number | null {
   if (!playlist || !Array.isArray(playlist.tracks) || playlist.tracks.length === 0) {
     return null;

@@ -595,16 +595,6 @@ export type LogTag =
   | 'BACKGROUND'
   | 'WORKER-POOL';
 
-export interface PlayerStateSnapshot {
-  pageType: string;
-  currentUrl: string;
-  currentAudioSrc: string;
-  isPlaying: boolean;
-  hasAudioElement: boolean;
-  metadata: TrackMetadata;
-  lastMessages: DebugEvent[];
-}
-
 export interface KeyCandidate {
   camelot: string;
   key: string;
