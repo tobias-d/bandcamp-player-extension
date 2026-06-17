@@ -31,14 +31,14 @@ website/    Marketing/demo site, deployed via .github/workflows.
 - `runtime-audio-host.ts` — extension runtime audio host used by Tempo Adjust and SignalSmith playback.
 - Chrome only: `targets/chrome/offscreen/analysis-host.ts` — MV3 offscreen analysis host.
 
-Message flow: content scripts call `sendMessage<T>(msg)` from `src/utils/messaging.ts`; `src/background/router.ts` dispatches to background handlers and returns the response.
+Message flow: content scripts call `sendMessage<T>(msg)` from `src/utils/messaging.ts`; the shared dispatcher in `src/background/router-core.ts` (wrapped per target by `src/targets/{chrome,firefox}/background/router.ts`) dispatches to background handlers and returns the response.
 
 ## Directory Index
 
 ```text
 src/background/
   index.ts                      Entry: registers router, inits worker pool
-  router.ts                     Message dispatcher
+  router-core.ts                Shared message dispatcher (per-target wrappers in targets/*/background/router.ts)
   cache.ts                      In-memory analysis result cache
   welcome-marker.ts             Tracks whether welcome screen has been shown
   key-essentia.ts               Essentia key analysis integration
