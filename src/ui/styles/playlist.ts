@@ -139,14 +139,6 @@ export const PLAYLIST_CSS = `
   transform: translateX(3px);
 }
 
-.bc-pl-open-header-icon {
-  width: 12px;
-  height: 12px;
-  display: block;
-  opacity: 0.64;
-  pointer-events: none;
-}
-
 .bc-pl-prep-indicator {
   display: none;
   align-items: center;
@@ -384,18 +376,6 @@ export const PLAYLIST_CSS = `
   display: block;
   opacity: 0.86;
 }
-
-.bc-pl-expand {
-  display: none; align-items: center; justify-content: center; gap: 6px;
-  height: var(--pl-row-height);
-  min-height: var(--pl-row-height);
-  padding: 0 var(--pl-row-padding-x);
-  font-size: 11px; color: var(--panel-text-dim);
-  cursor: pointer; transition: color 0.1s, background 0.1s;
-  line-height: 1;
-  box-sizing: border-box;
-}
-.bc-pl-collapse { border-top: 1px solid var(--panel-divider); }
 
 @keyframes bc-pl-bpm-loading-spin {
   from { transform: rotate(0deg); }

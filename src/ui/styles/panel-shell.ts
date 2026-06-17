@@ -852,11 +852,9 @@ export const PANEL_SHELL_CSS = `
 .bc-waveform-stub,
 .bc-controls-row,
 .bc-transport-inner,
-.bc-bpm-block,
 .bc-tap-stub,
 .bc-pl-header,
-.bc-pl-track,
-.bc-pl-expand {
+.bc-pl-track {
   background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;

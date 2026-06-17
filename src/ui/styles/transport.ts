@@ -724,27 +724,6 @@ export const TRANSPORT_CSS = `
   z-index: 1;
 }
 
-/* ─── BPM+KEY block ─────────────────────────────────────────────────── */
-.bc-bpm-block {
-  display: grid;
-  grid-template-rows: 1fr 1fr;
-  align-content: stretch;
-  border-right: 1px solid var(--panel-divider);
-  min-width: 108px;
-  height: 100%;
-}
-
-.bc-bpm-top {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px 10px 5px;
-  border-bottom: 1px solid var(--panel-divider);
-}
-
-.bc-bpm-bottom {
-  display: flex; align-items: center; gap: 5px;
-  padding: 5px 10px 8px;
-}
-
 /* All labels + values + indicators: same monospace size */
 .bc-bpm-label {
   font-family: var(--font-mono);
@@ -758,26 +737,6 @@ export const TRANSPORT_CSS = `
   font-size: 12px; font-weight: 650; color: var(--panel-text-bright);
   flex-shrink: 0;
 }
-
-.bc-beat-ind {
-  font-family: var(--font-mono);
-  font-size: 12px; color: var(--bpm-dot); flex-shrink: 0;
-}
-
-.bc-camelot-pair { display: flex; align-items: center; gap: 4px; }
-
-.bc-cam-val {
-  font-family: var(--font-mono);
-  font-size: 12px; font-weight: 650; color: var(--panel-text-bright);
-}
-
-.bc-cam-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--key-dot); flex-shrink: 0;
-}
-.bc-cam-dot-dim { opacity: 0.45; }
-
-.bc-cam-sep { font-size: 10px; color: var(--panel-text-dim); flex-shrink: 0; margin: 0 2px; }
 
 /* ─── Tapper row ────────────────────────────────────────────────────── */
 .bc-tap-stub {
