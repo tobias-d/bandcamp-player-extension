@@ -10,7 +10,8 @@ import {
   asTralbumRecord,
   buildTrackRows,
   getTrackLists,
-  resolveTralbumReleasePageUrl
+  resolveTralbumReleasePageUrl,
+  type TralbumRecord
 } from '@/content/playlist/resolver-tracklist';
 import { normalizeUrl, readTrackIdFromUrl, resolveStreamContentId } from '@/content/playlist/resolver-url';
 
@@ -19,12 +20,6 @@ export { normalizeUrl, readTrackIdFromUrl, resolveStreamContentId };
 export interface PlayerPlaylistResolveResult {
   playlist: PlaylistState;
   source: string;
-}
-
-export interface DiscoverPlaylistResolveResult {
-  playlist: PlaylistState;
-  source: string;
-  tralbum: unknown | null;
 }
 
 export interface ResolveNonReleaseResolverSnapshotInput {
@@ -154,6 +149,48 @@ function annotateTrackPlayability(
   };
 }
 
+interface AnnotatedTralbumTracks {
+  trackinfo: Array<Record<string, unknown>>;
+  releasePageUrl: string;
+  tracks: PlaylistTrack[];
+  playabilityGated: boolean;
+}
+
+// Shared Tralbum → playlist-rows builder used by all three resolve entry points.
+// `withReleasePageUrl` governs whether the release page URL is resolved at all
+// (the discover snapshot path omits it); `includePageUrl` governs whether each
+// row gets a per-track page URL. When includePageUrl is false buildTrackRows
+// ignores releasePageUrl, so passing the resolved value is byte-equivalent to
+// passing '' there.
+function buildAnnotatedTracksFromTralbum(
+  tralbumRecord: TralbumRecord,
+  source: string,
+  src: string,
+  options: { includePageUrl: boolean; withReleasePageUrl: boolean }
+): AnnotatedTralbumTracks {
+  const { primary: trackinfo, secondary: secondaryTrackinfo } = getTrackLists(tralbumRecord);
+  const releasePageUrl = options.withReleasePageUrl
+    ? resolveTralbumReleasePageUrl(tralbumRecord, trackinfo, secondaryTrackinfo)
+    : '';
+  const metadataHints = resolveTralbumMetadataHints(tralbumRecord);
+  const identitySource = normalizeIdentitySourceLabel(source);
+  const releaseDate = pickReleaseDateFromTralbum(tralbumRecord, identitySource);
+  const rows = buildTrackRows(
+    trackinfo,
+    options.includePageUrl,
+    secondaryTrackinfo,
+    metadataHints,
+    releasePageUrl,
+    releaseDate
+  );
+  const rowsWithIdentity = rows.map((track) => ({
+    ...track,
+    identitySource
+  }));
+  const { tracks, gated: playabilityGated } = annotateTrackPlayability(rowsWithIdentity, src);
+  return { trackinfo, releasePageUrl, tracks, playabilityGated };
+}
+
 function isMetadataResolutionAlignedWithSource(
   resolution: MetadataResolution,
   currentSrc: string
@@ -198,26 +235,26 @@ function resolvePlayerCurrentIndex(params: {
     }
   }
 
-  if (normalizedSrc) {
-    // CAUTION (latent): normalizeUrl drops the query string, so every
-    // `stream_redirect?track=ID&ts=…` URL on a host collapses to the same
-    // `/stream_redirect` key — this match is query-blind and can hit the wrong
-    // (first) redirect-stream row. It is shadowed in practice by the audio.trackId
-    // match above; the audio.streamContentId path below is the correct
-    // discriminator. Reordering/merging these belongs in the planned resolver
-    // track-array/stream-reader unification.
-    const byStream = tracks.findIndex((track) => normalizeUrl(track.streamUrl || '') === normalizedSrc);
-    if (byStream >= 0) {
-      return { currentIndex: byStream, reason: 'audio.streamUrl' };
-    }
-  }
-
   if (streamContentId) {
+    // streamContentId is the per-track stream discriminator (the `/mp3-N/<id>`
+    // path tail, else the track_id/track query param). It is matched BEFORE the
+    // byStream match below: normalizeUrl drops the query string, so on
+    // bandcamp.com/stream_redirect pages every row collapses to the same
+    // `/stream_redirect` key and the query-blind byStream would pick the first
+    // row regardless of which track is playing. The content-id match resolves the
+    // correct row; byStream remains a fallback for rows with no extractable id.
     const byStreamContentId = tracks.findIndex(
       (track) => resolveStreamContentId(track.streamUrl || '') === streamContentId
     );
     if (byStreamContentId >= 0) {
       return { currentIndex: byStreamContentId, reason: 'audio.streamContentId' };
+    }
+  }
+
+  if (normalizedSrc) {
+    const byStream = tracks.findIndex((track) => normalizeUrl(track.streamUrl || '') === normalizedSrc);
+    if (byStream >= 0) {
+      return { currentIndex: byStream, reason: 'audio.streamUrl' };
     }
   }
 
@@ -258,45 +295,6 @@ function resolvePlayerCurrentIndex(params: {
   }
 
   return { currentIndex: 0, reason: 'default(0)' };
-}
-
-function resolveDiscoverCurrentIndex(params: {
-  currentSrc: string;
-  tracks: PlaylistState['tracks'];
-  trackinfo: Array<Record<string, unknown>>;
-  tralbumCurrentTitle: string;
-}): number {
-  const { currentSrc, tracks, trackinfo, tralbumCurrentTitle } = params;
-  const trackId = readTrackIdFromUrl(currentSrc);
-  const normalizedSrc = normalizeUrl(currentSrc);
-
-  if (trackId) {
-    const byTrackId = tracks.findIndex((track) => track.trackId === trackId);
-    if (byTrackId >= 0) {
-      return byTrackId;
-    }
-  }
-
-  if (normalizedSrc) {
-    const byStream = tracks.findIndex((track) => normalizeUrl(track.streamUrl || '') === normalizedSrc);
-    if (byStream >= 0) {
-      return byStream;
-    }
-  }
-
-  const byPlayingFlag = trackinfo.findIndex((trackRaw) => Boolean(trackRaw.is_playing));
-  if (byPlayingFlag >= 0 && byPlayingFlag < tracks.length) {
-    return byPlayingFlag;
-  }
-
-  if (tralbumCurrentTitle) {
-    const byCurrentTitle = tracks.findIndex((track) => track.title.trim().toLowerCase() === tralbumCurrentTitle);
-    if (byCurrentTitle >= 0) {
-      return byCurrentTitle;
-    }
-  }
-
-  return 0;
 }
 
 function buildNonReleaseSourceLabel(
@@ -431,19 +429,12 @@ export function resolveNonReleaseResolverSnapshot(
     );
   }
 
-  const { primary: trackinfo, secondary: secondaryTrackinfo } = getTrackLists(tralbumRecord);
-  const releasePageUrl = includePageUrl
-    ? resolveTralbumReleasePageUrl(tralbumRecord, trackinfo, secondaryTrackinfo)
-    : '';
-  const metadataHints = resolveTralbumMetadataHints(tralbumRecord);
-  const identitySource = normalizeIdentitySourceLabel(source);
-  const releaseDate = pickReleaseDateFromTralbum(tralbumRecord, identitySource);
-  const rows = buildTrackRows(trackinfo, includePageUrl, secondaryTrackinfo, metadataHints, releasePageUrl, releaseDate);
-  const rowsWithIdentity = rows.map((track) => ({
-    ...track,
-    identitySource
-  }));
-  const { tracks, gated: playabilityGated } = annotateTrackPlayability(rowsWithIdentity, src);
+  const { trackinfo, releasePageUrl, tracks, playabilityGated } = buildAnnotatedTracksFromTralbum(
+    tralbumRecord,
+    source,
+    src,
+    { includePageUrl, withReleasePageUrl: includePageUrl }
+  );
   if (!tracks.length) {
     return buildSnapshot(
       buildEmptyPlaylist(previous, context === 'player' ? allowApiFetch : false),
@@ -527,17 +518,12 @@ export function resolvePlayerPlaylistFromGlobals(
     };
   }
 
-  const { primary: trackinfo, secondary: secondaryTrackinfo } = getTrackLists(tralbumRecord);
-  const releasePageUrl = resolveTralbumReleasePageUrl(tralbumRecord, trackinfo, secondaryTrackinfo);
-  const metadataHints = resolveTralbumMetadataHints(tralbumRecord);
-  const identitySource = normalizeIdentitySourceLabel(tralbumSource);
-  const releaseDate = pickReleaseDateFromTralbum(tralbumRecord, identitySource);
-  const rows = buildTrackRows(trackinfo, true, secondaryTrackinfo, metadataHints, releasePageUrl, releaseDate);
-  const rowsWithIdentity = rows.map((track) => ({
-    ...track,
-    identitySource
-  }));
-  const { tracks, gated: playabilityGated } = annotateTrackPlayability(rowsWithIdentity, src);
+  const { trackinfo, releasePageUrl, tracks, playabilityGated } = buildAnnotatedTracksFromTralbum(
+    tralbumRecord,
+    tralbumSource,
+    src,
+    { includePageUrl: true, withReleasePageUrl: true }
+  );
   if (!tracks.length) {
     return {
       playlist: buildEmptyPlaylist(previous, allowApiFetch),
@@ -581,80 +567,5 @@ export function resolvePlayerPlaylistFromGlobals(
       currentIndex
     ),
     source: `${tralbumSource}(${reason}${playabilityGated ? '|playability-gated' : ''})`
-  };
-}
-
-export function resolveDiscoverPlaylistFromGlobals(
-  previous: PlaylistState,
-  currentSrc: string,
-  allowApiFetch: boolean
-): DiscoverPlaylistResolveResult {
-  const src = currentSrc.trim();
-  if (!src) {
-    return {
-      playlist: buildEmptyPlaylist(previous, false),
-      source: 'none(no-stream)',
-      tralbum: null
-    };
-  }
-
-  const { tralbum, source } = resolveTracklistSource(src, { allowApiFetch, preferApi: true });
-  const tralbumRecord = asTralbumRecord(tralbum);
-  if (!tralbumRecord) {
-    return {
-      playlist: buildEmptyPlaylist(previous, false),
-      source: source === 'none' ? 'none' : source,
-      tralbum: null
-    };
-  }
-
-  const { primary: trackinfo, secondary: secondaryTrackinfo } = getTrackLists(tralbumRecord);
-  const releasePageUrl = resolveTralbumReleasePageUrl(tralbumRecord, trackinfo, secondaryTrackinfo);
-  const metadataHints = resolveTralbumMetadataHints(tralbumRecord);
-  const identitySource = normalizeIdentitySourceLabel(source);
-  const releaseDate = pickReleaseDateFromTralbum(tralbumRecord, identitySource);
-  const rows = buildTrackRows(trackinfo, false, secondaryTrackinfo, metadataHints, '', releaseDate);
-  const rowsWithIdentity = rows.map((track) => ({
-    ...track,
-    identitySource
-  }));
-  const { tracks, gated: playabilityGated } = annotateTrackPlayability(rowsWithIdentity, src);
-  if (!tracks.length) {
-    return {
-      playlist: buildEmptyPlaylist(previous, false),
-      source: source === 'none' ? 'none' : source,
-      tralbum: tralbumRecord
-    };
-  }
-
-  const matchesCurrentSource = tracks.some((track) => sourceMatchesTrack(track, src));
-  if (!matchesCurrentSource) {
-    return {
-      playlist: buildEmptyPlaylist(previous, false),
-      source: `${source}(stale-track)`,
-      tralbum: tralbumRecord
-    };
-  }
-
-  const tralbumCurrentTitle = String(tralbumRecord.current?.title ?? '').trim().toLowerCase();
-  const currentIndex = resolveDiscoverCurrentIndex({
-    currentSrc: src,
-    tracks,
-    trackinfo,
-    tralbumCurrentTitle
-  });
-
-  return {
-    playlist: withCurrent(
-      {
-        ...previous,
-        tracks,
-        releasePageUrl,
-        currentIndex
-      },
-      currentIndex
-    ),
-    source: `${source}${playabilityGated ? '|playability-gated' : ''}`,
-    tralbum: tralbumRecord
   };
 }

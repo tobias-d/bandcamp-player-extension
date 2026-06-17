@@ -30,30 +30,13 @@ function normalizeKeyLabel(value: string | undefined): string {
   return String(value || '').trim().toLowerCase();
 }
 
-function compareByKey(a: PlaylistTrack, b: PlaylistTrack): number {
-  const keyA = normalizeKeyLabel(a.key1);
-  const keyB = normalizeKeyLabel(b.key1);
-  if (!keyA && !keyB) {
-    return 0;
-  }
-  if (!keyA) {
-    return 1;
-  }
-  if (!keyB) {
-    return -1;
-  }
-  if (keyA < keyB) {
-    return -1;
-  }
-  if (keyA > keyB) {
-    return 1;
-  }
-  return 0;
-}
-
-function compareByKey2(a: PlaylistTrack, b: PlaylistTrack): number {
-  const keyA = normalizeKeyLabel(a.key2);
-  const keyB = normalizeKeyLabel(b.key2);
+function compareByKeyField(
+  a: PlaylistTrack,
+  b: PlaylistTrack,
+  field: 'key1' | 'key2'
+): number {
+  const keyA = normalizeKeyLabel(a[field]);
+  const keyB = normalizeKeyLabel(b[field]);
   if (!keyA && !keyB) {
     return 0;
   }
@@ -77,10 +60,10 @@ function compareTracks(sortKey: PlaylistState['sortKey'], a: PlaylistTrack, b: P
     return compareByBpm(a, b) || compareByIndex(a, b);
   }
   if (sortKey === 'key') {
-    return compareByKey(a, b) || compareByIndex(a, b);
+    return compareByKeyField(a, b, 'key1') || compareByIndex(a, b);
   }
   if (sortKey === 'key2') {
-    return compareByKey2(a, b) || compareByIndex(a, b);
+    return compareByKeyField(a, b, 'key2') || compareByIndex(a, b);
   }
   if (sortKey === 'title') {
     return compareByTitle(a, b) || compareByIndex(a, b);
