@@ -536,8 +536,17 @@ function resolveStatusItems(areas: DebugTraceArea[], context: DebugStatusContext
   const keyStatus = resolvePlaylistAnalysisStatus(keyPlaylistProgress, currentKeyStatus);
   const bpmDetail = formatPlaylistAnalysisDetail(bpmPlaylistProgress, analysisStatus || analysisBpm || 'waiting');
   const keyDetail = formatPlaylistAnalysisDetail(keyPlaylistProgress, keyLifecycle || keyResult || 'waiting');
+  // `title=default` is the final state on album/track pages: the panel sources the track
+  // title from the playlist, not metadata.title, so artist+album can resolve at high
+  // confidence while metadata.title legitimately stays default. Treat a high-confidence
+  // resolve as ready regardless of title source; an unresolved title only keeps the chip
+  // in "loading" while confidence is still below high (the genuine early-load window).
   const metadataLooksReady =
-    Boolean(metadata && metadata !== '--- | --- | ---' && !metadataSources.includes('title=default')) &&
+    Boolean(
+      metadata &&
+      metadata !== '--- | --- | ---' &&
+      (/^high$/i.test(metadataConfidence) || !metadataSources.includes('title=default'))
+    ) &&
     metadataSignature !== context.staleMetadataSignature;
 
   const statusItems = [
