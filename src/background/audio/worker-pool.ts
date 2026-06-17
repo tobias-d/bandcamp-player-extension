@@ -284,33 +284,18 @@ class AnalysisWorkerPool {
     }
   }
 
-  /* ---------------------------------------------------------------- */
-  /*  Public API                                                       */
-  /* ---------------------------------------------------------------- */
-
-  isReady(): boolean {
-    return this.initialized && this.slots.some((s) => s.ready);
-  }
-
-  async estimateTempo(input: TempoEstimateInput): Promise<TempoEstimateOutput> {
+  // Shared dispatch for the public analysis methods: require init, race an idle slot
+  // against the overflow queue, and validate the worker reply. Only this boilerplate was
+  // identical across estimateTempo/extractRhythm/computeHPCPChunk/computePrefilterChunk —
+  // each caller still builds its own request and maps the returned 'result' fields.
+  private async dispatchToWorker(
+    request: WorkerRequest,
+    transferList: Transferable[],
+    errorLabel: string
+  ): Promise<Extract<WorkerResponse, { type: 'result' }>> {
     if (!this.initialized) {
       throw new Error('Worker pool not initialized');
     }
-
-    const id = nextId();
-    const request: WorkerRequest = {
-      id,
-      type: 'estimate-tempo',
-      signal16k: input.signal16k,
-      options: {
-        minBpm: input.minBpm,
-        maxBpm: input.maxBpm,
-        targetMinBpm: input.targetMinBpm,
-        targetMaxBpm: input.targetMaxBpm,
-        preferFasterAmbiguous: input.preferFasterAmbiguous
-      }
-    };
-    const transferList: Transferable[] = [input.signal16k.buffer];
 
     const response = await new Promise<WorkerResponse>((resolve, reject) => {
       const slot = this.findIdleSlot();
@@ -322,11 +307,37 @@ class AnalysisWorkerPool {
     });
 
     if (response.type === 'error') {
-      throw new Error(response.error || 'Worker analysis failed');
+      throw new Error(response.error || errorLabel);
     }
     if (response.type !== 'result') {
       throw new Error(`Unexpected worker response: ${response.type}`);
     }
+    return response;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  Public API                                                       */
+  /* ---------------------------------------------------------------- */
+
+  isReady(): boolean {
+    return this.initialized && this.slots.some((s) => s.ready);
+  }
+
+  async estimateTempo(input: TempoEstimateInput): Promise<TempoEstimateOutput> {
+    const request: WorkerRequest = {
+      id: nextId(),
+      type: 'estimate-tempo',
+      signal16k: input.signal16k,
+      options: {
+        minBpm: input.minBpm,
+        maxBpm: input.maxBpm,
+        targetMinBpm: input.targetMinBpm,
+        targetMaxBpm: input.targetMaxBpm,
+        preferFasterAmbiguous: input.preferFasterAmbiguous
+      }
+    };
+
+    const response = await this.dispatchToWorker(request, [input.signal16k.buffer], 'Worker analysis failed');
 
     return {
       bpm: response.result?.bpm ?? 0,
@@ -339,35 +350,15 @@ class AnalysisWorkerPool {
   }
 
   async extractRhythm(input: RhythmExtractInput): Promise<RhythmExtractOutput> {
-    if (!this.initialized) {
-      throw new Error('Worker pool not initialized');
-    }
-
-    const id = nextId();
     const request: WorkerRequest = {
-      id,
+      id: nextId(),
       type: 'extract-rhythm',
       signal: input.signal,
       minBpm: input.minBpm,
       maxBpm: input.maxBpm
     };
-    const transferList: Transferable[] = [input.signal.buffer];
 
-    const response = await new Promise<WorkerResponse>((resolve, reject) => {
-      const slot = this.findIdleSlot();
-      if (slot) {
-        this.sendToSlot(slot, request, transferList).then(resolve, reject);
-      } else {
-        this.queue.push({ request, transferList, resolve, reject });
-      }
-    });
-
-    if (response.type === 'error') {
-      throw new Error(response.error || 'Worker rhythm extraction failed');
-    }
-    if (response.type !== 'result') {
-      throw new Error(`Unexpected worker response: ${response.type}`);
-    }
+    const response = await this.dispatchToWorker(request, [input.signal.buffer], 'Worker rhythm extraction failed');
 
     return {
       bpm: response.rhythm?.bpm ?? 0,
@@ -380,36 +371,16 @@ class AnalysisWorkerPool {
   }
 
   async computeHPCPChunk(input: HPCPChunkInput): Promise<HPCPChunkOutput> {
-    if (!this.initialized) {
-      throw new Error('Worker pool not initialized');
-    }
-
-    const id = nextId();
     const request: WorkerRequest = {
-      id,
+      id: nextId(),
       type: 'compute-hpcp-chunk',
       signal16k: input.signal16k,
       frameStarts: input.frameStarts,
       startOffsetSample: input.startOffsetSample,
       pcpSize: input.pcpSize
     };
-    const transferList: Transferable[] = [input.signal16k.buffer];
 
-    const response = await new Promise<WorkerResponse>((resolve, reject) => {
-      const slot = this.findIdleSlot();
-      if (slot) {
-        this.sendToSlot(slot, request, transferList).then(resolve, reject);
-      } else {
-        this.queue.push({ request, transferList, resolve, reject });
-      }
-    });
-
-    if (response.type === 'error') {
-      throw new Error(response.error || 'Worker HPCP chunk failed');
-    }
-    if (response.type !== 'result') {
-      throw new Error(`Unexpected worker response: ${response.type}`);
-    }
+    const response = await this.dispatchToWorker(request, [input.signal16k.buffer], 'Worker HPCP chunk failed');
 
     return {
       frames: response.hpcpChunk?.frames ?? [],
@@ -428,35 +399,15 @@ class AnalysisWorkerPool {
   }
 
   async computePrefilterChunk(input: PrefilterChunkInput): Promise<PrefilterChunkOutput> {
-    if (!this.initialized) {
-      throw new Error('Worker pool not initialized');
-    }
-
-    const id = nextId();
     const request: WorkerRequest = {
-      id,
+      id: nextId(),
       type: 'compute-prefilter-chunk',
       signal16k: input.signal16k,
       windows: input.windows,
       prefilterFrameCount: input.prefilterFrameCount
     };
-    const transferList: Transferable[] = [input.signal16k.buffer];
 
-    const response = await new Promise<WorkerResponse>((resolve, reject) => {
-      const slot = this.findIdleSlot();
-      if (slot) {
-        this.sendToSlot(slot, request, transferList).then(resolve, reject);
-      } else {
-        this.queue.push({ request, transferList, resolve, reject });
-      }
-    });
-
-    if (response.type === 'error') {
-      throw new Error(response.error || 'Worker prefilter chunk failed');
-    }
-    if (response.type !== 'result') {
-      throw new Error(`Unexpected worker response: ${response.type}`);
-    }
+    const response = await this.dispatchToWorker(request, [input.signal16k.buffer], 'Worker prefilter chunk failed');
 
     return {
       prefilters: response.prefilterChunk?.prefilters ?? [],
