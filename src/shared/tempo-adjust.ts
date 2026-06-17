@@ -1,4 +1,5 @@
 import type { AnalysisResult, PlaylistState, TempoAdjustUiState } from '@/shared/types';
+import { clamp } from '@/utils/number';
 
 export const TEMPO_ADJUST_OFFSET_MIN_BPM = -8;
 export const TEMPO_ADJUST_OFFSET_MAX_BPM = 8;
@@ -9,10 +10,6 @@ export const TEMPO_ADJUST_MAX_PLAYBACK_RATE = 2;
 export interface TempoAdjustControlState {
   offsetBpm: number;
   masterTempoEnabled: boolean;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
 }
 
 function asFiniteNumber(value: unknown): number | null {

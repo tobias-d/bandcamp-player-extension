@@ -1,4 +1,5 @@
 import type { KeyAnalysisResult } from '@/shared/types';
+import { clamp } from '@/utils/number';
 
 export type ConfidenceLevelClass = 'level-low' | 'level-medium' | 'level-high' | 'level-unknown';
 
@@ -13,11 +14,6 @@ export interface KeyDisplayEntry {
 export interface KeyDisplayResult {
   key1: KeyDisplayEntry;
   key2: KeyDisplayEntry;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return min;
-  return Math.min(max, Math.max(min, value));
 }
 
 function parseCamelot(raw: string): { n: number; mode: 'A' | 'B' } | null {
