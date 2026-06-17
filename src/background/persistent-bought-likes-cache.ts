@@ -1,15 +1,11 @@
 import type { PersistentBoughtLikesSnapshot } from '@/shared/types';
-import { browserApi } from '@/utils/browser-api';
+import { storageGet, storageSet } from '@/utils/extension-storage';
 
 const PERSISTENT_BOUGHT_LIKES_CACHE_STORAGE_KEY = 'persistent_bought_likes_cache_v1';
 
 let loaded = false;
 let loadPromise: Promise<void> | null = null;
 const persistentBoughtLikesByFanId = new Map<string, PersistentBoughtLikesSnapshot>();
-
-function getStorageArea(): chrome.storage.StorageArea | null {
-  return browserApi.storage?.local || browserApi.storage?.sync || null;
-}
 
 function normalizeFanId(value: unknown): string {
   return String(value ?? '').replace(/[^\d]/g, '').trim();
@@ -39,28 +35,6 @@ function normalizeSnapshot(snapshot: PersistentBoughtLikesSnapshot): PersistentB
     inventory: normalizeInventory(snapshot?.inventory),
     updatedAt: Math.max(1, Number(snapshot?.updatedAt || Date.now()))
   };
-}
-
-function storageGet<T>(key: string): Promise<T | null> {
-  const area = getStorageArea();
-  if (!area) {
-    return Promise.resolve(null);
-  }
-  return new Promise((resolve) => {
-    area.get(key, (result) => {
-      resolve((result?.[key] as T) ?? null);
-    });
-  });
-}
-
-function storageSet(key: string, value: unknown): Promise<void> {
-  const area = getStorageArea();
-  if (!area) {
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    area.set({ [key]: value }, () => resolve());
-  });
 }
 
 async function ensureLoaded(): Promise<void> {

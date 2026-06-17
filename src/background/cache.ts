@@ -8,9 +8,9 @@ import {
   ANALYSIS_PERSIST_TTL_MS,
   ANALYSIS_VERSION
 } from '@/shared/constants';
-import { browserApi } from '@/utils/browser-api';
 import { TTLCache } from '@/utils/cache';
 import { createLogger } from '@/utils/debug';
+import { storageGet, storageRemove, storageSet } from '@/utils/extension-storage';
 
 const logger = createLogger('ANALYZER');
 
@@ -45,45 +45,6 @@ let cacheEpoch = 0;
 
 export function getAnalysisCacheEpoch(): number {
   return cacheEpoch;
-}
-
-function getStorageArea(): chrome.storage.StorageArea | null {
-  return browserApi.storage?.local || browserApi.storage?.sync || null;
-}
-
-function storageGet<T>(key: string): Promise<T | null> {
-  const area = getStorageArea();
-  if (!area) {
-    return Promise.resolve(null);
-  }
-
-  return new Promise((resolve) => {
-    area.get(key, (result) => {
-      resolve((result?.[key] as T) ?? null);
-    });
-  });
-}
-
-function storageSet(key: string, value: unknown): Promise<void> {
-  const area = getStorageArea();
-  if (!area) {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve) => {
-    area.set({ [key]: value }, () => resolve());
-  });
-}
-
-function storageRemove(key: string): Promise<void> {
-  const area = getStorageArea();
-  if (!area) {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve) => {
-    area.remove(key, () => resolve());
-  });
 }
 
 function isKeyAnalysisLike(value: unknown): boolean {
