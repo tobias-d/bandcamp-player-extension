@@ -1,4 +1,5 @@
 import { dom, injectStylesheet } from '@/utils/dom';
+import { copyThemeVars } from '@/utils/theme';
 
 const WHY_TWO_KEYS_STYLE_ID = 'bc-player-why-two-keys-styles';
 const SIDE_GAP_PX = 8;
@@ -202,15 +203,7 @@ export function createWhyTwoKeysPanel(anchorRoot: HTMLElement): WhyTwoKeysPanelC
 
   let open = false;
 
-  const syncThemeTokens = (): void => {
-    const styles = window.getComputedStyle(anchorRoot);
-    for (const variable of PANEL_THEME_VARS) {
-      const value = styles.getPropertyValue(variable).trim();
-      if (value) {
-        panel.style.setProperty(variable, value);
-      }
-    }
-  };
+  const syncThemeTokens = (): void => copyThemeVars(anchorRoot, panel, PANEL_THEME_VARS);
 
   const syncGeometry = (): void => {
     const rect = anchorRoot.getBoundingClientRect();

@@ -1,4 +1,5 @@
 import { dom, injectStylesheet } from '@/utils/dom';
+import { copyThemeVars } from '@/utils/theme';
 
 // Chrome-only confirm dialog for the Performance-mode toggle, shared by the settings row and the
 // welcome gate so both open the exact same explainer. Theme tokens are copied from a source element
@@ -142,13 +143,7 @@ export function createPerformanceConfirmDialog(themeSource: HTMLElement): Perfor
       pendingConfirm = onConfirm;
       confirmBody.replaceChildren(...performanceConfirmBodyNodes(next));
       goButton.textContent = next ? 'Enable & reload' : 'Disable & reload';
-      const sourceStyles = window.getComputedStyle(themeSource);
-      for (const variable of PERF_CONFIRM_THEME_VARS) {
-        const value = sourceStyles.getPropertyValue(variable).trim();
-        if (value) {
-          backdrop.style.setProperty(variable, value);
-        }
-      }
+      copyThemeVars(themeSource, backdrop, PERF_CONFIRM_THEME_VARS);
       backdrop.classList.add('is-visible');
     },
     destroy() {
