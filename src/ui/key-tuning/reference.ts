@@ -1,4 +1,4 @@
-const KEY_NAME_TO_CAMELOT = new Map<string, string>([
+export const KEY_NAME_TO_CAMELOT = new Map<string, string>([
   ['am', '8A'], ['a min', '8A'], ['a minor', '8A'], ['cm', '5A'], ['c minor', '5A'],
   ['em', '9A'], ['e minor', '9A'], ['bm', '10A'], ['b minor', '10A'], ['f#m', '11A'],
   ['f# minor', '11A'], ['g#m', '1A'], ['g# minor', '1A'], ['bbm', '3A'], ['bb minor', '3A'],
@@ -16,10 +16,9 @@ export function parseReferenceCamelot(raw: string): string | null {
   const value = cleaned.toUpperCase();
   if (!value) return null;
 
-  const exactCamelot = value.match(/^(?:[1-9]|1[0-2])\s*([AB])$/);
+  const exactCamelot = value.match(/^(1[0-2]|[1-9])\s*([AB])$/);
   if (exactCamelot) {
-    const n = value.match(/(?:[1-9]|1[0-2])/)?.[0] || '';
-    return `${n}${exactCamelot[1]}`;
+    return `${exactCamelot[1]}${exactCamelot[2]}`;
   }
 
   const embeddedCamelot = value.match(/(?:^|[^0-9])((?:[1-9]|1[0-2]))\s*([AB])(?:$|[^A-Z])/);
