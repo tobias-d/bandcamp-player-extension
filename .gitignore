@@ -13,3 +13,6 @@ dist/
 
 # Ignore project docs folder
 docs/
+
+# Local working scratch doc (not part of the repo)
+REVIEW-PROGRESS.md
