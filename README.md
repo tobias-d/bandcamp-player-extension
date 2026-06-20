@@ -60,7 +60,10 @@ flowchart TD
     Action --> Runtime[The extension's own engine<br/>takes over and plays the track]
     Runtime --> Tempo["Tempo change<br/>SignalSmith Stretch speeds the track up or down —<br/>pitch stays the same"]
 
-    Origin -.->|why start here?| WhyOrigin["Plays instantly — no waiting while the<br/>extension fetches and decodes the stream."]
+    Origin -->|in the background, right away| Prep[The extension prepares its engine:<br/>fetches and decodes the stream and upcoming tracks]
+    Prep -.->|already prepared, so takeover is instant| Runtime
+
+    Origin -.->|why start here?| WhyOrigin["Plays instantly, so the user<br/>hears audio with no wait."]
     Runtime -.->|why switch to it?| WhyRuntime["Smoother playback,<br/>accurate seeking,<br/>and instant track changes."]
 
     classDef action fill:#dbeafe,stroke:#60a5fa,color:#1e3a5f;
