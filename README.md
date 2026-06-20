@@ -233,6 +233,71 @@ and the approaches that were tried and rejected:
 
 ---
 
+## Orchestration: doing the work without freezing the browser
+
+The two systems above do a lot of expensive work — fetching audio, decoding it, running DSP, and
+preparing tracks the user hasn't reached yet. Doing all of that naively would stutter playback or
+exhaust memory. This is the cross-cutting "how it stays responsive" layer beneath both systems: a
+few deliberate scheduling choices keep the heavy work off the audible path and within a memory
+budget.
+
+```mermaid
+flowchart TD
+    Cores[Detect available CPU cores] -->|builds about cores − 2 worker threads| Pool
+
+    subgraph Pool[Worker pool]
+      W1[Worker 1]
+      W2[Worker 2]
+      W3[Worker 3]
+    end
+
+    Track[One track to analyse] --> Split[Split into separate jobs:<br/>base tempo · rhythm · key chunks]
+    Split --> Coord{Coordinator hands each job<br/>to the next free worker}
+    Coord --> W1
+    Coord --> W2
+    Coord --> W3
+    W1 --> Cache[BPM and key results,<br/>cached per pipeline]
+    W2 --> Cache
+    W3 --> Cache
+```
+
+**Work runs in a warm worker pool, off the main thread.** Analysis is CPU-bound Essentia WASM, so
+it never runs on the page's UI thread. A pool of Web Workers — sized to the machine (roughly your
+CPU cores minus two, about three by default) and warmed at startup so the first request isn't
+cold — does the heavy lifting. BPM, key, and waveform are **separate pipelines** with their own
+caches and status, so enabling one never restarts a settled result from another.
+
+**Only part of the audio is analysed.** BPM and key don't need the whole track, and downloading and
+decoding every full file would be wasteful. So analysis uses a **partial fetch** of the stream and
+samples a handful of short ~16-second windows (up to six, across the opening ~72 seconds) instead of
+scanning end to end, then votes. It is far cheaper, faster to a first result, and robust to intros
+and breakdowns. Only the waveform is built from the full track, since it has to span the whole seek
+bar.
+
+**Preparation is bounded, not greedy.** The extension prepares upcoming tracks ahead of time (so
+the next one plays instantly) but never all of them at once. A memory-aware policy
+(`runtime-predecode-policy.ts`) picks a window of the next several tracks and a parallelism cap from
+the available memory — roughly 6–10 tracks with 1–3 in flight. Decoded audio beyond the budget is
+evicted, but the small encoded blobs are kept, so revisiting a track is decode-only with no
+re-fetch.
+
+```mermaid
+flowchart TD
+    Memory[Detect available memory] -->|sizes the preload window| Window[Preload window:<br/>how many upcoming tracks to prepare<br/>and how many to decode in parallel]
+    Window --> Preload[Decode upcoming tracks ahead of time<br/>so the next one plays instantly]
+```
+
+**Performance mode (Chrome, opt-in).** On a powerful machine you can trade memory for readiness:
+Performance mode widens that window substantially — more tracks prepared, more in parallel. It is
+Chrome-only and off by default, a deliberate choice rather than a silent one.
+
+Exact worker counts, memory budgets, and the predecode table live in
+[`rules/audio-rules.md`](rules/audio-rules.md),
+[`rules/bpm-analysis-rules.md`](rules/bpm-analysis-rules.md), and
+[`rules/playlist-rules.md`](rules/playlist-rules.md).
+
+---
+
 ## Build and install
 
 Build from source and load the unpacked extension. Requires **Node.js `>=24`** (pinned in
