@@ -53,6 +53,23 @@ analyses it, and plays it back through its own host — switching over from Band
 the moment it needs that control. The handoff and playback design is documented in
 [`rules/audio-rules.md`](rules/audio-rules.md).
 
+```mermaid
+flowchart TD
+    Play([User presses play on a track]) --> Origin[Bandcamp's own player<br/>plays the track]
+    Origin -->|"User action:<br/>seek · tempo change · pick another track"| Runtime[The extension's own engine<br/>takes over and plays the track]
+
+    Origin -.->|why start here?| WhyOrigin["Plays instantly — no waiting while the<br/>extension fetches and decodes the stream."]
+    Runtime -.->|why switch to it?| WhyRuntime["Smoother playback,<br/>accurate seeking,<br/>and instant track changes."]
+
+    classDef note fill:#fff8dc,stroke:#d9c46a,color:#333;
+    class WhyOrigin,WhyRuntime note;
+```
+
+Bandcamp's own player starts the track. The first action that needs the extension's engine —
+seeking, a tempo change, or picking another track — hands playback over to the runtime host, and
+from then on control stays there. Full mechanics (the click-free handover, two-host ping-pong,
+predecode, Firefox chunked feed) are in [`rules/audio-rules.md`](rules/audio-rules.md).
+
 ### Audio: analysis
 
 Because the engine already holds the decoded audio, it can run real DSP on the signal instead of
@@ -64,6 +81,22 @@ library) and produces:
 - **musical key** — optional, using a stricter electronic-music-oriented scoring flow that returns
   one key, two candidates, or nothing when the evidence is weak
 - **waveform** data for the seek bar
+
+```mermaid
+flowchart TD
+    Play([User presses play]) --> Playlist[Extension fetches the whole playlist<br/>every track on the album]
+    Playlist --> Download["Downloads and decodes the tracks in the background<br/>a memory-bounded window of what's coming up"]
+    Download -->|"a few short ~16 s windows<br/>(not the whole track)"| Essentia[Essentia<br/>WebAssembly DSP]
+    Download -->|full track| Wave[Waveform<br/>for the seek bar]
+    Essentia --> BPM[BPM]
+    Essentia --> Key[Musical key<br/>optional]
+```
+
+The extension decodes the album's tracks in the background — a memory-bounded window of what's
+coming up, so the next track is ready to analyse and play instantly. BPM and key don't scan the
+whole track: they sample a handful of short ~16-second windows and vote, which is far cheaper and
+robust to intros/breakdowns. Only the waveform is built from the full decoded audio, since it has
+to cover the entire seek bar.
 
 The project ships a **custom Essentia WASM build** (CSP-safe, with a HarmonicPeaks fix and added
 EDM key profiles) copied over the stock package at build time — provenance in
