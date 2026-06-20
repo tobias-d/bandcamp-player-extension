@@ -55,8 +55,8 @@ the moment it needs that control. The handoff and playback design is documented 
 
 ```mermaid
 flowchart TD
-    Play([User presses play]) --> Origin[Bandcamp's own player<br/>plays the track]
-    Origin --> Action([User seeks, changes tempo,<br/>or picks another track])
+    Play([User presses play<br/>on the Bandcamp website]) --> Origin[Bandcamp's own player<br/>plays the track]
+    Origin --> Action([User seeks, changes tempo, or picks<br/>another track from the extension's playlist])
     Action --> Runtime[The extension's own engine<br/>takes over and plays the track]
     Runtime --> Tempo["Tempo change<br/>SignalSmith Stretch speeds the track up or down —<br/>pitch stays the same"]
 
