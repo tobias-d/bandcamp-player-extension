@@ -60,11 +60,9 @@ const WELCOME_CSS = `
   flex-direction: column;
   gap: 10px;
   margin-top: -1px;
-  max-width: 320px;
-  margin-left: auto;
-  margin-right: auto;
-  align-items: center;
-  text-align: center;
+  width: 100%;
+  align-items: stretch;
+  text-align: left;
 }
 
 .bc-welcome-gate-section {
@@ -72,18 +70,17 @@ const WELCOME_CSS = `
   box-sizing: border-box;
 }
 
-.bc-welcome-gate-section.is-hints {
-  padding-top: 2px;
+.bc-welcome-gate-section.is-header {
+  text-align: center;
 }
 
-/* Slide 1 has fewer/shorter lines, so nudge its tips down for better vertical balance. */
-.bc-welcome-gate-copy.is-slide-1 .bc-welcome-gate-section.is-hints {
-  padding-top: 16px;
+.bc-welcome-gate-section.is-hints {
+  padding-top: 8px;
 }
 
 .bc-welcome-gate-title {
   font-family: var(--font-display, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif);
-  font-size: 19px;
+  font-size: 17px;
   line-height: 1.12;
   font-weight: 700;
   letter-spacing: 0.1px;
@@ -91,63 +88,36 @@ const WELCOME_CSS = `
 
 .bc-welcome-gate-version {
   margin-top: 6px;
-  font-size: 11px;
+  font-size: 10.5px;
   line-height: 1.1;
   color: var(--panel-text-dim, #1f2228);
 }
 
 .bc-welcome-gate-text {
-  font-size: 11px;
-  line-height: 1.42;
+  font-size: 10.5px;
+  line-height: 1.4;
   color: var(--panel-text-dim, #1f2228);
 }
 
-.bc-welcome-gate-bullets {
+.bc-welcome-gate-list {
+  margin: 0;
+  padding-left: 18px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 7px;
+  list-style: decimal;
 }
 
-/* Slide 1 has fewer bullets, so give them more breathing room between lines. */
-.bc-welcome-gate-copy.is-slide-1 .bc-welcome-gate-bullets {
-  gap: 10px;
-}
-
-/* Slide 2 ("What's new") shows version badges per section, so the header's own
-   version number is redundant there. */
-.bc-welcome-gate-copy:not(.is-slide-1) .bc-welcome-gate-version {
-  display: none;
-}
-
-.bc-welcome-gate-bullet {
+.bc-welcome-gate-list li {
   margin: 0;
+  padding-left: 2px;
 }
 
-.bc-welcome-gate-bullet.is-separated {
-  margin-top: 2px;
-}
-
-.bc-welcome-gate-bullet.is-feedback {
-  margin-top: 14px;
+.bc-welcome-gate-feedback {
+  margin: 14px 0 0;
+  text-align: center;
   color: #1d5fd1;
   font-weight: 800;
-}
-
-/* Small colored badge per version section (shrinks to content, centered). */
-.bc-welcome-gate-ver-label {
-  align-self: center;
-  margin: 0;
-  padding: 2px 9px;
-  border-radius: 6px;
-  background: rgba(29, 95, 209, 0.13);
-  color: #1d5fd1;
-  font-weight: 800;
-  font-size: 11px;
-  letter-spacing: 0.4px;
-}
-
-.bc-welcome-gate-ver-label.is-section-gap {
-  margin-top: 6px;
 }
 
 .bc-welcome-gate-actions {
@@ -322,96 +292,54 @@ export function createWelcomeGate(): WelcomeGateController {
     version
   ]);
 
-  // Slide 1: returning tips that have always lived on the gate.
-  const slide1Bullets: HTMLElement[] = [
-    dom('p', { class: 'bc-welcome-gate-bullet' }, [
-      'You can use ',
-      dom('strong', {}, ['keyboard shortcuts']),
-      ' for faster navigation (see settings).'
-    ]),
-    dom('p', { class: 'bc-welcome-gate-bullet' }, [
+  // A single numbered list of getting-started tips. Performance mode only exists on
+  // Chrome, but we announce it on both browsers (clearly labelled) so Firefox users
+  // know the capability exists on Chrome.
+  const tips: HTMLElement[] = [
+    dom('li', {}, [
       dom('strong', {}, ['Resize the panel']),
       ' by dragging any corner.'
     ]),
-    dom('p', { class: 'bc-welcome-gate-bullet' }, [
+    dom('li', {}, [
+      'Adjust the ',
+      dom('strong', {}, ['panel opacity']),
+      ' under Settings → Glass effect.'
+    ]),
+    dom('li', {}, [
       'If your connection is slow, turn off ',
       dom('strong', {}, ['track preloading']),
       '.'
     ]),
-    dom('p', { class: 'bc-welcome-gate-bullet is-separated' }, [
-      'You can activate ',
+    dom('li', {}, [
+      'Activate ',
       dom('strong', {}, ['key analysis']),
-      ' in the settings.'
+      ' in Settings.'
+    ]),
+    dom('li', {}, [
+      dom('strong', {}, ['Performance mode']),
+      ' (Chrome only) — activate it in Settings for instant skips.'
+    ]),
+    dom('li', {}, [
+      'Use ',
+      dom('strong', {}, ['keyboard shortcuts']),
+      ' for faster navigation (see Settings).'
     ])
   ];
 
-  // Slide 2: what's new, grouped by version. The feedback note closes the slide.
-  const slide2Content: HTMLElement[] = [
-    dom('p', { class: 'bc-welcome-gate-ver-label' }, ['3.6.2']),
-    dom('p', { class: 'bc-welcome-gate-bullet' }, [
-      dom('strong', {}, ['More stable Discover state']),
-      ' — playlist and current-track details stay visible after idle or wake.'
-    ]),
-    dom('p', { class: 'bc-welcome-gate-ver-label is-section-gap' }, ['3.6.1']),
-    dom('p', { class: 'bc-welcome-gate-bullet' }, [
-      dom('strong', {}, ['Liquid-glass look']),
-      ' (Chrome only) — the panel is now real frosted glass. Fine-tune it under ',
-      dom('strong', {}, ['Settings → Glass effect']),
-      '.'
-    ]),
-    dom('p', { class: 'bc-welcome-gate-ver-label is-section-gap' }, ['3.6.0']),
-    dom('p', { class: 'bc-welcome-gate-bullet' }, [
-      dom('strong', {}, ['More accurate BPM']),
-      ' — analysis is more thorough now, so it takes a little longer.'
-    ]),
-    dom('p', { class: 'bc-welcome-gate-bullet' }, [
-      dom('strong', {}, ['Reworked waveform']),
-      ' — now much closer to Rekordbox.'
-    ])
-  ];
-
-  // Performance mode only exists on Chrome, but we announce it on both browsers
-  // (clearly labelled) so Firefox users know the capability exists on Chrome.
-  slide2Content.push(dom('p', { class: 'bc-welcome-gate-bullet' }, [
-    dom('strong', {}, ['Performance mode']),
-    ' (Chrome only) — preloads further ahead for instant skips. Activate it under ',
-    dom('strong', {}, ['Settings']),
-    '.'
-  ]));
-
-  // The feedback note closes slide 2 on both browsers.
-  slide2Content.push(dom('p', { class: 'bc-welcome-gate-bullet is-separated is-feedback' }, [
+  const list = dom('ol', { class: 'bc-welcome-gate-list' }, tips);
+  const feedback = dom('p', { class: 'bc-welcome-gate-feedback' }, [
     'Please report bugs and feature wishes via the feedback form'
-  ]));
-
-  const bulletsContainer = dom('div', { class: 'bc-welcome-gate-bullets' });
+  ]);
   const hints = dom('div', { class: 'bc-welcome-gate-section is-hints bc-welcome-gate-text' }, [
-    bulletsContainer
+    list,
+    feedback
   ]);
 
   const actions = dom('div', { class: 'bc-welcome-gate-actions' });
-  const confirmButton = dom('button', { class: 'bc-welcome-gate-button', type: 'button' }, ['NEXT']) as HTMLButtonElement;
+  const confirmButton = dom('button', { class: 'bc-welcome-gate-button', type: 'button' }, ["LET'S GO"]) as HTMLButtonElement;
   actions.appendChild(confirmButton);
 
-  // The gate is a two-slide flow: slide 1 is the returning tips, slide 2 announces what's new.
-  // NEXT advances slide 1 -> 2; on slide 2 the button confirms and closes the gate.
-  let currentSlide: 1 | 2 = 1;
-  const setSlide = (slide: 1 | 2): void => {
-    currentSlide = slide;
-    copy.classList.toggle('is-slide-1', slide === 1);
-    if (slide === 2) {
-      title.replaceChildren("What's new");
-      bulletsContainer.replaceChildren(...slide2Content);
-      confirmButton.textContent = "LET'S GO";
-      return;
-    }
-    title.replaceChildren('Thanks for downloading', dom('br'), 'Bandcamp Deck');
-    bulletsContainer.replaceChildren(...slide1Bullets);
-    confirmButton.textContent = 'NEXT';
-  };
-
   copy.append(header, hints);
-  setSlide(1);
 
   card.appendChild(copy);
   card.appendChild(actions);
@@ -428,7 +356,6 @@ export function createWelcomeGate(): WelcomeGateController {
   };
 
   const show = (): void => {
-    setSlide(1);
     visible = true;
     overlay.classList.add('is-visible');
     mountedRoot?.classList.add('bc-panel-welcome-open');
@@ -452,11 +379,6 @@ export function createWelcomeGate(): WelcomeGateController {
   };
 
   confirmButton.addEventListener('click', () => {
-    if (currentSlide === 1) {
-      setSlide(2);
-      confirmButton.focus();
-      return;
-    }
     void (async () => {
       if (currentVersion) {
         await writeLastSeenVersion(currentVersion);

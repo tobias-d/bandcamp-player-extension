@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Bandcamp Deck",
-  "version": "3.6.2",
+  "version": "3.6.3",
   "description": "The most complete DJ-ready Bandcamp player, with accurate BPM analysis, tempo adjust, waveform visualization, and more.",
   "permissions": [
     "storage",

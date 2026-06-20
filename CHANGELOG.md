@@ -2,6 +2,15 @@
 
 All notable changes to Bandcamp Deck are recorded here, one entry per released version. It is written for people rebuilding the extension, so entries carry the technical detail needed to understand what changed and why. This file reflects version updates only — entries are added when the version number is bumped, not per commit.
 
+## 3.6.3 — 2026-06-20
+
+Version `3.6.3` reworks the welcome gate (`src/ui/components/welcome-gate.ts`) into a single window.
+
+Main improvements:
+- Single-window welcome gate: the two-slide flow is gone. The separate "What's new" slide (per-version changelog badges) and the `NEXT → LET'S GO` slide-switching state machine (`setSlide`/`currentSlide`) were removed, along with all the slide-specific CSS (`.is-slide-1`, the per-bullet/`ver-label` styling). The single button now confirms and closes directly. Version gating (show once per version via `bc:welcome:last-seen-version:v2`, plus the pending-version force-show on update) is unchanged, so the gate still re-appears after a version bump.
+- Updated getting-started tips: the gate now shows one numbered list (`<ol>`) covering panel resize, panel opacity (Settings → Glass effect), track preloading, key analysis, Performance mode (Chrome only, announced on both browsers), and keyboard shortcuts. The list is left-aligned; the header, version line, and button stay centered. The feedback note is retained below the list. Body/title font sizes were nudged down slightly (title 19→17px, body 11→10.5px) to fit the longer single-window list.
+- AMO lint cleanup: the idle metadata placeholder (`BANDCAMP // DECK`) in `src/ui/components/metadata-display.ts` no longer assigns `innerHTML`. The separator span is now built from DOM nodes via `replaceChildren`, clearing the two "Unsafe assignment to innerHTML" warnings the Firefox add-on linter raised against the bundled `content/discover` and `content/player` scripts (the source line was shared into both bundles).
+
 ## 3.6.2 — 2026-06-20
 
 Version `3.6.2` centers on two things: a systematic, area-by-area **code simplification review** and an **overhaul of the `rules/*.md` documentation**. Along the way it also hardens playback/session state after idle periods and collects the reliability fixes since `3.6.1`.

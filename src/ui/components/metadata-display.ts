@@ -25,15 +25,18 @@ function isIdleMetadataState(metadata: TrackMetadata, currentTrackTitle: string)
 const MARQUEE_RIGHT_FADE_PX = 18;
 
 // Idle placeholder shown when nothing is playing. Fixed constant (never user
-// input), rendered as markup so the "//" separator can be tinted on its own.
+// input), built as DOM nodes (not innerHTML) so the "//" separator can be tinted
+// on its own without tripping the AMO unsafe-innerHTML lint.
 const IDLE_ALBUM_LABEL = 'BANDCAMP // DECK';
-const IDLE_ALBUM_HTML = 'BANDCAMP <span class="bc-deck-sep">//</span> DECK';
+function createIdleAlbumNodes(): (Node | string)[] {
+  return ['BANDCAMP ', dom('span', { class: 'bc-deck-sep' }, ['//']), ' DECK'];
+}
 
 interface OscillatingText {
   container: HTMLElement;
   setValue(value: string): void;
-  /** Sets trusted markup (constant labels only); plainTitle drives the tooltip. */
-  setHtml(html: string, plainTitle: string): void;
+  /** Renders trusted nodes (constant labels only); plainTitle drives the tooltip and change key. */
+  setNodes(nodes: (Node | string)[], plainTitle: string): void;
   syncOverflow(): void;
 }
 
@@ -72,10 +75,10 @@ function createOscillatingText(tagName: 'div' | 'span', className: string): Osci
       }
       syncOverflow();
     },
-    setHtml(html, plainTitle) {
-      if (html !== lastValue) {
-        lastValue = html;
-        text.innerHTML = html;
+    setNodes(nodes, plainTitle) {
+      if (plainTitle !== lastValue) {
+        lastValue = plainTitle;
+        text.replaceChildren(...nodes);
         container.setAttribute('title', plainTitle.trim());
       }
       syncOverflow();
@@ -170,7 +173,7 @@ export function createMetadataDisplay(metaContainer: HTMLElement): MetadataDispl
       if (loadingState) {
         albumTitle.setValue('\u00A0');
       } else if (idleState) {
-        albumTitle.setHtml(IDLE_ALBUM_HTML, IDLE_ALBUM_LABEL);
+        albumTitle.setNodes(createIdleAlbumNodes(), IDLE_ALBUM_LABEL);
       } else {
         albumTitle.setValue(albumBaseText || '\u00A0');
       }
