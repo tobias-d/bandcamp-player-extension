@@ -30,11 +30,15 @@ Release notes live in [`CHANGELOG.md`](CHANGELOG.md) — one entry per version, 
 
 ## Architecture
 
-The two systems below are what make Bandcamp Deck more than a UI skin, and they're the parts
-worth reading the source for: a **self-contained audio engine with signal analysis**, and
-**deep Bandcamp-API identity work**.
+Two systems are what make Bandcamp Deck more than a UI skin, and they're the parts worth reading
+the source for:
 
-### Audio: our own engine
+1. **A self-contained audio engine with signal analysis** — its own playback engine, plus real DSP
+   (BPM, key, waveform) on the decoded audio.
+2. **Deep Bandcamp-API identity work** — resolving exactly which track, album, and artist is
+   playing, then driving metadata, playlists, and wishlist/collection from it.
+
+### 1. Audio: our own engine
 
 Bandcamp Deck does not rely on Bandcamp's built-in page player for anything past starting a
 stream. To actually control audio — change tempo, render an accurate waveform, seek precisely,
@@ -77,7 +81,7 @@ seeking, a tempo change, or picking another track — hands playback over to the
 from then on control stays there. Full mechanics (the click-free handover, two-host ping-pong,
 predecode, Firefox chunked feed) are in [`rules/audio-rules.md`](rules/audio-rules.md).
 
-### Audio: analysis
+#### Signal analysis
 
 Because the engine already holds the decoded audio, it can run real DSP on the signal instead of
 guessing from page markup. Analysis runs in the background through
@@ -113,16 +117,50 @@ EDM key profiles) copied over the stock package at build time — provenance in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), analysis design rules in
 [`rules/bpm-analysis-rules.md`](rules/bpm-analysis-rules.md).
 
-### Bandcamp API usage
+### 2. Bandcamp API: metadata, playlists, and wishlist
 
-Bandcamp Deck does substantial *identity* work before touching the panel — knowing which
-Bandcamp track, album, and artist are actually playing, not just what text is on the page. It
-follows an API-first rule wherever Bandcamp exposes a stable JSON source, and uses limited HTML
-parsing of the release page only where no structured equivalent exists — as a fallback when API
-attempts fail, or up front for custom-domain releases whose API host can't be derived. No external
-service is involved.
+Four things the panel does all depend on Bandcamp's own API, and none of them can be trusted from
+the page's visible text or button styling:
 
-The API work falls into two areas:
+- show the **correct metadata** — artist, album, track, release date, duration;
+- build a **real playlist** the user can navigate, sort, and preload;
+- let the user **add or remove albums and single tracks from their wishlist**;
+- know the **current state** of an item — is it already wishlisted, or already in the collection?
+
+To make any of that reliable, the extension first does **identity work**: figuring out exactly which
+Bandcamp track, album, and artist are actually playing — not just what text is on the page. It
+follows an API-first rule wherever Bandcamp exposes a stable JSON source, and falls back to limited
+HTML parsing of the release page only where no structured equivalent exists (when API attempts fail,
+or up front for custom-domain releases whose API host can't be derived). No external service is
+involved.
+
+The hard case is anywhere the page doesn't expose normal album data — Discover, feeds, and other
+non-release playback. There the extension listens to the page audio through an injected bridge and
+resolves the playing stream back to Bandcamp API data: matching the stream to a track ID, recovering
+album identity from partial metadata, and keeping BPM/waveform/key/wishlist state on the right row.
+While API data loads, the panel may briefly show safe bootstrap metadata from the media session or
+page, then replace it once the resolver confirms the match.
+
+That identity foundation feeds three areas.
+
+```mermaid
+flowchart TD
+    Play([User plays a track<br/>on the Bandcamp website]) --> Identity[Identity work:<br/>which track, album, and artist is this?]
+    Identity --> Single[Single release page<br/>ask Bandcamp's API for the track]
+    Identity --> List["List page — Discover · feed · collection · wishlist<br/>find the playing track, then ask the API"]
+    Single --> Resolved[Confirmed identity<br/>track / album / artist IDs]
+    List --> Resolved
+
+    Resolved --> Metadata[Metadata<br/>artist · album · track · release date · duration]
+    Resolved --> Playlist[Playlist<br/>ordered tracks to navigate, sort, and preload]
+    Resolved --> Hearts[Wishlist and collection state<br/>already wishlisted? already bought?]
+
+    Hearts --> HeartClick([User clicks a heart])
+    HeartClick --> Mutate[Add or remove from the wishlist<br/>after identity and safety checks]
+
+    classDef action fill:#dbeafe,stroke:#60a5fa,color:#1e3a5f;
+    class Play,HeartClick action;
+```
 
 **1. Metadata.** Bandcamp's tralbum endpoints resolve artist/album titles, release dates, track
 lists, track identity, durations, and stream details. (`Tralbum` = Bandcamp's combined
@@ -135,14 +173,13 @@ track-or-album record.)
   > Android app logs (2026-04-24) show `/api/mobile/26/tralbum_details`, but spot checks returned
   > the same payload shape as v24, so the extension stays on v24 until a concrete difference appears.
 
-The hard case is anywhere the page doesn't expose normal album data — Discover, feeds, and other
-non-release playback. There the extension listens to the page audio through an injected bridge and
-resolves the playing stream back to Bandcamp API data: matching the stream to a track ID, building
-the correct playlist, keeping BPM/waveform/key/like state on the right row, and recovering album
-identity from partial metadata. While API data loads, the panel may briefly show safe bootstrap
-metadata from the media session or page, then replace it once the resolver confirms the match.
+**2. Playlists.** From that metadata the extension builds the ordered track list the panel
+navigates: the resolver turns a release's track array — or, on Discover/feeds, the stream it
+resolved above — into a real playlist, which then drives track navigation, optional BPM/key sorting,
+and background preload of upcoming tracks. Design and file map in
+[`rules/playlist-rules.md`](rules/playlist-rules.md).
 
-**2. Wishlist and collection.** Both reading and writing the heart state go through the same
+**3. Wishlist and collection.** Both reading and writing the heart state go through the same
 API-first model — the extension never trusts a button's appearance.
 
 *Reading:* to know whether an item is `liked`, `disliked`, or `bought`, it reads the fan and
