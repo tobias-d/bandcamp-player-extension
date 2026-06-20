@@ -40,7 +40,8 @@ files below. Read the relevant area file before changing that part of the projec
 - Build, manifests, release, and verification: read `rules/build-rules.md`.
 - Architecture, directory map, large files, and conventions: read `rules/architecture-rules.md`.
 - Metadata, Tralbum, custom-domain permissions, and identity resolution: read `rules/metadata-rules.md`.
-- Likes, wishlist mutation, playlist, preload, and analysis request routing: read `rules/likes-playlist-rules.md`.
+- Likes, wishlist/collection inventory sync, like-state, and collect/uncollect mutation: read `rules/wishlist-and-collection.md`.
+- Playlist resolution/sorting/selection, preload, and analysis request routing: read `rules/playlist-rules.md`.
 - UI panel and debugger behavior: read `rules/debug-ui-rules.md`.
 
 ## Verification

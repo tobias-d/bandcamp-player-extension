@@ -347,7 +347,12 @@ export function createWelcomeGate(): WelcomeGateController {
 
   // Slide 2: what's new, grouped by version. The feedback note closes the slide.
   const slide2Content: HTMLElement[] = [
-    dom('p', { class: 'bc-welcome-gate-ver-label' }, ['3.6.1']),
+    dom('p', { class: 'bc-welcome-gate-ver-label' }, ['3.6.2']),
+    dom('p', { class: 'bc-welcome-gate-bullet' }, [
+      dom('strong', {}, ['More stable Discover state']),
+      ' — playlist and current-track details stay visible after idle or wake.'
+    ]),
+    dom('p', { class: 'bc-welcome-gate-ver-label is-section-gap' }, ['3.6.1']),
     dom('p', { class: 'bc-welcome-gate-bullet' }, [
       dom('strong', {}, ['Liquid-glass look']),
       ' (Chrome only) — the panel is now real frosted glass. Fine-tune it under ',

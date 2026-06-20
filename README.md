@@ -119,78 +119,64 @@ through the page-context bridge in the context Bandcamp expects; the bridge norm
 once on a replacement crumb, and reports back. A successful write forces a fresh sync so the UI
 reflects Bandcamp's real state instead of a long-lived optimistic guess.
 
-See [`rules/metadata-rules.md`](rules/metadata-rules.md) and
-[`rules/likes-playlist-rules.md`](rules/likes-playlist-rules.md) for the full constraints.
+See [`rules/wishlist-and-collection.md`](rules/wishlist-and-collection.md) for the full inventory
+sync + mutation reference, and [`rules/metadata-rules.md`](rules/metadata-rules.md) for the
+identity model behind it.
 
 ### Design docs
 
 The `rules/*.md` documents capture the architectural decisions and constraints behind each major
 area so sensitive changes follow the original intent instead of re-deriving it.
-[`AGENTS.md`](AGENTS.md) is the entry point and links them all;
-[`rules/architecture-rules.md`](rules/architecture-rules.md) has the repository layout, webpack
-entry points, and a large-file navigation guide.
+[`AGENTS.md`](AGENTS.md) is the entry point and links them all. They come in two kinds.
+
+**Deep subsystem references** — rebuildable from scratch, with the model, mechanisms, constants,
+and the approaches that were tried and rejected:
+
+- [`rules/audio-rules.md`](rules/audio-rules.md) — runtime audio: playback ownership, click-free
+  transitions, SignalSmith, predecode.
+- [`rules/bpm-analysis-rules.md`](rules/bpm-analysis-rules.md) — BPM/tempo detection accuracy,
+  correction families, and the beat-grid refinement.
+- [`rules/wishlist-and-collection.md`](rules/wishlist-and-collection.md) — like/wishlist/collection
+  inventory sync and collect/uncollect mutation.
+
+**Area maps** — where-to-look references and guardrails for an area:
+
+- [`rules/architecture-rules.md`](rules/architecture-rules.md) — repository layout, webpack entry
+  points, and a large-file navigation guide.
+- [`rules/build-rules.md`](rules/build-rules.md) — build/release commands, the prebuild chain, and
+  the verification matrix.
+- [`rules/playlist-rules.md`](rules/playlist-rules.md) — playlist resolution/sorting/selection,
+  preload, and analysis-request routing.
+- [`rules/metadata-rules.md`](rules/metadata-rules.md) — Tralbum metadata, custom-domain releases,
+  identity, and host permissions.
+- [`rules/debug-ui-rules.md`](rules/debug-ui-rules.md) — the injected panel and the debug panel.
 
 ---
 
 ## Build and install
 
-### Toolchain
-
-- **Node.js `>=24`** — pinned in [`.nvmrc`](.nvmrc); run `nvm use` to match.
-- **npm** — a committed `package-lock.json` makes installs reproducible.
+Build from source and load the unpacked extension. Requires **Node.js `>=24`** (pinned in
+[`.nvmrc`](.nvmrc)).
 
 ```bash
-nvm use          # selects Node 24
-npm ci           # clean, lockfile-exact install (use `npm install` when changing deps)
+git clone https://github.com/tobias-d/bandcamp-player-extension.git
+cd bandcamp-player-extension
+nvm use                  # Node 24
+npm ci                   # lockfile-exact install
+
+npm run build            # Firefox (MV2) -> dist/firefox/
+npm run build:chrome     # Chrome  (MV3) -> dist/chrome/
 ```
 
-> The two source-sensitive dependencies — the custom Essentia WASM and `signalsmith-stretch`
-> (pinned exactly to `1.3.2`) — are patched against exact upstream source during the build, which
-> is why installs are locked.
+Then load the build unpacked:
 
-### Build pipeline
+- **Firefox** — `about:debugging` → *This Firefox* → *Load Temporary Add-on* → pick any file in `dist/firefox/`.
+- **Chrome / Chromium** — `chrome://extensions` → enable Developer mode → *Load unpacked* → select `dist/chrome/`.
 
-Production builds run a dependency-ordered chain. The shared `prep` step
-(`prebuild:*` → `npm run prep`) runs before webpack:
-
-1. `preflight-build-guard` — version sync across `package.json` + the three manifests, critical files present
-2. `copy-custom-essentia-wasm` — copy the custom WASM build from `vendor/essentia-wasm-custom/` over the stock package
-3. `patch-essentia-no-eval` — make the Essentia bundle CSP-safe
-4. `generate-signalsmith-worklet` — generate + patch `vendor/signalsmith/worklet.js` from `signalsmith-stretch`
-5. `verify-signalsmith-worklet-feeding` — prove the worklet feeding patch is byte-correct (also `npm run verify:worklet`)
-
-Then webpack compiles, and `postbuild:*` runs `patch-webpack-no-eval` on the emitted runtime-audio host.
-**Do not change one build step without checking the steps before and after it** — see
-[`rules/build-rules.md`](rules/build-rules.md).
-
-### Per-browser builds and releases
-
-```bash
-npm run build            # Firefox (MV2) production  -> dist/firefox/
-npm run build:chrome     # Chrome  (MV3) production  -> dist/chrome/
-npm run build:dev        # Firefox development build
-npm run watch            # Firefox watch mode
-
-npm run release:firefox  # rebuild + package -> releases/firefox/{.xpi,.zip}
-npm run release:chrome   # rebuild + package -> releases/chrome/.zip
-npm run release:all      # both, in sequence
-```
-
-`dist/` and `releases/` are gitignored (build output is not committed).
-
-**Manifests are not interchangeable.** Firefox builds from `src/manifest.firefox.json`
-(intentionally **Manifest V2** for the current Firefox path; `src/manifest.firefox.dev.json` for
-dev), Chrome from `src/manifest.json` (**Manifest V3**). The release guards verify the built
-manifest shape before packaging — the Firefox guard checks MV2 shape, version, the Gecko add-on ID,
-and `data_collection_permissions.required: ["none"]`; the Chrome guard checks `manifest_version: 3`,
-`background.service_worker`, separated `host_permissions`, and MV3 `web_accessible_resources`.
-Packaging fails loudly if a build carries the other browser's manifest shape.
-
-### Load an unpacked build
-
-1. Open the browser's extensions page and enable developer mode.
-2. Firefox: *Load Temporary Add-on* → pick any file in `dist/firefox/`.
-   Chromium: *Load unpacked* → select `dist/chrome/`.
+The build patches two source-pinned dependencies (custom Essentia WASM and `signalsmith-stretch`),
+so `npm ci` installs are locked, and the two browsers build from separate, non-interchangeable
+manifests. The full prebuild chain, dev/watch commands, release packaging (`npm run release:all`),
+and manifest guards live in [`rules/build-rules.md`](rules/build-rules.md).
 
 ---
 
@@ -221,11 +207,13 @@ detailed directory index.
 
 ## Verification
 
+No test framework — strict TypeScript is the primary correctness gate. After a change, type-check
+and rebuild the affected target(s) (a shared change must build for **both** browsers — see the
+verification matrix in [`AGENTS.md`](AGENTS.md)):
+
 ```bash
-npx tsc --noEmit      # type-check (no test framework; strict TS is the primary correctness gate)
-npm run build         # Firefox production
-npm run build:chrome  # Chrome production
-npm run verify:worklet # Signalsmith feeding-patch proof (also runs inside every build)
+npx tsc --noEmit        # type-check
+npm run verify:worklet  # Signalsmith feeding-patch proof (also runs inside every build)
 ```
 
 Manual smoke checklist:
@@ -234,9 +222,6 @@ Manual smoke checklist:
 - Feed/recommendation heart actions update after inventory sync; wishlist buttons reflect synced state.
 - Bandcamp download pages do **not** show the panel.
 - BPM and waveform appear after analysis; key analysis appears when enabled.
-
-A shared change should be built for **both** browsers; see the verification matrix in
-[`AGENTS.md`](AGENTS.md).
 
 ---
 

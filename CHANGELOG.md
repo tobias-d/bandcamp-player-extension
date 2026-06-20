@@ -2,6 +2,18 @@
 
 All notable changes to Bandcamp Deck are recorded here, one entry per released version. It is written for people rebuilding the extension, so entries carry the technical detail needed to understand what changed and why. This file reflects version updates only — entries are added when the version number is bumped, not per commit.
 
+## 3.6.2 — 2026-06-20
+
+Version `3.6.2` centers on two things: a systematic, area-by-area **code simplification review** and an **overhaul of the `rules/*.md` documentation**. Along the way it also hardens playback/session state after idle periods and collects the reliability fixes since `3.6.1`.
+
+Main improvements:
+- Code simplification review: every major area (runtime audio, BPM/key, metadata/Tralbum, likes/playlist, Discover, UI, background) was reviewed in turn to remove dead code, consolidate duplicated helpers (number clamping, storage wrappers, worker dispatch, theme variables, key tuning, Discover metadata/preload), and collapse layered paths into one. Several latent bugs surfaced and were fixed in the same pass: the likes double-toggle race (with the dead background mutation engine deleted), deterministic likes retry backoff, key analysis bound to the settled BPM, Discover release-only identity locks closed, and the camelot `10A/11A/12A` parse fix.
+- Rules documentation overhaul: the `rules/*.md` docs were revised to a common structure with two tiers — deep, rebuildable subsystem references (`audio-rules`, `bpm-analysis-rules`, and a new `wishlist-and-collection` reference covering inventory sync + collect/uncollect mutation) and lighter area maps (`architecture`, `build`, `metadata`, `debug-ui`, and `playlist-rules`, renamed from `likes-playlist-rules` to match its trimmed scope). Each doc now carries a scope line and cross-links, and `AGENTS.md`/`README.md` index the full set.
+- Discover idle preservation: temporary empty stream URLs no longer collapse the preserved playlist and current-track state after idle or wake. The controller keeps the last known state visible and adds a throttled `idle-state-preserved` trace when that path is used.
+- Loading and status correctness: wishlist/collection foreground sync keeps the UI loading state active until the real sync promise settles, METADATA no longer shows a false loading chip when the default title is legitimate, and BPM attempts are counted only when analysis actually starts.
+- Playback and playlist reliability: runtime audio ownership now keeps origin playback authoritative, stale-host overlap is simplified, playlist resolving/sorting uses one shared path, current-index ordering is fixed, and playlist decoration normalizes cache-key reads with clearer 0-BPM display.
+- Build hygiene: the build chain now includes the lockfile/Node pin/worklet verification cleanup from this cycle.
+
 ## 3.6.1 — 2026-06-13
 
 Version `3.6.1` gives the panel a real liquid-glass surface and the tooling to tune it, plus task-manager-style resource diagnostics in the debug panel.

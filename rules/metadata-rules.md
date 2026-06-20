@@ -1,5 +1,12 @@
 # Metadata, Identity, And Host Permission Rules
 
+**Scope:** Tralbum metadata fetching, custom-domain releases, Discover identity selection, and the
+host/runtime security boundaries. This is a **map** (where-to-look + guardrails), not a rebuild
+narrative.
+
+> Cross-links: like-identity that builds on this identity model lives in
+> `rules/wishlist-and-collection.md` §2; host permissions and manifests in `rules/build-rules.md`.
+
 ## Tralbum API Flow
 
 `Tralbum` is Bandcamp's combined track-or-album data. Release metadata is API-first:

@@ -1,5 +1,12 @@
 # Build, Manifest, Release, And Verification Rules
 
+**Scope:** build/dev/release commands, the production prebuild chain, manifests, and the
+verification matrix for every change type. This is a **map** (where-to-look + guardrails), not a
+rebuild narrative.
+
+> Cross-links: the audio-asset build steps are detailed in `rules/audio-rules.md` §7; the broad
+> host permissions in `rules/metadata-rules.md`; repository layout in `rules/architecture-rules.md`.
+
 ## Build Commands
 
 Core verification commands:

@@ -1,5 +1,13 @@
 # UI Panel And Debugger Rules
 
+**Scope:** the injected page panel and the always-live debug panel — structure, named areas,
+resource diagnostics, and anonymized export rules. This is a **map** (where-to-look + guardrails),
+not a rebuild narrative.
+
+> Cross-links: runtime-playback debug fields are defined in `rules/audio-rules.md` §6; sync/mutation
+> debug stages in `rules/wishlist-and-collection.md` §7; tempo-decision fields in
+> `rules/bpm-analysis-rules.md` §8.
+
 ## UI
 
 - The custom panel is injected into the Bandcamp page DOM by `src/ui/panel.ts`.

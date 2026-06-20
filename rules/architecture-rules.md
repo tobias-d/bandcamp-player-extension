@@ -1,5 +1,14 @@
 # Architecture And Conventions Rules
 
+**Scope:** repository layout, webpack entry points, the directory/large-file index, and codebase
+conventions. This is a **map** (where-to-look + guardrails), not a rebuild narrative — it is the
+hub that points at the deep area docs.
+
+> Deep references: `rules/audio-rules.md` (runtime audio), `rules/bpm-analysis-rules.md` (tempo
+> accuracy), `rules/wishlist-and-collection.md` (likes/wishlist/collection),
+> `rules/playlist-rules.md` (playlist/preload/analysis routing), `rules/metadata-rules.md`
+> (metadata/identity), `rules/build-rules.md` (build/release), `rules/debug-ui-rules.md` (UI/debug).
+
 ## Architecture Rules
 
 - Prefer one clear runtime path over layered fallback paths.

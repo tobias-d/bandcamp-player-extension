@@ -213,3 +213,39 @@ Instrumentation: `rawBpm` (pre-round float) rides `EssentiaTempoResult` → work
 **Guardrail for future changes:** do not widen `GRID_REFINE_TOLERANCE_BPM` to "fix" more tracks — the
 1.25 cut cleanly separated the 6 real fixes (beat-counter within ~0.95 of base) from the failures
 (>1.5 away). A wider gate re-introduced a break (a correct 134 pushed to 135).
+
+---
+
+## 10. Constants (the knobs)
+
+| Constant | Value | Where | Role |
+|---|---|---|---|
+| Correction entry bands | 150–170 / 145–149 / 85–100 / 120–140 | `tempo-correction-support.ts` | which family (if any) a raw base BPM enters (§3) |
+| `GRID_REFINE_TOLERANCE_BPM` | 1.25 | `tempo.ts` | max base↔beat-counter gap for grid refinement (§9) |
+| Percival lag grid | `7500 / n` | `tempo.ts` | source of the coarse ±1 BPM quantisation (§9) |
+| Worker count | `clamp(hardwareConcurrency − 2, MIN, MAX)`, default 3 | `shared/concurrency.ts` | analysis worker-pool size (§1) |
+| Preload budget | 15 s (`preload-timeout:15000`) | preload controllers | per-track preload timeout the rhythm offload protects (§9) |
+
+Always classify and tune correction bands from **raw `Base BPM`**, never corrected output (§3).
+
+## 11. Open items / future work
+
+- **Chrome first-BPM delay** (§9): the one-shot corrected pass trades ~1.5–2 s of first-paint
+  latency for correctness. The deferred+push alternative is not lean on Chrome (offscreen-cache
+  rework + a new offscreen→background→tab push channel). Parked pending a tolerance call.
+- **Model-based tempo replacement** (CNN / downbeat-first, §6): higher ceiling but too large while
+  the regression set is small. Parked as a later refactor, not the next step.
+
+## 12. Files
+
+- `src/background/audio/tempo.ts` — base Percival estimate, `extractRhythmEvidence`,
+  `refineTempoToBeatGrid`, `resolveTempoForAnalysis`.
+- `src/background/audio/tempo-beat-correction.ts` + `tempo-correction-support.ts` — beat-evidence
+  correction families and thresholds (`resolveCorrectionMode`).
+- `src/background/audio/tempo-segment-prototype.ts` — segment / sparse voting.
+- `src/background/handlers/analysis.ts` + `analysis-tempo.ts` — one-shot corrected pass, request
+  handling; Chrome offscreen host `targets/chrome/offscreen/analysis-host.ts`.
+- `src/background/audio/worker-pool.ts` + `analysis-worker.ts` — parallel Essentia jobs
+  (`extract-rhythm`); `src/shared/concurrency.ts` — worker count.
+- `src/content/analysis/tempo-request.ts` — content→background request flow.
+- `tools/check-bpm-offset.mjs` — offset validation against the rekordbox reference.

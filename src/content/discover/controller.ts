@@ -266,6 +266,7 @@ export function initDiscoverController(): void {
   let playlistPollId: number | null = null;
   let lastTrackKey = '';
   let lastEmptyRecoveryAt = 0;
+  let lastIdlePreserveTraceAt = 0;
   let hintDebug = '-';
   const uiPerformanceDebug: UiPerformanceDebug = {};
   // Forward-declared; assigned after preload controller is created.
@@ -2634,6 +2635,31 @@ export function initDiscoverController(): void {
     playbackHandoff.reportPlaybackState(Boolean(nextNowPlaying.isPlaying), nextNowPlaying.streamUrl);
     const gateOpen = Boolean(nextNowPlaying.streamUrl);
     if (!gateOpen) {
+      const preservedStreamUrl = String(
+        nowPlaying.streamUrl ||
+        playlistState.tracks[playlistState.currentIndex]?.streamUrl ||
+        ''
+      ).trim();
+      const hasStateToPreserve = Boolean(preservedStreamUrl || playlistState.tracks.length > 0 || lastTrackKey);
+      if (hasStateToPreserve) {
+        playbackHandoff.reportPlaybackState(false, preservedStreamUrl);
+        nowPlaying = {
+          ...nowPlaying,
+          isPlaying: false,
+          playbackTs: Number(nowPlaying.playbackTs || Date.now())
+        };
+        const nowMs = Date.now();
+        if (nowMs - lastIdlePreserveTraceAt >= 60_000) {
+          lastIdlePreserveTraceAt = nowMs;
+          appendJumpTrace(
+            'idle-state-preserved',
+            `src=${preservedStreamUrl || '-'} tracks=${playlistState.tracks.length} current=${playlistState.currentIndex}`
+          );
+        }
+        render();
+        return;
+      }
+
       // Discover idle gate: do not surface mediaSession leftovers after page refresh.
       // Until an origin-site play provides a real stream URL, keep panel in default idle state.
       cancelPlaylistRetries();
