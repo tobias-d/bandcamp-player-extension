@@ -4,70 +4,64 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bandcamp // Deck — The DJ-ready player for Bandcamp</title>
-<meta name="description" content="A floating player that follows your listening across all of Bandcamp — real BPM analysis, key detection, tempo adjust, and waveform seeking. Even on Discover.">
+<meta name="description" content="A floating player that follows your listening across all of Bandcamp: real BPM analysis, key detection, tempo adjust, and waveform seeking. Even on Discover.">
 <meta property="og:title" content="Bandcamp // Deck — The DJ-ready player for Bandcamp">
-<meta property="og:description" content="Real BPM analysis, key detection, tempo adjust, and waveform seeking — on every Bandcamp page, even Discover.">
+<meta property="og:description" content="Real BPM analysis, key detection, tempo adjust, and waveform seeking, on every Bandcamp page, even Discover.">
 <meta property="og:image" content="assets/panel.png">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
+<p class="topnote">an independent project <span class="slashes">//</span> not affiliated with Bandcamp</p>
+
 <!-- ============ Hero ============ -->
 <header class="hero">
   <div class="hero-text">
-    <p class="kicker">Free &middot; open source &middot; no account &middot; runs entirely on your computer</p>
-    <h1>Bandcamp <span class="slashes">//</span> Deck</h1>
+    <p class="kicker">Free <span class="slashes">//</span> open source <span class="slashes">//</span> no account</p>
+    <h1 class="logo-mark"><img class="logo" src="assets/logo.png" alt="Bandcamp // Deck"></h1>
     <p class="tagline">The DJ-ready player for Bandcamp</p>
     <p class="sub">
-      A floating player that follows your listening across all of Bandcamp —
-      real BPM analysis, key detection, tempo adjust, and waveform seeking.
+      <strong>Bandcamp <span class="slashes">//</span> Deck</strong>
+      adds a floating player with <strong>BPM and key analysis</strong>,
+      <strong>tempo control</strong>, and a <strong>clickable waveform</strong>,
+      working across Bandcamp pages like Feed, Collections, Wishlists, and Discover.
     </p>
     <div class="cta-row">
-      <a class="cta cta-primary" href="https://chromewebstore.google.com/detail/bandcamp-deck/kgdfbnakchalhfmkiajllbkgflpcolij">
-        Add to Chrome
-      </a>
-      <a class="cta cta-secondary" href="https://addons.mozilla.org/en-US/firefox/addon/bandcamp-deck/">
-        Add to Firefox
-      </a>
+      <a class="cta" href="https://chromewebstore.google.com/detail/bandcamp-deck/kgdfbnakchalhfmkiajllbkgflpcolij">Add to Chrome</a>
+      <a class="cta" href="https://addons.mozilla.org/en-US/firefox/addon/bandcamp-deck/">Add to Firefox</a>
     </div>
   </div>
+  <img class="app-shot hero-shot" src="assets/panel.png" alt="Bandcamp // Deck panel">
 </header>
 
 <!-- ============ Features ============ -->
 <section class="features" id="features">
   <p class="side-label">Features</p>
-  <div class="features-layout">
-    <div class="features-col">
-      <div class="grid grid-2">
+  <div class="grid">
         <article class="card">
-          <h3>Real BPM, not a guess</h3>
-          <p>Tempo is analyzed from the actual audio with Essentia — the same signal-analysis library used in MIR research. No metadata scraping.</p>
+          <h3>Real BPM analysis</h3>
+          <p>The tempo is measured from the actual audio with Essentia, a signal-analysis library used in music research. It is not read from tags or metadata.</p>
         </article>
         <article class="card">
-          <h3>Tap it out yourself</h3>
-          <p>Prefer your ears? Tap along — button or keyboard shortcut — and the panel reads BPM straight from your timing.</p>
+          <h3>Tap the tempo yourself</h3>
+          <p>You can also tap it out by ear, with a button or a keyboard shortcut, and the panel reads the BPM from your timing.</p>
         </article>
         <article class="card">
           <h3>Key detection</h3>
-          <p>Key detection tuned for electronic music — one clear result, or two candidates when the track sits between keys.</p>
+          <p>Key detection tuned for electronic music: one clear result, or two candidates when the track sits between keys.</p>
         </article>
         <article class="card">
           <h3>Tempo Adjust</h3>
-          <p>Preview any track at your set's tempo. Hear how it'll actually sit in the mix before you buy.</p>
+          <p>Change a track's playback speed to match your set. The key stays locked, so speeding up or slowing down won't shift the pitch, and the sound stays high quality either way.</p>
         </article>
         <article class="card">
           <h3>Waveform seeking</h3>
-          <p>A real rendered waveform. Skip the intro, jump to the drop, check the breakdown.</p>
+          <p>A real, rendered three-band waveform of the track. Click anywhere on it to jump to that point.</p>
         </article>
         <article class="card">
           <h3>Wishlist that keeps up</h3>
-          <p>Heart albums and tracks from the panel — synced against Bandcamp's own collection data, so state is never stale.</p>
+          <p>Heart albums and tracks from the panel, synced against Bandcamp's own collection data, so state is never stale.</p>
         </article>
-      </div>
-    </div>
-    <div class="shot-col">
-      <img class="app-shot" src="assets/panel.png" alt="Bandcamp // Deck panel">
-    </div>
   </div>
 </section>
 
@@ -80,11 +74,11 @@
   <div class="grid grid-2">
     <article class="card">
       <h3>Tempo without pitch shift</h3>
-      <p>Tempo Adjust changes speed without touching pitch — the way professional DJ software works. The cheap shortcut that makes vocals sound like chipmunks is never used, not even as a fallback.</p>
+      <p>Tempo Adjust changes speed without touching pitch, the way professional DJ software works. The cheap shortcut that makes vocals sound like chipmunks is never used, not even as a fallback.</p>
     </article>
     <article class="card">
       <h3>Gapless, like a DJ deck</h3>
-      <p>Two complete players run silently in parallel. The next track loads on the quiet one while you listen to the current one, then they swap — no gap, no click at the join.</p>
+      <p>Two complete players run silently in parallel. The next track loads on the quiet one while you listen to the current one, then they swap, with no gap and no click at the join.</p>
     </article>
     <article class="card">
       <h3>Instant seeking</h3>
@@ -94,27 +88,63 @@
       <h3>Analysis on your machine</h3>
       <p>BPM and key are measured from the actual audio, inside your browser, using the same library that music researchers use. Nothing is sent anywhere.</p>
     </article>
-    <article class="card wide">
+    <article class="card">
       <h3>Wishlist and Collection, properly in sync</h3>
-      <p>When you heart something from the panel, the extension talks directly to Bandcamp's collection API — the same one your Bandcamp profile uses. Your likes and wishlist reflect your real collection, not a guess from the page.</p>
+      <p>When you heart something from the panel, the extension talks directly to Bandcamp's collection API, the same one your Bandcamp profile uses. Your likes and wishlist reflect your real collection, not a guess from the page.</p>
+    </article>
+    <article class="card">
+      <h3>Set up the way you like</h3>
+      <p>Open the panel's settings to make it yours: switch key analysis, auto-play, and track preloading on or off, remap the keyboard shortcuts, and tune the glass look of the panel. On Chrome there's also a performance mode that puts a powerful machine's spare headroom to work.</p>
     </article>
   </div>
-  <p class="deep-dive">
-    Want the full technical story?
-    <a href="audio-engine.html">Read the audio-engine deep dive →</a>
-  </p>
+</section>
+
+<!-- ============ Support ============ -->
+<section class="support" id="support">
+  <p class="side-label">Support &amp; feedback</p>
+  <h2>Support the project, or send feedback</h2>
+  <p class="lede">Bandcamp Deck is free. If it's useful to you, you can leave a small tip. And if you've hit a bug or have a feature in mind, there's a form for that.</p>
+  <div class="cta-row">
+    <a class="cta" href="https://ko-fi.com/lany_">Tip on Ko-fi</a>
+    <a class="cta" href="https://docs.google.com/forms/d/e/1FAIpQLSeID8d5rRBv3aPgkXW0bZH6qGAO5GsXrmYVMymZqxiPGWF7wg/viewform">Send feedback</a>
+  </div>
+</section>
+
+<!-- ============ Built on ============ -->
+<section class="built-on" id="built-on">
+  <p class="side-label">Built on</p>
+  <h2>Two open-source libraries</h2>
+  <p class="lede">The audio engine leans on two free, open-source projects from the audio world. Both run entirely inside your browser.</p>
+  <div class="grid grid-2">
+    <article class="card">
+      <h3><a class="lib-link" href="https://signalsmith-audio.co.uk/code/stretch/">Signalsmith Stretch ↗</a></h3>
+      <p>A time-stretching library. It's the part that lets a track play faster or slower without its pitch, and so its key, moving along with it. That's what keeps a sped-up track sounding natural instead of like a chipmunk.</p>
+    </article>
+    <article class="card">
+      <h3><a class="lib-link" href="https://essentia.upf.edu/">Essentia ↗</a></h3>
+      <p>An audio-analysis library built for music research at Pompeu Fabra University in Barcelona. It listens to the actual audio to work out a track's tempo and musical key, rather than trusting whatever tags happen to be attached to the file.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ============ Follow ============ -->
+<section class="follow" id="follow">
+  <p class="side-label">Source</p>
+  <h2>Follow along on GitHub</h2>
+  <p class="lede">The whole extension is open source. Star or watch the repo to follow new releases and changes.</p>
+  <div class="cta-row">
+    <a class="cta" href="https://github.com/tobias-d/bandcamp-player-extension">Follow on GitHub</a>
+  </div>
 </section>
 
 <!-- ============ Footer ============ -->
 <footer>
-  <nav>
-    <a href="https://github.com/tobias-d/bandcamp-player-extension/blob/main/CHANGELOG.md">Changelog</a>
-    <a href="https://github.com/tobias-d/bandcamp-player-extension">GitHub</a>
-    <a href="https://github.com/tobias-d/bandcamp-player-extension/blob/main/LICENSE">License</a>
-    <a href="https://essentia.upf.edu/">Built with Essentia.js</a>
+  <nav class="footer-nav">
+    <a href="impressum.html">Impressum</a>
+    <a href="datenschutz.html">Datenschutz</a>
   </nav>
-  <p class="disclaimer">BCD&#8211;036 &middot; cut in Berlin &middot; an independent project, not affiliated with Bandcamp</p>
 </footer>
 
+<script src="app.js"></script>
 </body>
 </html>
