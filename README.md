@@ -6,8 +6,10 @@ currently playing track across release pages, fan/feed/recommendation pages, and
 and keeps transport, waveform seeking, playlist context, real audio analysis, and
 wishlist state in one place.
 
-For developers, the two parts worth reading are its **audio engine and signal analysis** and its
-**Bandcamp-API identity work** — see [Architecture](#architecture). The rest is a thin UI over them.
+For developers, the parts worth reading are the two systems in [Architecture](#architecture) — the
+**audio engine with signal analysis**, and the **Bandcamp-API work** behind metadata, playlists, and
+wishlist — plus [Orchestration](#orchestration-doing-the-work-without-freezing-the-browser), how that
+heavy work is scheduled to keep the browser responsive. The rest is a thin UI over them.
 
 ## Download
 
@@ -203,34 +205,6 @@ See [`rules/wishlist-and-collection.md`](rules/wishlist-and-collection.md) for t
 sync + mutation reference, and [`rules/metadata-rules.md`](rules/metadata-rules.md) for the
 identity model behind it.
 
-### Design docs
-
-The `rules/*.md` documents capture the architectural decisions and constraints behind each major
-area so sensitive changes follow the original intent instead of re-deriving it.
-[`AGENTS.md`](AGENTS.md) is the entry point and links them all. They come in two kinds.
-
-**Deep subsystem references** — rebuildable from scratch, with the model, mechanisms, constants,
-and the approaches that were tried and rejected:
-
-- [`rules/audio-rules.md`](rules/audio-rules.md) — runtime audio: playback ownership, click-free
-  transitions, SignalSmith, predecode.
-- [`rules/bpm-analysis-rules.md`](rules/bpm-analysis-rules.md) — BPM/tempo detection accuracy,
-  correction families, and the beat-grid refinement.
-- [`rules/wishlist-and-collection.md`](rules/wishlist-and-collection.md) — like/wishlist/collection
-  inventory sync and collect/uncollect mutation.
-
-**Area maps** — where-to-look references and guardrails for an area:
-
-- [`rules/architecture-rules.md`](rules/architecture-rules.md) — repository layout, webpack entry
-  points, and a large-file navigation guide.
-- [`rules/build-rules.md`](rules/build-rules.md) — build/release commands, the prebuild chain, and
-  the verification matrix.
-- [`rules/playlist-rules.md`](rules/playlist-rules.md) — playlist resolution/sorting/selection,
-  preload, and analysis-request routing.
-- [`rules/metadata-rules.md`](rules/metadata-rules.md) — Tralbum metadata, custom-domain releases,
-  identity, and host permissions.
-- [`rules/debug-ui-rules.md`](rules/debug-ui-rules.md) — the injected panel and the debug panel.
-
 ---
 
 ## Orchestration: doing the work without freezing the browser
@@ -393,6 +367,38 @@ Manual smoke checklist:
   through extension-owned runtime audio instead.
 - The Essentia bundle is patched automatically by the `prep` step before webpack; never edit the
   copied bundle in `node_modules` by hand.
+
+---
+
+## Design docs
+
+The `rules/*.md` documents capture the architectural decisions and constraints behind each major
+area so sensitive changes follow the original intent instead of re-deriving it.
+[`AGENTS.md`](AGENTS.md) is the entry point and links them all. They come in two kinds.
+
+**Deep subsystem references** — rebuildable from scratch, with the model, mechanisms, constants,
+and the approaches that were tried and rejected:
+
+- [`rules/audio-rules.md`](rules/audio-rules.md) — runtime audio: playback ownership, click-free
+  transitions, SignalSmith, predecode.
+- [`rules/bpm-analysis-rules.md`](rules/bpm-analysis-rules.md) — BPM/tempo detection accuracy,
+  correction families, and the beat-grid refinement.
+- [`rules/wishlist-and-collection.md`](rules/wishlist-and-collection.md) — like/wishlist/collection
+  inventory sync and collect/uncollect mutation.
+
+**Area maps** — where-to-look references and guardrails for an area:
+
+- [`rules/architecture-rules.md`](rules/architecture-rules.md) — repository layout, webpack entry
+  points, and a large-file navigation guide.
+- [`rules/build-rules.md`](rules/build-rules.md) — build/release commands, the prebuild chain, and
+  the verification matrix.
+- [`rules/playlist-rules.md`](rules/playlist-rules.md) — playlist resolution/sorting/selection,
+  preload, and analysis-request routing.
+- [`rules/metadata-rules.md`](rules/metadata-rules.md) — Tralbum metadata, custom-domain releases,
+  identity, and host permissions.
+- [`rules/debug-ui-rules.md`](rules/debug-ui-rules.md) — the injected panel and the debug panel.
+
+---
 
 ## License
 
