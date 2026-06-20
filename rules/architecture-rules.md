@@ -27,7 +27,6 @@ tools/      Build and maintenance scripts. tools/build/ runs in the npm build
 rules/      Area rule docs (this folder) — read before changing that area.
 dist/       Build output (gitignored). dist/firefox and dist/chrome.
 releases/   Local packaged release archives (gitignored, not in version control).
-website/    Marketing/demo site, deployed via .github/workflows.
 ```
 
 ## Webpack Entry Points

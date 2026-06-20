@@ -187,7 +187,6 @@ src/        Extension source (content scripts, background, UI, shared, per-targe
 vendor/     Third-party shipped code: custom Essentia WASM build + generated Signalsmith worklet
 tools/      Build pipeline (tools/build/*) and maintenance scripts (tools/check-bpm-offset.mjs)
 rules/      Area design-rule docs — read before changing that area
-website/    Marketing/demo site (deployed via .github/workflows)
 dist/       Build output (gitignored): dist/firefox, dist/chrome
 releases/   Packaged release artifacts (gitignored)
 ```
