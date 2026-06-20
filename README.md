@@ -239,7 +239,15 @@ The two systems above do a lot of expensive work — fetching audio, decoding it
 preparing tracks the user hasn't reached yet. Doing all of that naively would stutter playback or
 exhaust memory. This is the cross-cutting "how it stays responsive" layer beneath both systems: a
 few deliberate scheduling choices keep the heavy work off the audible path and within a memory
-budget.
+budget. Two kinds of background work dominate, and each is scheduled on its own terms: the
+**worker pool** that analyses audio, and **runtime preparation** that readies upcoming tracks.
+
+### Worker pool
+
+The worker pool's job is to turn each track's audio into its **BPM and musical key**. That is heavy
+signal processing — CPU-bound Essentia WASM (WebAssembly DSP) — so it must run off the page's UI
+thread, or the panel would freeze while a track is analysed; and on a busy playlist several tracks
+need analysing at once, so the work is spread across cores.
 
 ```mermaid
 flowchart TD
@@ -261,11 +269,12 @@ flowchart TD
     W3 --> Cache
 ```
 
-**Work runs in a warm worker pool, off the main thread.** Analysis is CPU-bound Essentia WASM, so
-it never runs on the page's UI thread. A pool of Web Workers — sized to the machine (roughly your
-CPU cores minus two, about three by default) and warmed at startup so the first request isn't
-cold — does the heavy lifting. BPM, key, and waveform are **separate pipelines** with their own
-caches and status, so enabling one never restarts a settled result from another.
+A pool of Web Workers — background threads sized to the machine (roughly your CPU cores minus two,
+about three by default) — does the work. The pool is **warmed** at startup: each worker loads and
+initialises its Essentia WASM up front, so the first analysis isn't slowed by cold-start setup. Each
+track's analysis is split into separate **jobs** — base tempo, rhythm, and key chunks — and a
+coordinator hands each job to the next free worker. BPM, key, and waveform are **separate pipelines**
+with their own caches, so enabling one never restarts a settled result from another.
 
 **Only part of the audio is analysed.** BPM and key don't need the whole track, and downloading and
 decoding every full file would be wasteful. So analysis uses a **partial fetch** of the stream and
@@ -273,6 +282,14 @@ samples a handful of short ~16-second windows (up to six, across the opening ~72
 scanning end to end, then votes. It is far cheaper, faster to a first result, and robust to intros
 and breakdowns. Only the waveform is built from the full track, since it has to span the whole seek
 bar.
+
+### Runtime preparation
+
+Runtime preparation's job is to make sure the **next track is ready the moment it's needed** — when
+the user picks another track, or the extension's engine takes over from Bandcamp, playback should
+begin with no wait. So the extension fetches and decodes upcoming tracks in the background, ahead of
+where the user currently is. Decoded audio is large, though, so this work has to stay within a
+memory budget.
 
 **Preparation is bounded, not greedy.** The extension prepares upcoming tracks ahead of time (so
 the next one plays instantly) but never all of them at once. A memory-aware policy
