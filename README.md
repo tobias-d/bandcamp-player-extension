@@ -55,13 +55,17 @@ the moment it needs that control. The handoff and playback design is documented 
 
 ```mermaid
 flowchart TD
-    Play([User presses play on a track]) --> Origin[Bandcamp's own player<br/>plays the track]
-    Origin -->|"User action:<br/>seek · tempo change · pick another track"| Runtime[The extension's own engine<br/>takes over and plays the track]
+    Play([User presses play]) --> Origin[Bandcamp's own player<br/>plays the track]
+    Origin --> Action([User seeks, changes tempo,<br/>or picks another track])
+    Action --> Runtime[The extension's own engine<br/>takes over and plays the track]
+    Runtime --> Tempo["Tempo change<br/>SignalSmith Stretch speeds the track up or down —<br/>pitch stays the same"]
 
     Origin -.->|why start here?| WhyOrigin["Plays instantly — no waiting while the<br/>extension fetches and decodes the stream."]
     Runtime -.->|why switch to it?| WhyRuntime["Smoother playback,<br/>accurate seeking,<br/>and instant track changes."]
 
+    classDef action fill:#dbeafe,stroke:#60a5fa,color:#1e3a5f;
     classDef note fill:#fff8dc,stroke:#d9c46a,color:#333;
+    class Play,Action action;
     class WhyOrigin,WhyRuntime note;
 ```
 
@@ -90,6 +94,9 @@ flowchart TD
     Download -->|full track| Wave[Waveform<br/>for the seek bar]
     Essentia --> BPM[BPM]
     Essentia --> Key[Musical key<br/>optional]
+
+    classDef action fill:#dbeafe,stroke:#60a5fa,color:#1e3a5f;
+    class Play action;
 ```
 
 The extension decodes the album's tracks in the background — a memory-bounded window of what's
