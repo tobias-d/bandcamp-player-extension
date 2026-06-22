@@ -1,5 +1,20 @@
 import { dom } from '@/utils/dom';
 import { createPerformanceConfirmDialog, PerformanceConfirmDialog } from '@/ui/components/performance-confirm';
+import { createConfirmDialog, ConfirmDialog } from '@/ui/components/confirm-dialog';
+
+// Explainer shown when the user turns Key analysis ON. Built from nodes so app names can be bold.
+// It is opt-in because key detection is subjective, so we set expectations before enabling it.
+function keyAnalysisConfirmBodyNodes(): (string | Node)[] {
+  return [
+    'Key analysis is optional because it is ',
+    dom('strong', {}, ['never a fully objective measurement']),
+    '. Different tools listen to a track in different ways, so the same song can read differently in apps like ',
+    dom('strong', {}, ['Rekordbox']),
+    ' or ',
+    dom('strong', {}, ['Mixed In Key']),
+    ' — a different result does not mean one is wrong. Turn it on to add key estimates to your tracks.'
+  ];
+}
 
 interface SettingsHandlers {
   onTogglePreloadTracks(enabled: boolean): void;
@@ -95,6 +110,10 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
     };
   }
 
+  // Turning Key analysis ON opens this explainer first (same modal style as Performance mode). Only
+  // on confirm do we call the handler; cancel leaves the toggle off. Turning it OFF needs no dialog.
+  const keyConfirm: ConfirmDialog = createConfirmDialog(root, 'Key analysis');
+
   const shortcutsRow = dom('div', { class: 'bc-settings-row' });
   const shortcutsText = dom('span', { class: 'bc-settings-label' }, ['Keyboard shortcuts']);
   const shortcutsButton = dom(
@@ -152,8 +171,19 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
 
   keyToggle.addEventListener('click', () => {
     const next = !readToggleState(keyToggle);
-    setToggleState(keyToggle, next);
-    handlers.onToggleKeyAnalysis(next);
+    if (next) {
+      // Do not flip/persist here — the confirm dialog owns enabling. The toggle's visual state is
+      // re-synced from the persisted value by update() on the render that follows onToggleKeyAnalysis,
+      // so a cancelled dialog leaves it off and a confirmed one shows it on.
+      keyConfirm.open({
+        title: 'Key analysis',
+        body: keyAnalysisConfirmBodyNodes(),
+        confirmLabel: 'Enable',
+        onConfirm: () => handlers.onToggleKeyAnalysis(true)
+      });
+      return;
+    }
+    handlers.onToggleKeyAnalysis(false);
   });
 
   autoPlayToggle.addEventListener('click', () => {
@@ -196,6 +226,7 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
     destroy() {
       root.remove();
       performanceConfirm?.destroy();
+      keyConfirm.destroy();
     }
   };
 }
