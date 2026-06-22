@@ -2,6 +2,16 @@
 
 All notable changes to Bandcamp Deck are recorded here, one entry per released version. It is written for people rebuilding the extension, so entries carry the technical detail needed to understand what changed and why. This file reflects version updates only — entries are added when the version number is bumped, not per commit.
 
+## 3.6.4 — 2026-06-22
+
+Version `3.6.4` is a UI-appearance release.
+
+Main improvements:
+- Appearance panel: the Alt+G glass tuner becomes a full Appearance panel (`appearance-panel.ts`, Settings → **Appearance / Edit**), restyled to the main UI's light glass and attached flush to the panel's left edge with live drag/resize tracking and an inline Frost slider.
+- Camouflage layer: a new toggle adds tiled grey radial blobs that blend into the glass and keep their form as the panel grows.
+- Letterpress idle wordmark: `BANDCAMP // DECK` is pressed into the glass with a layered text-shadow.
+- Welcome-gate copy now points to Settings → Appearance and uses a centered, unnumbered list.
+
 ## 3.6.3 — 2026-06-20
 
 Version `3.6.3` reworks the welcome gate (`src/ui/components/welcome-gate.ts`) into a single window.

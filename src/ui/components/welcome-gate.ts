@@ -101,16 +101,17 @@ const WELCOME_CSS = `
 
 .bc-welcome-gate-list {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 0;
   display: flex;
   flex-direction: column;
   gap: 7px;
-  list-style: decimal;
+  list-style: none;
+  text-align: center;
 }
 
 .bc-welcome-gate-list li {
   margin: 0;
-  padding-left: 2px;
+  padding-left: 0;
 }
 
 .bc-welcome-gate-feedback {
@@ -292,7 +293,7 @@ export function createWelcomeGate(): WelcomeGateController {
     version
   ]);
 
-  // A single numbered list of getting-started tips. Performance mode only exists on
+  // A single list of getting-started tips. Performance mode only exists on
   // Chrome, but we announce it on both browsers (clearly labelled) so Firefox users
   // know the capability exists on Chrome.
   const tips: HTMLElement[] = [
@@ -301,9 +302,9 @@ export function createWelcomeGate(): WelcomeGateController {
       ' by dragging any corner.'
     ]),
     dom('li', {}, [
-      'Adjust the ',
-      dom('strong', {}, ['panel opacity']),
-      ' under Settings → Glass effect.'
+      'Tune the ',
+      dom('strong', {}, ['appearance']),
+      ' of the UI under Settings → Appearance.'
     ]),
     dom('li', {}, [
       'If your connection is slow, turn off ',
@@ -326,7 +327,7 @@ export function createWelcomeGate(): WelcomeGateController {
     ])
   ];
 
-  const list = dom('ol', { class: 'bc-welcome-gate-list' }, tips);
+  const list = dom('ul', { class: 'bc-welcome-gate-list' }, tips);
   const feedback = dom('p', { class: 'bc-welcome-gate-feedback' }, [
     'Please report bugs and feature wishes via the feedback form'
   ]);

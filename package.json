@@ -1,6 +1,6 @@
 {
   "name": "bandcamp-deck",
-  "version": "3.6.3",
+  "version": "3.6.4",
   "description": "Bandcamp Deck rebuild (v3)",
   "license": "AGPL-3.0-or-later",
   "engines": {
