@@ -7,7 +7,7 @@ interface SettingsHandlers {
   onToggleAutoPlay(enabled: boolean): void;
   onTogglePerformanceMode(enabled: boolean): void;
   onOpenKeyboardShortcuts(): void;
-  onAdjustGlassEffect(): void;
+  onEditAppearance(): void;
 }
 
 interface SettingsUpdateInput {
@@ -110,15 +110,15 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
   shortcutsRow.appendChild(shortcutsButton);
 
   const glassRow = dom('div', { class: 'bc-settings-row' });
-  const glassText = dom('span', { class: 'bc-settings-label' }, ['Glass effect']);
+  const glassText = dom('span', { class: 'bc-settings-label' }, ['Appearance']);
   const glassButton = dom(
     'button',
     {
       class: 'bc-settings-action-btn',
       type: 'button',
-      'aria-label': 'Adjust glass effect'
+      'aria-label': 'Edit appearance'
     },
-    ['Adjust']
+    ['Edit']
   ) as HTMLButtonElement;
   glassRow.appendChild(glassText);
   glassRow.appendChild(glassButton);
@@ -178,7 +178,7 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
   });
 
   glassButton.addEventListener('click', () => {
-    handlers.onAdjustGlassEffect();
+    handlers.onEditAppearance();
   });
 
   container.appendChild(root);

@@ -20,7 +20,7 @@ import { createWaveformCanvas } from '@/ui/components/waveform-canvas';
 import { createWelcomeGate } from '@/ui/components/welcome-gate';
 import { createWhyTwoKeysPanel } from '@/ui/components/why-two-keys-panel';
 import { createPanelGlass } from '@/ui/glass/glass-effect';
-import { createGlassTuner } from '@/ui/glass/glass-tuner';
+import { createAppearancePanel } from '@/ui/glass/appearance-panel';
 import { shouldSuppressProvisionalLowBandTempo } from '@/shared/tempo-display';
 import {
   DEFAULT_KEYBOARD_SHORTCUTS,
@@ -994,7 +994,7 @@ export function showResultsPanel(
   // Liquid-glass surface + Alt+G tuner. Created after the root is attached so
   // the glass ResizeObserver's initial fire sees real panel dimensions.
   const panelGlass = createPanelGlass(root);
-  const glassTuner = createGlassTuner(panelGlass);
+  const appearancePanel = createAppearancePanel(panelGlass, root);
   const whyTwoKeysPanel = createWhyTwoKeysPanel(root);
 
   whyTwoKeysButton.addEventListener('click', (event) => {
@@ -1103,9 +1103,9 @@ export function showResultsPanel(
     onOpenKeyboardShortcuts() {
       setShortcutSettingsOpen(!shortcutSettingsOpen);
     },
-    onAdjustGlassEffect() {
+    onEditAppearance() {
       setSettingsOpen(false);
-      glassTuner.open();
+      appearancePanel.open();
     }
   });
   const keyboardShortcutsPanel = createKeyboardShortcutsPanel(shortcutsHost, {
@@ -1373,7 +1373,7 @@ export function showResultsPanel(
       keyboardShortcutsPanel.destroy();
       welcomeGate.destroy();
       whyTwoKeysPanel.destroy();
-      glassTuner.destroy();
+      appearancePanel.destroy();
       panelGlass.destroy();
       likeButton.destroy();
       metadata.destroy();

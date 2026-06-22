@@ -140,6 +140,14 @@ function buildDisplacementMap(
  * function filters in one backdrop-filter list is unreliable in Chromium.
  */
 export function createPanelGlass(root: HTMLElement): PanelGlassController {
+  // Grey camouflage dapple: a pointer-transparent layer below the content whose
+  // opacity / blur / brightness are driven by --glass-camo* (see GLASS_CSS).
+  // Appended before the rim so it sits underneath everything else.
+  const camo = document.createElement('div');
+  camo.className = 'bc-glass-camo';
+  camo.setAttribute('aria-hidden', 'true');
+  root.appendChild(camo);
+
   // Specular rim light: a pointer-transparent overlay whose inset highlights
   // are scaled by --glass-specular (see GLASS_CSS).
   const rim = document.createElement('div');
@@ -254,6 +262,12 @@ export function createPanelGlass(root: HTMLElement): PanelGlassController {
     apply(settings: GlassSettings): void {
       root.style.setProperty('--glass-tint', String(settings.tint));
       root.style.setProperty('--glass-specular', String(settings.specular));
+      // Camouflage layer is engine-agnostic (plain CSS), so it is driven the
+      // same way on both browsers, outside the Chrome SVG branch below. The
+      // switch toggles the whole layer by collapsing its opacity to 0.
+      root.style.setProperty('--glass-camo', settings.camoEnabled ? String(settings.camo) : '0');
+      root.style.setProperty('--glass-camo-blur', `${settings.camoBlur}px`);
+      root.style.setProperty('--glass-camo-tone', String(settings.camoTone));
       if (__BUILD_TARGET__ === 'chrome') {
         // CSS blur(v) is defined as a Gaussian with stdDeviation = v, so the
         // slider value transfers 1:1 between the Firefox CSS path and this one.
@@ -281,6 +295,7 @@ export function createPanelGlass(root: HTMLElement): PanelGlassController {
       resizeObserver?.disconnect();
       svg?.remove();
       rim.remove();
+      camo.remove();
       root.style.removeProperty('backdrop-filter');
       root.style.removeProperty('-webkit-backdrop-filter');
     }

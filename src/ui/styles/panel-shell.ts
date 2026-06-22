@@ -122,7 +122,9 @@ export const PANEL_SHELL_CSS = `
   /* Glass surface: tint/blur are tunable via Alt+G (src/ui/glass/). Fallback
      values mirror GLASS_DEFAULTS in glass-settings.ts. On Chrome,
      glass-effect.ts overrides this backdrop-filter inline with the SVG
-     refraction chain; this rule is the Firefox path and the pre-init state. */
+     refraction chain; this rule is the Firefox path and the pre-init state.
+     The grey camouflage dapple is a separate .bc-glass-camo layer (glass.ts /
+     glass-effect.ts), not part of this tint. */
   background: rgba(247, 240, 240, var(--glass-tint, 0.65));
   backdrop-filter: blur(var(--glass-blur, 6.5px));
   -webkit-backdrop-filter: blur(var(--glass-blur, 6.5px));

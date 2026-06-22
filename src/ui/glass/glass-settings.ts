@@ -1,7 +1,7 @@
 /**
  * Tunable parameters for the panel liquid-glass surface. Persisted to
  * localStorage (same convention as the __BC_DEBUG__ logging flag) so a tuned
- * look survives reloads; the Alt+G tuner panel edits these live.
+ * look survives reloads; the Appearance panel (Alt+G) edits these live.
  */
 export interface GlassSettings {
   /** Peak backdrop displacement at the panel rim, in px. Chrome-only (SVG filter). */
@@ -16,10 +16,23 @@ export interface GlassSettings {
   tint: number;
   /** Specular rim-light opacity (0..1). */
   specular: number;
+  /** Grey camouflage layer opacity (0..1; master amount). Fixed constant. */
+  camo: number;
+  /** Grey camouflage blur radius, in px (the "very blurred" softness). Fixed constant. */
+  camoBlur: number;
+  /** Grey camouflage brightness multiplier (light-grey <-> dark-grey shade). Fixed constant. */
+  camoTone: number;
+  /** Whether the camouflage layer is shown. The Alt+G switch toggles this. */
+  camoEnabled: boolean;
 }
 
+/** Only the numeric settings are min/max-clamped; camoEnabled is boolean. */
+type NumericGlassKey = {
+  [K in keyof GlassSettings]: GlassSettings[K] extends number ? K : never;
+}[keyof GlassSettings];
+
 interface GlassSettingKey {
-  key: keyof GlassSettings;
+  key: NumericGlassKey;
   min: number;
   max: number;
 }
@@ -34,7 +47,7 @@ const LIMITS: GlassSettingKey[] = [
 ];
 
 /**
- * The tuned liquid-glass standard. The Alt+G panel now exposes a single
+ * The tuned liquid-glass standard. The Appearance panel exposes a single
  * combined Tint+Blur control, so tint and blur are kept coupled on the slider
  * line (blur = tint × 10): the default sits at position 0.65. Keep the blur and
  * tint values in sync with the stylesheet fallbacks in panel-shell.ts.
@@ -45,7 +58,11 @@ export const GLASS_DEFAULTS: GlassSettings = {
   lens: -150,
   blur: 6.5,
   tint: 0.65,
-  specular: 0.85
+  specular: 0.85,
+  camo: 1,
+  camoBlur: 11,
+  camoTone: 0.88,
+  camoEnabled: true
 };
 
 const STORAGE_KEY = '__BC_GLASS__';
@@ -57,6 +74,12 @@ export function clampGlassSettings(raw: Partial<GlassSettings>): GlassSettings {
     if (Number.isFinite(value)) {
       result[key] = Math.min(max, Math.max(min, value));
     }
+  }
+  // camo/camoBlur/camoTone are fixed constants (kept at GLASS_DEFAULTS, not in
+  // LIMITS), so stale stored values can never override the standard look; only
+  // the on/off state is read back from storage.
+  if (typeof raw.camoEnabled === 'boolean') {
+    result.camoEnabled = raw.camoEnabled;
   }
   return result;
 }
@@ -83,7 +106,7 @@ export function saveGlassSettings(settings: GlassSettings): void {
 }
 
 /**
- * The Alt+G panel exposes one combined Tint+Blur control. Its position is a
+ * The Appearance panel exposes one combined Tint+Blur control. Its position is a
  * 0..1 fraction where 0 = clear glass and 1 = full frost: tint uses that
  * fraction directly (its range is already 0..1) and blur scales to the same
  * fraction of its 0..10px range. Tint therefore *is* the position, which lets

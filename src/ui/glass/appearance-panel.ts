@@ -1,0 +1,185 @@
+import { dom } from '@/utils/dom';
+import type { PanelGlassController } from '@/ui/glass/glass-effect';
+import {
+  GLASS_DEFAULTS,
+  loadGlassSettings,
+  saveGlassSettings,
+  positionFromSettings,
+  withGlassPosition
+} from '@/ui/glass/glass-settings';
+
+export interface AppearancePanelController {
+  /** Opens the Appearance panel (e.g. from the Settings menu entry). */
+  open(): void;
+  destroy(): void;
+}
+
+/** Slider granularity: 1% steps over the 0..1 position (= 0.1px blur steps). */
+const POSITION_STEP = 0.01;
+
+const formatPosition = (position: number): string => `${Math.round(position * 100)}%`;
+
+/**
+ * The Appearance panel — a live-tuning surface for the panel glass, opened with
+ * Alt+G or from Settings → Appearance → Edit (same shortcut pattern as the Alt+K
+ * key-tuning and Alt+D debugger panels). Styled to match the main UI panel (light
+ * glass), it sits just to the left of it. A "Frost" slider drives tint and blur
+ * together (see withGlassPosition); a "Camouflage" switch shows or hides the grey
+ * camo layer (its amount/blur/shade are fixed constants in GLASS_DEFAULTS). The
+ * remaining glass parameters keep their calibrated defaults. Loads persisted
+ * settings and applies them immediately on creation, so a tuned look survives
+ * reloads even when the panel is never opened.
+ */
+export function createAppearancePanel(
+  glass: PanelGlassController,
+  root: HTMLElement
+): AppearancePanelController {
+  // Re-couple the loaded values to a single slider position so stored state
+  // can never drift from the one control the panel exposes for tint+blur.
+  let position = positionFromSettings(loadGlassSettings());
+  let settings = withGlassPosition(loadGlassSettings(), position);
+  glass.apply(settings);
+  saveGlassSettings(settings);
+
+  const applyAndSave = (): void => {
+    // Re-couple tint+blur from the Frost position; camoEnabled on `settings` is
+    // preserved through withGlassPosition (it spreads the current settings).
+    settings = withGlassPosition(settings, position);
+    glass.apply(settings);
+    saveGlassSettings(settings);
+  };
+
+  // ─── Frost slider (tint + blur coupled to a single position) ───────────
+  const slider = dom('input', {
+    type: 'range',
+    class: 'bc-appearance-panel-slider',
+    min: '0',
+    max: '1',
+    step: String(POSITION_STEP),
+    value: String(position),
+    'aria-label': 'Frost'
+  }) as HTMLInputElement;
+  const valueEl = dom('span', { class: 'bc-appearance-panel-value' }, [formatPosition(position)]);
+
+  const setPosition = (next: number): void => {
+    position = next;
+    slider.value = String(position);
+    valueEl.textContent = formatPosition(position);
+    applyAndSave();
+  };
+
+  slider.addEventListener('input', () => setPosition(Number.parseFloat(slider.value)));
+
+  // ─── Camouflage on/off switch ──────────────────────────────────────────
+  const camoToggle = dom('button', {
+    type: 'button',
+    class: 'bc-settings-toggle-btn bc-appearance-panel-switch',
+    'aria-label': 'Toggle camouflage',
+    'aria-pressed': settings.camoEnabled ? 'true' : 'false'
+  }) as HTMLButtonElement;
+  camoToggle.classList.toggle('is-on', settings.camoEnabled);
+
+  const setCamoEnabled = (enabled: boolean): void => {
+    settings = { ...settings, camoEnabled: enabled };
+    camoToggle.classList.toggle('is-on', enabled);
+    camoToggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    applyAndSave();
+  };
+
+  camoToggle.addEventListener('click', () => setCamoEnabled(!settings.camoEnabled));
+
+  // ─── Reset ─────────────────────────────────────────────────────────────
+  const resetButton = dom('button', { type: 'button', class: 'bc-appearance-panel-reset' }, ['Reset']);
+  resetButton.addEventListener('click', () => {
+    setCamoEnabled(GLASS_DEFAULTS.camoEnabled);
+    setPosition(positionFromSettings(GLASS_DEFAULTS));
+  });
+
+  const closeButton = dom(
+    'button',
+    { type: 'button', class: 'bc-appearance-panel-close', 'aria-label': 'Close' },
+    ['×']
+  );
+
+  const host = dom('div', { class: 'bc-appearance-panel', role: 'dialog', 'aria-label': 'Appearance' }, [
+    dom('div', { class: 'bc-appearance-panel-head' }, [
+      dom('span', { class: 'bc-appearance-panel-title' }, ['Appearance']),
+      resetButton,
+      closeButton
+    ]),
+    dom('div', { class: 'bc-appearance-panel-row' }, [
+      dom('span', { class: 'bc-appearance-panel-label' }, ['Frost']),
+      valueEl
+    ]),
+    slider,
+    dom('div', { class: 'bc-appearance-panel-row bc-appearance-panel-switch-row' }, [
+      dom('span', { class: 'bc-appearance-panel-label' }, ['Camouflage']),
+      camoToggle
+    ])
+  ]);
+  document.body.appendChild(host);
+
+  // Attached to the main panel: while open, each frame places the panel flush
+  // against the main panel's left edge with tops aligned and matching its live
+  // scale, so it tracks the main panel through drag and resize (same approach as
+  // the keyboard-shortcuts host). getBoundingClientRect already includes the
+  // main panel's transform, so this is a single read per frame.
+  let geometryRaf = 0;
+  const readPanelScale = (): number => {
+    const raw = Number.parseFloat(getComputedStyle(root).getPropertyValue('--panel-scale'));
+    return Number.isFinite(raw) && raw > 0 ? raw : 1;
+  };
+  const syncGeometry = (): void => {
+    const rect = root.getBoundingClientRect();
+    // right anchors the panel's right edge to the main panel's left edge;
+    // transform-origin: top right then grows it leftward and downward.
+    host.style.right = `${Math.round(window.innerWidth - rect.left)}px`;
+    host.style.top = `${Math.round(rect.top)}px`;
+    host.style.setProperty('--appearance-scale', String(readPanelScale()));
+  };
+  const stopGeometryLoop = (): void => {
+    if (geometryRaf) {
+      window.cancelAnimationFrame(geometryRaf);
+      geometryRaf = 0;
+    }
+  };
+  const startGeometryLoop = (): void => {
+    stopGeometryLoop();
+    const tick = (): void => {
+      syncGeometry();
+      geometryRaf = window.requestAnimationFrame(tick);
+    };
+    tick();
+  };
+
+  const setOpen = (open: boolean): void => {
+    host.classList.toggle('is-open', open);
+    if (open) {
+      startGeometryLoop();
+    } else {
+      stopGeometryLoop();
+    }
+  };
+
+  closeButton.addEventListener('click', () => setOpen(false));
+
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (!event.altKey || event.code !== 'KeyG' || event.repeat) {
+      return;
+    }
+    event.preventDefault();
+    setOpen(!host.classList.contains('is-open'));
+  };
+  document.addEventListener('keydown', onKeyDown, true);
+
+  return {
+    open(): void {
+      setOpen(true);
+    },
+    destroy(): void {
+      document.removeEventListener('keydown', onKeyDown, true);
+      stopGeometryLoop();
+      host.remove();
+    }
+  };
+}
