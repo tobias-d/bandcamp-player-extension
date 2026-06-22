@@ -22,11 +22,21 @@ export interface GlassSettings {
   camoBlur: number;
   /** Grey camouflage brightness multiplier (light-grey <-> dark-grey shade). Fixed constant. */
   camoTone: number;
-  /** Whether the camouflage layer is shown. The Alt+G switch toggles this. */
-  camoEnabled: boolean;
+  /** Selected background style index into BACKGROUND_STYLES. The Appearance slider sets this. */
+  bgStyle: number;
 }
 
-/** Only the numeric settings are min/max-clamped; camoEnabled is boolean. */
+/** Selectable panel background styles. Index 0 is always "no background"; the last is a
+ *  reserved placeholder for a style still to be designed (it currently shows no background). */
+export const BACKGROUND_STYLES = ['None', 'Camouflage', 'Prism', 'Style 4'] as const;
+
+/** Index in BACKGROUND_STYLES whose selection shows the grey camouflage layer. */
+export const BG_STYLE_CAMOUFLAGE = 1;
+
+/** Index in BACKGROUND_STYLES whose selection shows the prism light-beam layer. */
+export const BG_STYLE_PRISM = 2;
+
+/** Only the numeric tuning settings are min/max-clamped; bgStyle is an index clamped separately. */
 type NumericGlassKey = {
   [K in keyof GlassSettings]: GlassSettings[K] extends number ? K : never;
 }[keyof GlassSettings];
@@ -62,7 +72,7 @@ export const GLASS_DEFAULTS: GlassSettings = {
   camo: 1,
   camoBlur: 11,
   camoTone: 0.88,
-  camoEnabled: true
+  bgStyle: BG_STYLE_CAMOUFLAGE
 };
 
 const STORAGE_KEY = '__BC_GLASS__';
@@ -77,9 +87,13 @@ export function clampGlassSettings(raw: Partial<GlassSettings>): GlassSettings {
   }
   // camo/camoBlur/camoTone are fixed constants (kept at GLASS_DEFAULTS, not in
   // LIMITS), so stale stored values can never override the standard look; only
-  // the on/off state is read back from storage.
-  if (typeof raw.camoEnabled === 'boolean') {
-    result.camoEnabled = raw.camoEnabled;
+  // the selected style index is read back from storage.
+  const rawStyle = Number((raw as { bgStyle?: unknown }).bgStyle);
+  if (Number.isFinite(rawStyle)) {
+    result.bgStyle = Math.min(BACKGROUND_STYLES.length - 1, Math.max(0, Math.round(rawStyle)));
+  } else if (typeof (raw as { camoEnabled?: unknown }).camoEnabled === 'boolean') {
+    // Migrate the old on/off camouflage switch to the new style index.
+    result.bgStyle = (raw as { camoEnabled?: boolean }).camoEnabled ? BG_STYLE_CAMOUFLAGE : 0;
   }
   return result;
 }

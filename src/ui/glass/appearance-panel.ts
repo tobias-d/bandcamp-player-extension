@@ -2,6 +2,7 @@ import { dom } from '@/utils/dom';
 import type { PanelGlassController } from '@/ui/glass/glass-effect';
 import {
   GLASS_DEFAULTS,
+  BACKGROUND_STYLES,
   loadGlassSettings,
   saveGlassSettings,
   positionFromSettings,
@@ -31,9 +32,10 @@ const formatPosition = (position: number): string => `${Math.round(position * 10
  * Alt+G or from Settings → Appearance → Edit (same shortcut pattern as the Alt+K
  * key-tuning and Alt+D debugger panels). Styled to match the main UI panel (light
  * glass), it sits just to the left of it. A "Frost" slider drives tint and blur
- * together (see withGlassPosition); a "Camouflage" switch shows or hides the grey
- * camo layer (its amount/blur/shade are fixed constants in GLASS_DEFAULTS). The
- * remaining glass parameters keep their calibrated defaults. Loads persisted
+ * together (see withGlassPosition); a "Background" stepper (‹ name ›) cycles through
+ * the background styles in BACKGROUND_STYLES (None, Camouflage, Prism, plus one
+ * reserved placeholder position; the camo amount/blur/shade are fixed constants in
+ * GLASS_DEFAULTS). The remaining glass parameters keep their defaults. Loads persisted
  * settings and applies them immediately on creation, so a tuned look survives
  * reloads even when the panel is never opened.
  */
@@ -77,28 +79,41 @@ export function createAppearancePanel(
 
   slider.addEventListener('input', () => setPosition(Number.parseFloat(slider.value)));
 
-  // ─── Camouflage on/off switch ──────────────────────────────────────────
-  const camoToggle = dom('button', {
+  // ─── Background style stepper (‹ name ›) ───────────────────────────────
+  const bgValueEl = dom(
+    'span',
+    { class: 'bc-appearance-panel-value bc-appearance-panel-bg-value' },
+    [BACKGROUND_STYLES[settings.bgStyle]]
+  );
+  const bgPrev = dom('button', {
     type: 'button',
-    class: 'bc-settings-toggle-btn bc-appearance-panel-switch',
-    'aria-label': 'Toggle camouflage',
-    'aria-pressed': settings.camoEnabled ? 'true' : 'false'
-  }) as HTMLButtonElement;
-  camoToggle.classList.toggle('is-on', settings.camoEnabled);
+    class: 'bc-appearance-panel-arrow',
+    'aria-label': 'Previous background style'
+  }, ['‹']) as HTMLButtonElement;
+  const bgNext = dom('button', {
+    type: 'button',
+    class: 'bc-appearance-panel-arrow',
+    'aria-label': 'Next background style'
+  }, ['›']) as HTMLButtonElement;
 
-  const setCamoEnabled = (enabled: boolean): void => {
-    settings = { ...settings, camoEnabled: enabled };
-    camoToggle.classList.toggle('is-on', enabled);
-    camoToggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+  const setBgStyle = (next: number): void => {
+    const index = Math.min(BACKGROUND_STYLES.length - 1, Math.max(0, Math.round(next)));
+    settings = { ...settings, bgStyle: index };
+    bgValueEl.textContent = BACKGROUND_STYLES[index];
+    bgPrev.disabled = index === 0;
+    bgNext.disabled = index === BACKGROUND_STYLES.length - 1;
     applyAndSave();
   };
+  bgPrev.disabled = settings.bgStyle === 0;
+  bgNext.disabled = settings.bgStyle === BACKGROUND_STYLES.length - 1;
 
-  camoToggle.addEventListener('click', () => setCamoEnabled(!settings.camoEnabled));
+  bgPrev.addEventListener('click', () => setBgStyle(settings.bgStyle - 1));
+  bgNext.addEventListener('click', () => setBgStyle(settings.bgStyle + 1));
 
   // ─── Reset ─────────────────────────────────────────────────────────────
   const resetButton = dom('button', { type: 'button', class: 'bc-appearance-panel-reset' }, ['Reset']);
   resetButton.addEventListener('click', () => {
-    setCamoEnabled(GLASS_DEFAULTS.camoEnabled);
+    setBgStyle(GLASS_DEFAULTS.bgStyle);
     setPosition(positionFromSettings(GLASS_DEFAULTS));
   });
 
@@ -119,9 +134,9 @@ export function createAppearancePanel(
       slider,
       valueEl
     ]),
-    dom('div', { class: 'bc-appearance-panel-row bc-appearance-panel-switch-row' }, [
-      dom('span', { class: 'bc-appearance-panel-label' }, ['Camouflage']),
-      camoToggle
+    dom('div', { class: 'bc-appearance-panel-row bc-appearance-panel-bg-row' }, [
+      dom('span', { class: 'bc-appearance-panel-label' }, ['Background']),
+      dom('div', { class: 'bc-appearance-panel-stepper' }, [bgValueEl, bgPrev, bgNext])
     ])
   ]);
   document.body.appendChild(host);

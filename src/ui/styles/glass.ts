@@ -61,6 +61,30 @@ export const GLASS_CSS = `
   background-repeat: repeat;
 }
 
+/* Prism light-beams — a few long, thin, defined diagonal streaks in a purple/yellow
+   palette "shining through" the glass. Each beam is its own non-repeating
+   linear-gradient with px stops (a narrow core + short falloff), placed at an
+   irregular offset and slightly different angle so the set reads as scattered light
+   rather than a regular, symmetrical pattern. Beams are anchored in px (not
+   percentages), so they keep their width as the panel grows. A light blur softens the
+   edges without smearing them; the whole layer is oversized (negative inset, beyond
+   the blur) and clipped by the panel's overflow:hidden so the blur leaves no faded
+   ring at the border. Sits below the content (z-index 0), engine-agnostic, and is
+   gated entirely by --glass-prism (0 = off / pure glass). */
+.bc-glass-prism {
+  position: absolute;
+  inset: -64px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--glass-prism, 0);
+  filter: blur(12px) saturate(1.25);
+  background-image:
+    linear-gradient(116deg, transparent 70px, rgba(170, 120, 255, 0.28) 77px, rgba(170, 120, 255, 0.28) 82px, transparent 90px),
+    linear-gradient(120deg, transparent 182px, rgba(255, 214, 120, 0.25) 189px, rgba(255, 214, 120, 0.25) 193px, transparent 201px),
+    linear-gradient(113deg, transparent 312px, rgba(150, 110, 245, 0.22) 319px, rgba(150, 110, 245, 0.22) 324px, transparent 332px);
+  background-repeat: no-repeat;
+}
+
 /* Specular rim light: glass reads as glass through a thin, uniform edge
    light — not a top-light/bottom-dark bevel. All strengths scale with
    --glass-specular so one slider drives the whole rim. */
@@ -179,6 +203,49 @@ export const GLASS_CSS = `
   font-size: 13px;
   font-weight: 600;
   color: #1f2228;
+}
+
+/* The background-style value is a name, not a number: let it size to the text and
+   sit a touch smaller so it shares the row with the stepper arrows. */
+.bc-appearance-panel-bg-value {
+  min-width: 0;
+  font-size: 12px;
+}
+
+/* Background row: label on the left, the name + ‹ › arrows grouped on the right. */
+.bc-appearance-panel-bg-row {
+  align-items: center;
+}
+
+.bc-appearance-panel-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bc-appearance-panel-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgba(78, 86, 97, 0.28);
+  border-radius: 6px;
+  background: transparent;
+  color: #1f2228;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bc-appearance-panel-arrow:hover {
+  background: rgba(14, 16, 20, 0.08);
+}
+
+.bc-appearance-panel-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 /* Compact inline control: takes the space between the label and value on the

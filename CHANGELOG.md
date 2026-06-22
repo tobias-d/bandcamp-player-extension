@@ -6,6 +6,7 @@ All notable changes to Bandcamp Deck are recorded here, one entry per released v
 
 - About panel: rewrote the About text (`src/ui/components/why-two-keys-panel.ts`) to lead with the extension's own audio engine and the two projects behind the core features (Signalsmith Stretch for Tempo Adjust, Essentia for BPM/key/waveform), added a memory/Performance-mode note, and shortened the key-analysis section.
 - Welcome panel: reworked the welcome gate (`src/ui/components/welcome-gate.ts`) into a paged walkthrough — three curved-divider bands (welcome / slides / dismiss), Back/Next arrows with a dot indicator, trackpad swipe navigation, feature chips, a compact keyboard-shortcuts grid, and a revised feedback/tip slide.
+- Appearance: the panel background can now be switched between styles in Settings → Appearance.
 
 ## 3.6.4 — 2026-06-22
 

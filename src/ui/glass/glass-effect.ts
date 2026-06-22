@@ -1,4 +1,5 @@
 import type { GlassSettings } from '@/ui/glass/glass-settings';
+import { BG_STYLE_CAMOUFLAGE, BG_STYLE_PRISM } from '@/ui/glass/glass-settings';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const FILTER_ID = 'bc-panel-glass-filter';
@@ -148,6 +149,14 @@ export function createPanelGlass(root: HTMLElement): PanelGlassController {
   camo.setAttribute('aria-hidden', 'true');
   root.appendChild(camo);
 
+  // Prism light-beams: a second pointer-transparent background layer (same z-index
+  // as the camo), shown only for the Prism style. Its intensity is gated by
+  // --glass-prism (0 = off); the beam colours/blur are fixed constants in GLASS_CSS.
+  const prism = document.createElement('div');
+  prism.className = 'bc-glass-prism';
+  prism.setAttribute('aria-hidden', 'true');
+  root.appendChild(prism);
+
   // Specular rim light: a pointer-transparent overlay whose inset highlights
   // are scaled by --glass-specular (see GLASS_CSS).
   const rim = document.createElement('div');
@@ -263,9 +272,11 @@ export function createPanelGlass(root: HTMLElement): PanelGlassController {
       root.style.setProperty('--glass-tint', String(settings.tint));
       root.style.setProperty('--glass-specular', String(settings.specular));
       // Camouflage layer is engine-agnostic (plain CSS), so it is driven the
-      // same way on both browsers, outside the Chrome SVG branch below. The
-      // switch toggles the whole layer by collapsing its opacity to 0.
-      root.style.setProperty('--glass-camo', settings.camoEnabled ? String(settings.camo) : '0');
+      // same way on both browsers, outside the Chrome SVG branch below. It shows
+      // only when the camouflage background style is selected; any other style
+      // collapses its opacity to 0.
+      root.style.setProperty('--glass-camo', settings.bgStyle === BG_STYLE_CAMOUFLAGE ? String(settings.camo) : '0');
+      root.style.setProperty('--glass-prism', settings.bgStyle === BG_STYLE_PRISM ? '1' : '0');
       root.style.setProperty('--glass-camo-blur', `${settings.camoBlur}px`);
       root.style.setProperty('--glass-camo-tone', String(settings.camoTone));
       if (__BUILD_TARGET__ === 'chrome') {
