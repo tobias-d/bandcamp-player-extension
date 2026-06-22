@@ -11,6 +11,7 @@ Main improvements:
 - Camouflage layer: a new toggle adds tiled grey radial blobs that blend into the glass and keep their form as the panel grows.
 - Letterpress idle wordmark: `BANDCAMP // DECK` is pressed into the glass with a layered text-shadow.
 - Welcome-gate copy now points to Settings → Appearance and uses a centered, unnumbered list.
+- Open-album button: now hidden whenever the panel is idle on every page type. Visibility is decided once in the panel (`panel.ts`, idle + valid album URL); the redundant source/playback gate in `state-sync.ts` was removed, so it no longer lingered on idle release pages.
 
 ## 3.6.3 — 2026-06-20
 

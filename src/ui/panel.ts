@@ -1256,7 +1256,11 @@ export function showResultsPanel(
     };
     const panelIdle = isPanelIdle(next);
     root.classList.toggle('bc-panel-idle', panelIdle);
-    const albumOpenHref = resolveAlbumOpenHref(next);
+    // One global rule for the "Open album in a new tab" affordance: surface it
+    // only when the panel is active and we have a real album URL to open. An
+    // idle panel never shows it, on every page type. The album URL itself is
+    // supplied by the state builders; the panel owns the visibility decision.
+    const albumOpenHref = panelIdle ? '' : resolveAlbumOpenHref(next);
     if (albumOpenHref) {
       albumOpenLink.href = albumOpenHref;
       albumOpenLink.removeAttribute('aria-disabled');

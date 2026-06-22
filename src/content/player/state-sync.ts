@@ -827,11 +827,13 @@ export function buildPanelInput(
     ...state.playlist,
     tracks: applyLikeStatesToPlaylist(state.playlist.tracks, likeState)
   };
-  const hasLoadedSource = Boolean(String(state.currentSrc || '').trim());
+  // Suppress the album-open URL only on the album's own release page — there's
+  // no point linking to the page you're already on. Idle hiding is decided once
+  // in the panel, so there is no source/playback gate here.
   const isAlbumReleasePage = detectPageContext().pageType === 'album';
-  const releasePageUrl = hasLoadedSource && !isAlbumReleasePage
-    ? normalizeAlbumPageUrl(playlistWithLikes.releasePageUrl)
-    : '';
+  const releasePageUrl = isAlbumReleasePage
+    ? ''
+    : normalizeAlbumPageUrl(playlistWithLikes.releasePageUrl);
 
   return {
     metadata: state.metadata,
