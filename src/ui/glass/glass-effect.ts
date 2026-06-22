@@ -149,12 +149,17 @@ export function createPanelGlass(root: HTMLElement): PanelGlassController {
   camo.setAttribute('aria-hidden', 'true');
   root.appendChild(camo);
 
-  // Prism light-beams: a second pointer-transparent background layer (same z-index
-  // as the camo), shown only for the Prism style. Its intensity is gated by
-  // --glass-prism (0 = off); the beam colours/blur are fixed constants in GLASS_CSS.
+  // Prism light-beams: a second pointer-transparent layer (same z-index as the camo),
+  // shown only for the Prism style. Its intensity is gated by --glass-prism (0 = off);
+  // the container carries the blur/opacity, and each child is one tapered beam (a
+  // rotated elliptical gradient) — colours/positions are fixed constants in GLASS_CSS.
   const prism = document.createElement('div');
   prism.className = 'bc-glass-prism';
   prism.setAttribute('aria-hidden', 'true');
+  // Six beams: a cool set (purple/indigo/blue) and a warm set (orange/amber/yellow).
+  for (let i = 0; i < 6; i += 1) {
+    prism.appendChild(document.createElement('div')).className = 'bc-glass-prism-beam';
+  }
   root.appendChild(prism);
 
   // Specular rim light: a pointer-transparent overlay whose inset highlights

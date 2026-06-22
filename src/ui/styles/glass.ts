@@ -61,28 +61,74 @@ export const GLASS_CSS = `
   background-repeat: repeat;
 }
 
-/* Prism light-beams — a few long, thin, defined diagonal streaks in a purple/yellow
-   palette "shining through" the glass. Each beam is its own non-repeating
-   linear-gradient with px stops (a narrow core + short falloff), placed at an
-   irregular offset and slightly different angle so the set reads as scattered light
-   rather than a regular, symmetrical pattern. Beams are anchored in px (not
-   percentages), so they keep their width as the panel grows. A light blur softens the
-   edges without smearing them; the whole layer is oversized (negative inset, beyond
-   the blur) and clipped by the panel's overflow:hidden so the blur leaves no faded
-   ring at the border. Sits below the content (z-index 0), engine-agnostic, and is
-   gated entirely by --glass-prism (0 = off / pure glass). */
+/* Prism light-beams — a few long, thin diagonal spikes of light "shining through" the
+   glass, in two limited palettes (cool purple->blue and warm orange->yellow, like a
+   narrow rainbow). Each beam is a rotated child whose elliptical mask is fat in the
+   middle and tapers to a point at both ends (like a needle/spike), so it thins out
+   before it disappears. The beams sit at irregular offsets and slightly
+   different angles so the set reads as scattered light, not a symmetrical pattern.
+   Sizes/offsets are px so the beams keep their form as the panel grows. The container
+   carries a light blur (softening the spikes without smearing them) and the opacity
+   gate; it is oversized (negative inset, beyond the blur) and clipped by the panel's
+   overflow:hidden so the blur leaves no faded ring at the border. Sits below the
+   content (z-index 0), engine-agnostic, gated by --glass-prism (0 = off / pure glass). */
 .bc-glass-prism {
   position: absolute;
   inset: -64px;
   pointer-events: none;
   z-index: 0;
   opacity: var(--glass-prism, 0);
-  filter: blur(12px) saturate(1.25);
-  background-image:
-    linear-gradient(116deg, transparent 70px, rgba(170, 120, 255, 0.28) 77px, rgba(170, 120, 255, 0.28) 82px, transparent 90px),
-    linear-gradient(120deg, transparent 182px, rgba(255, 214, 120, 0.25) 189px, rgba(255, 214, 120, 0.25) 193px, transparent 201px),
-    linear-gradient(113deg, transparent 312px, rgba(150, 110, 245, 0.22) 319px, rgba(150, 110, 245, 0.22) 324px, transparent 332px);
-  background-repeat: no-repeat;
+  filter: blur(9px) saturate(1.25);
+}
+
+/* Each beam is a single-hue tapered spike. The beams come in two sets of adjacent
+   hues — a cool set (purple / indigo / blue) and a warm set (orange / amber / yellow)
+   — so each set fans out as its own narrow rainbow. */
+.bc-glass-prism-beam {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: radial-gradient(ellipse closest-side at center, currentColor 0%, transparent 100%);
+}
+
+/* Cool set — purple, indigo, blue, fanned together in the upper-left. */
+.bc-glass-prism-beam:nth-child(1) {
+  width: 440px;
+  height: 11px;
+  color: rgba(150, 110, 245, 0.5);
+  transform: translate(-50%, -50%) translate(-62px, -74px) rotate(26deg);
+}
+.bc-glass-prism-beam:nth-child(2) {
+  width: 440px;
+  height: 11px;
+  color: rgba(122, 142, 250, 0.48);
+  transform: translate(-50%, -50%) translate(-48px, -62px) rotate(28deg);
+}
+.bc-glass-prism-beam:nth-child(3) {
+  width: 440px;
+  height: 11px;
+  color: rgba(108, 182, 255, 0.46);
+  transform: translate(-50%, -50%) translate(-34px, -50px) rotate(30deg);
+}
+
+/* Warm set — orange, amber, yellow, fanned together toward the lower-right. */
+.bc-glass-prism-beam:nth-child(4) {
+  width: 360px;
+  height: 10px;
+  color: rgba(255, 158, 88, 0.48);
+  transform: translate(-50%, -50%) translate(40px, 42px) rotate(30deg);
+}
+.bc-glass-prism-beam:nth-child(5) {
+  width: 360px;
+  height: 10px;
+  color: rgba(255, 190, 108, 0.46);
+  transform: translate(-50%, -50%) translate(54px, 54px) rotate(32deg);
+}
+.bc-glass-prism-beam:nth-child(6) {
+  width: 360px;
+  height: 10px;
+  color: rgba(255, 222, 120, 0.5);
+  transform: translate(-50%, -50%) translate(68px, 66px) rotate(34deg);
 }
 
 /* Specular rim light: glass reads as glass through a thin, uniform edge
