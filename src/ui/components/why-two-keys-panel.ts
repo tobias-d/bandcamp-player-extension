@@ -151,46 +151,43 @@ export function createWhyTwoKeysPanel(anchorRoot: HTMLElement): WhyTwoKeysPanelC
   );
   const body = dom('div', { class: 'bc-why-two-keys-body' }, [
     dom('p', {}, [
-      'Bandcamp Deck adds BPM analysis, key analysis, waveform detail, Tempo Adjust, and Wishlist interaction.'
+      'Bandcamp Deck runs its ',
+      dom('strong', {}, ['own audio engine']),
+      ': once a stream starts, the extension takes playback over from Bandcamp’s player so it can ',
+      'change tempo, seek precisely, render an accurate waveform, and preload upcoming tracks.'
     ]),
     dom('p', {}, [
-      'Some of these features may look simple on the surface, but there is a lot happening underneath. ',
-      'The extension builds on two sophisticated audio projects: ',
+      'Two open-source projects make these core features possible. ',
+      dom('strong', {}, ['Signalsmith Stretch']),
+      ' powers Tempo Adjust, speeding a track to a target BPM without changing its pitch. ',
       dom('strong', {}, ['Essentia']),
-      ' powers the BPM and key analysis, while ',
-      dom('strong', {}, ['SignalSmith']),
-      ' powers the high-quality time-stretching used for Tempo Adjust.'
+      ' powers the BPM, key, and waveform analysis, working on the decoded audio itself.'
     ]),
     dom('p', {}, [
-      'Because these features rely on multiple audio calculations, Bandcamp Deck can be fairly resource intensive. ',
-      'For the smoothest experience, a fast CPU is recommended. ',
-      'You also should not be surprised if your machine gets warm and the fans start running while the extension is working. ',
-      'That is expected.'
+      'Running real audio analysis in the browser makes Bandcamp Deck fairly resource intensive, ',
+      'so a fast CPU helps and your machine may get warm. Bandcamp can also slow down under heavy ',
+      'traffic, so avoid skipping between tracks too quickly.'
     ]),
     dom('p', {}, [
-      'Bandcamp itself is not always at its fastest when site traffic is high. ',
-      'Since Bandcamp Deck also makes many requests for analysis and metadata, browsing can feel a bit slower during those moments. ',
-      'When that happens, it is also not recommended to switch between tracks excessively fast.'
+      'Preloading upcoming tracks also uses a fair amount of ',
+      dom('strong', {}, ['memory']),
+      ', kept within a budget and released when no longer needed. On Chrome, an optional ',
+      dom('strong', {}, ['Performance mode']),
+      ' prepares more tracks ahead for faster navigation, at the cost of more memory — off by ',
+      'default, for machines with plenty of RAM (around ',
+      dom('strong', {}, ['16 GB or more']),
+      ').'
     ]),
+    dom('h3', {}, ['About Key Analysis']),
     dom('p', {}, [
-      'BPM analysis can also be less reliable on very fast tracks, especially once the tempo goes above ',
-      dom('strong', {}, ['150 BPM']),
-      '.'
-    ]),
-    dom('h3', {}, ['On Key Analysis']),
-    dom('p', {}, [
-      'Apps like Rekordbox, Mixed In Key, and similar tools can return different key results for the same track, and that does not automatically mean one result is wrong. ',
-      dom('strong', {}, ['Key detection is not a fully objective measurement']),
-      ': different tools analyze music in different ways, focus on different parts of a track, and apply different decision rules. ',
-      'For that reason, Bandcamp Deck can show ',
+      dom('strong', {}, ['Key detection is not fully objective']),
+      ': tools like Rekordbox and Mixed In Key analyze music differently and can disagree on the ',
+      'same track without either being wrong. Bandcamp Deck may therefore show ',
       dom('strong', {}, ['two keys']),
-      ' instead of forcing everything into a single answer. ',
-      'Electronic tracks can have more than one strong tonal center, so the analysis looks across multiple sections of the track, reduces the influence of weak or ambiguous moments, and highlights the strongest key candidates. ',
-      'The first key should be understood as the ',
+      ' — the first is the ',
       dom('strong', {}, ['main harmonic center']),
-      ', while the second represents an important secondary one. If both are close, the track is likely moving between ',
-      dom('strong', {}, ['two tonal centers']),
-      '. If the first is clearly stronger, it should be treated as the main key.'
+      ', the second a secondary one. If they are close, the track moves between two tonal centers; ',
+      'if the first is clearly stronger, treat it as the main key.'
     ]),
   ]);
 
