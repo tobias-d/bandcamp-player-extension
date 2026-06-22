@@ -78,14 +78,14 @@ export const GLASS_CSS = `
 
 /* ─── Appearance panel (Alt+G) ───────────────────────────────────────────
    Styled to match the main UI panel: same light-glass surface, border, corner
-   radius, text colour and live 1.15 scale. appearance-panel.ts sets top,
-   right and --appearance-scale every frame while open so the panel stays
-   attached flush to the main panel's left edge (right edge = main panel's left
-   edge) and, sharing transform-origin: top right, expands leftward as its
-   content grows. The edge that meets the main panel is squared and has no
-   border so the two panels read as one attached surface. Lives on
-   document.body, so the values the main panel reads from its scoped CSS vars
-   are spelled out literally here (kept in sync with panel-shell.ts). */
+   radius, text colour and live 1.15 scale. appearance-panel.ts sets top, left
+   and --appearance-scale every frame while open (anchoring by the panel's own
+   scaled width) so the panel's right edge stays flush against the main panel's
+   left edge, growing downward from transform-origin: top left. The edge that
+   meets the main panel is squared and has no border so the two panels read as
+   one attached surface. Lives on document.body, so the values the main panel
+   reads from its scoped CSS vars are spelled out literally here (kept in sync
+   with panel-shell.ts). */
 .bc-appearance-panel {
   display: none;
   position: fixed;
@@ -105,7 +105,7 @@ export const GLASS_CSS = `
   font-size: 12px;
   user-select: none;
   transform: scale(var(--appearance-scale, 1.15));
-  transform-origin: top right;
+  transform-origin: top left;
 }
 
 .bc-appearance-panel.is-open {
@@ -151,6 +151,13 @@ export const GLASS_CSS = `
   margin-bottom: 8px;
 }
 
+/* The slider row keeps label, slider and value on one line: the label and value
+   stay their natural width, the slider takes the space between them. */
+.bc-appearance-panel-slider-row {
+  align-items: center;
+  gap: 10px;
+}
+
 /* Switch rows host a .bc-settings-toggle-btn (no text baseline), so centre it. */
 .bc-appearance-panel-switch-row {
   align-items: center;
@@ -158,39 +165,44 @@ export const GLASS_CSS = `
 }
 
 .bc-appearance-panel-label {
+  flex: 0 0 auto;
   color: rgba(31, 34, 40, 0.72);
   font-size: 12px;
   letter-spacing: 0.2px;
 }
 
 .bc-appearance-panel-value {
+  flex: 0 0 auto;
+  min-width: 34px;
+  text-align: right;
   font-variant-numeric: tabular-nums;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #1f2228;
 }
 
-/* One large, easy-to-grab control. Custom track + thumb (not accent-color) so
-   the hit target and thumb are big enough to drag comfortably. */
+/* Compact inline control: takes the space between the label and value on the
+   slider row. Custom track + thumb (not accent-color) so the thumb stays
+   grabbable at this smaller size. */
 .bc-appearance-panel-slider {
   -webkit-appearance: none;
   appearance: none;
-  display: block;
-  width: 100%;
-  height: 30px;
-  margin: 2px 0 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 16px;
+  margin: 0;
   padding: 0;
   background: transparent;
   cursor: pointer;
 }
 
 .bc-appearance-panel-slider::-webkit-slider-runnable-track {
-  height: 10px;
+  height: 6px;
   border-radius: 999px;
   background: rgba(31, 34, 40, 0.16);
 }
 .bc-appearance-panel-slider::-moz-range-track {
-  height: 10px;
+  height: 6px;
   border-radius: 999px;
   background: rgba(31, 34, 40, 0.16);
 }
@@ -198,21 +210,21 @@ export const GLASS_CSS = `
 .bc-appearance-panel-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 24px;
-  height: 24px;
-  margin-top: -7px; /* centre the 24px thumb on the 10px track */
+  width: 14px;
+  height: 14px;
+  margin-top: -4px; /* centre the 14px thumb on the 6px track */
   border-radius: 50%;
   background: #2c2f36;
   border: 2px solid #ffffff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 .bc-appearance-panel-slider::-moz-range-thumb {
-  width: 24px;
-  height: 24px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: #2c2f36;
   border: 2px solid #ffffff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .bc-appearance-panel-slider:focus-visible {

@@ -17,6 +17,13 @@ export interface AppearancePanelController {
 /** Slider granularity: 1% steps over the 0..1 position (= 0.1px blur steps). */
 const POSITION_STEP = 0.01;
 
+/**
+ * How far below the main panel's top edge the Appearance panel attaches, in the
+ * main panel's own (pre-scale) px — roughly below its header — so it reads as
+ * attached to the body of the panel rather than hanging off the top corner.
+ */
+const ATTACH_TOP_OFFSET_PX = 56;
+
 const formatPosition = (position: number): string => `${Math.round(position * 100)}%`;
 
 /**
@@ -107,11 +114,11 @@ export function createAppearancePanel(
       resetButton,
       closeButton
     ]),
-    dom('div', { class: 'bc-appearance-panel-row' }, [
+    dom('div', { class: 'bc-appearance-panel-row bc-appearance-panel-slider-row' }, [
       dom('span', { class: 'bc-appearance-panel-label' }, ['Frost']),
+      slider,
       valueEl
     ]),
-    slider,
     dom('div', { class: 'bc-appearance-panel-row bc-appearance-panel-switch-row' }, [
       dom('span', { class: 'bc-appearance-panel-label' }, ['Camouflage']),
       camoToggle
@@ -131,11 +138,20 @@ export function createAppearancePanel(
   };
   const syncGeometry = (): void => {
     const rect = root.getBoundingClientRect();
-    // right anchors the panel's right edge to the main panel's left edge;
-    // transform-origin: top right then grows it leftward and downward.
-    host.style.right = `${Math.round(window.innerWidth - rect.left)}px`;
-    host.style.top = `${Math.round(rect.top)}px`;
-    host.style.setProperty('--appearance-scale', String(readPanelScale()));
+    const scale = readPanelScale();
+    // Anchor by left (not right) using the panel's own scaled width, so its
+    // right edge sits flush against the main panel's left edge with no seam — the
+    // same approach as the keyboard-shortcuts host. (right + innerWidth is
+    // unreliable: innerWidth includes the scrollbar, which opens a gap.) Clamp to
+    // the viewport so the panel is never cut off when room to the left is tight.
+    const scaledWidth = host.offsetWidth * scale;
+    const left = Math.max(8, rect.left - scaledWidth);
+    // Offset down (scaled with the panel) so it attaches below the main panel's
+    // header rather than at the very top corner.
+    const top = Math.max(8, rect.top + ATTACH_TOP_OFFSET_PX * scale);
+    host.style.left = `${Math.round(left)}px`;
+    host.style.top = `${Math.round(top)}px`;
+    host.style.setProperty('--appearance-scale', String(scale));
   };
   const stopGeometryLoop = (): void => {
     if (geometryRaf) {
