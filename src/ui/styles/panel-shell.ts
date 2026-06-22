@@ -547,6 +547,13 @@ export const PANEL_SHELL_CSS = `
   text-overflow: clip;
   color: #2b2b2b;
   -webkit-text-fill-color: currentColor;
+  /* Letterpress / printing-press effect: the dark wordmark reads as pressed into
+     the light glass. A light highlight on the bottom edge is the lit lower lip of
+     the impression; a faint dark cast on top gives it depth. Inherits onto the
+     "//" separator too. (text-shadow is auto-dropped in forced-colors mode.) */
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65),
+    0 -1px 1px rgba(0, 0, 0, 0.12);
 }
 
 .bc-metadata-album.bc-metadata-idle .bc-metadata-marquee-text::after {
@@ -554,6 +561,9 @@ export const PANEL_SHELL_CSS = `
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* The shine overlay sits exactly over the base text; keep the letterpress
+     shadow on the base glyphs only so the sweep stays a clean highlight. */
+  text-shadow: none;
   background-image: linear-gradient(
     100deg,
     transparent 0%,
