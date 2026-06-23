@@ -156,6 +156,13 @@ const WELCOME_CSS = `
   white-space: nowrap;
 }
 
+/* Green variant of the feature chip, used for "NEW" markers on recently added settings. */
+.bc-welcome-gate-feature-new {
+  border-color: color-mix(in srgb, #1a7f37 55%, transparent);
+  background: color-mix(in srgb, #1a7f37 12%, transparent);
+  color: #1a7f37;
+}
+
 /* One page is shown at a time; the others are hidden. The active page is centered
    both vertically (between the header and the buttons) and horizontally, and the
    region scrolls if a page is taller than a small panel so navigation stays reachable. */
@@ -221,9 +228,9 @@ const WELCOME_CSS = `
   grid-template-rows: repeat(3, auto);
   grid-template-columns: auto auto;
   column-gap: 18px;
-  row-gap: 0;
+  row-gap: 5px;
   justify-content: center;
-  margin: 0;
+  margin: 8px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -233,8 +240,10 @@ const WELCOME_CSS = `
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 9.5px;
-  line-height: 1;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  line-height: 0.95;
   color: var(--panel-text-dim, #1f2228);
 }
 
@@ -246,16 +255,16 @@ const WELCOME_CSS = `
 
 .bc-welcome-gate-key {
   display: inline-block;
-  min-width: 9px;
-  padding: 0 3px;
+  min-width: 13px;
+  padding: 0 4px;
   border: 1px solid color-mix(in srgb, var(--panel-text, #1f2228) 32%, transparent);
   border-radius: 4px;
   text-align: center;
   color: var(--panel-text, #1f2228);
   font-family: var(--font-mono, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
-  line-height: 1.05;
+  line-height: 1;
   white-space: nowrap;
 }
 
@@ -517,6 +526,8 @@ function buildWelcomePages(): HTMLElement[] {
     dom('a', { class: className, href, target: '_blank', rel: 'noopener noreferrer' }, [label]);
   const feature = (label: string): HTMLElement =>
     dom('span', { class: 'bc-welcome-gate-feature' }, [label]);
+  const newBadge = (): HTMLElement =>
+    dom('span', { class: 'bc-welcome-gate-feature bc-welcome-gate-feature-new' }, ['NEW']);
 
   const appearance = page(
     'Appearance',
@@ -524,6 +535,8 @@ function buildWelcomePages(): HTMLElement[] {
       dom('li', {}, [dom('strong', {}, ['Resize the panel']), ' by dragging any corner.']),
       dom('li', {}, [
         feature('Appearance'),
+        ' ',
+        newBadge(),
         ' in Settings sets the panel’s opacity and background pattern.'
       ])
     ])
@@ -588,7 +601,6 @@ function buildWelcomePages(): HTMLElement[] {
     text('Spotted a bug or have a wish? ', link(FEEDBACK_FORM_URL, 'Send feedback')),
     text('No ads, no accounts, no catch — if Bandcamp Deck earns a place in your workflow, a small tip is hugely appreciated. ', link(KOFI_URL, 'Leave a tip', 'bc-welcome-gate-support-link'))
   );
-  feedback.classList.add('is-tight');
 
   return [appearance, performance, keyAnalysis, shortcuts, feedback];
 }
