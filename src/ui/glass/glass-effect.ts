@@ -187,8 +187,10 @@ export function createPanelGlass(root: HTMLElement): PanelGlassController {
   const prism = document.createElement('div');
   prism.className = 'bc-glass-prism';
   prism.setAttribute('aria-hidden', 'true');
-  // Six beams: a cool set (purple/indigo/blue) and a warm set (orange/amber/yellow).
-  for (let i = 0; i < 6; i += 1) {
+  // Sixteen beams: cool (purple/indigo/blue) and warm (orange/amber/yellow) mixed
+  // throughout the panel. Each beam has individual blur in CSS; beams are anchored at
+  // fixed coords so the panel's overflow:hidden reveals more as it expands.
+  for (let i = 0; i < 16; i += 1) {
     prism.appendChild(document.createElement('div')).className = 'bc-glass-prism-beam';
   }
   root.appendChild(prism);

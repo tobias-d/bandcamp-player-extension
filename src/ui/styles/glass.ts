@@ -78,57 +78,142 @@ export const GLASS_CSS = `
   pointer-events: none;
   z-index: 0;
   opacity: var(--glass-prism, 0);
-  filter: blur(9px) saturate(1.25);
+  filter: saturate(1.25);
 }
 
-/* Each beam is a single-hue tapered spike. The beams come in two sets of adjacent
-   hues — a cool set (purple / indigo / blue) and a warm set (orange / amber / yellow)
-   — so each set fans out as its own narrow rainbow. */
+/* Each beam is a single-hue tapered spike anchored at a fixed pixel position
+   within the prism container (inset:-64px → origin 64px above/left of the panel
+   top-left). The panel's overflow:hidden is a static window: beams never move as
+   the panel expands, it just reveals more of them. translate(-50%,-50%) centres
+   each beam on its left/top point.
+
+   All beams fan out from a single focal origin at container-space (-50px, -80px)
+   — outside the panel's upper-left corner. Each beam's rotation angle equals
+   atan2(cy+80, cx+50) so every beam, if extended, passes through that origin.
+   Angles increase top-to-bottom (28°→48°) as the fan spreads across the panel.
+   Cool (purple/indigo/blue) and warm (orange/amber/yellow) beams alternate.
+   Individual blur per beam gives depth variation. */
 .bc-glass-prism-beam {
   position: absolute;
-  left: 50%;
-  top: 50%;
   background: radial-gradient(ellipse closest-side at center, currentColor 0%, transparent 100%);
 }
 
-/* Cool set — purple, indigo, blue, fanned together in the upper-left. */
-.bc-glass-prism-beam:nth-child(1) {
-  width: 440px;
-  height: 11px;
-  color: rgba(150, 110, 245, 0.5);
-  transform: translate(-50%, -50%) translate(-62px, -74px) rotate(26deg);
+/* ── Always visible (compact panel) ── */
+.bc-glass-prism-beam:nth-child(1) {  /* cool purple · 28° */
+  width: 420px; height: 6px;
+  color: rgba(150, 110, 245, 0.62);
+  left: 251px; top: 80px;
+  filter: blur(7px);
+  transform: translate(-50%, -50%) rotate(28deg);
 }
-.bc-glass-prism-beam:nth-child(2) {
-  width: 440px;
-  height: 11px;
-  color: rgba(122, 142, 250, 0.48);
-  transform: translate(-50%, -50%) translate(-48px, -62px) rotate(28deg);
+.bc-glass-prism-beam:nth-child(2) {  /* warm orange · 32° */
+  width: 400px; height: 11px;
+  color: rgba(255, 158, 88, 0.66);
+  left: 246px; top: 105px;
+  filter: blur(10px);
+  transform: translate(-50%, -50%) rotate(32deg);
 }
-.bc-glass-prism-beam:nth-child(3) {
-  width: 440px;
-  height: 11px;
-  color: rgba(108, 182, 255, 0.46);
-  transform: translate(-50%, -50%) translate(-34px, -50px) rotate(30deg);
+.bc-glass-prism-beam:nth-child(3) {  /* cool indigo · 29° */
+  width: 480px; height: 5px;
+  color: rgba(122, 142, 250, 0.60);
+  left: 329px; top: 130px;
+  filter: blur(6px);
+  transform: translate(-50%, -50%) rotate(29deg);
+}
+.bc-glass-prism-beam:nth-child(4) {  /* warm amber · 35° */
+  width: 360px; height: 9px;
+  color: rgba(255, 190, 108, 0.65);
+  left: 285px; top: 155px;
+  filter: blur(9px);
+  transform: translate(-50%, -50%) rotate(35deg);
+}
+.bc-glass-prism-beam:nth-child(5) {  /* cool blue · 31° */
+  width: 440px; height: 4px;
+  color: rgba(108, 182, 255, 0.58);
+  left: 380px; top: 178px;
+  filter: blur(5px);
+  transform: translate(-50%, -50%) rotate(31deg);
+}
+.bc-glass-prism-beam:nth-child(6) {  /* warm yellow · 38° */
+  width: 380px; height: 7px;
+  color: rgba(255, 222, 120, 0.65);
+  left: 308px; top: 200px;
+  filter: blur(8px);
+  transform: translate(-50%, -50%) rotate(38deg);
+}
+.bc-glass-prism-beam:nth-child(7) {  /* cool purple · 36° */
+  width: 420px; height: 5px;
+  color: rgba(160, 120, 248, 0.55);
+  left: 363px; top: 220px;
+  filter: blur(12px);
+  transform: translate(-50%, -50%) rotate(36deg);
 }
 
-/* Warm set — orange, amber, yellow, fanned together toward the lower-right. */
-.bc-glass-prism-beam:nth-child(4) {
-  width: 360px;
-  height: 10px;
-  color: rgba(255, 158, 88, 0.48);
-  transform: translate(-50%, -50%) translate(40px, 42px) rotate(30deg);
+/* ── Revealed as panel expands ── */
+.bc-glass-prism-beam:nth-child(8) {  /* warm orange · 33° */
+  width: 460px; height: 10px;
+  color: rgba(255, 165, 85, 0.63);
+  left: 442px; top: 240px;
+  filter: blur(11px);
+  transform: translate(-50%, -50%) rotate(33deg);
 }
-.bc-glass-prism-beam:nth-child(5) {
-  width: 360px;
-  height: 10px;
-  color: rgba(255, 190, 108, 0.46);
-  transform: translate(-50%, -50%) translate(54px, 54px) rotate(32deg);
+.bc-glass-prism-beam:nth-child(9) {  /* cool indigo · 37° */
+  width: 350px; height: 4px;
+  color: rgba(125, 145, 252, 0.58);
+  left: 408px; top: 265px;
+  filter: blur(7px);
+  transform: translate(-50%, -50%) rotate(37deg);
 }
-.bc-glass-prism-beam:nth-child(6) {
-  width: 360px;
-  height: 10px;
-  color: rgba(255, 222, 120, 0.5);
-  transform: translate(-50%, -50%) translate(68px, 66px) rotate(34deg);
+.bc-glass-prism-beam:nth-child(10) { /* warm amber · 40° */
+  width: 400px; height: 8px;
+  color: rgba(255, 195, 105, 0.63);
+  left: 391px; top: 290px;
+  filter: blur(9px);
+  transform: translate(-50%, -50%) rotate(40deg);
+}
+.bc-glass-prism-beam:nth-child(11) { /* cool blue · 42° */
+  width: 380px; height: 5px;
+  color: rgba(110, 185, 255, 0.60);
+  left: 395px; top: 320px;
+  filter: blur(6px);
+  transform: translate(-50%, -50%) rotate(42deg);
+}
+.bc-glass-prism-beam:nth-child(12) { /* warm yellow · 44° */
+  width: 340px; height: 4px;
+  color: rgba(255, 218, 115, 0.55);
+  left: 395px; top: 350px;
+  filter: blur(13px);
+  transform: translate(-50%, -50%) rotate(44deg);
+}
+
+/* ── Revealed only when fully expanded ── */
+.bc-glass-prism-beam:nth-child(13) { /* cool purple · 41° */
+  width: 420px; height: 7px;
+  color: rgba(155, 115, 248, 0.62);
+  left: 485px; top: 385px;
+  filter: blur(8px);
+  transform: translate(-50%, -50%) rotate(41deg);
+}
+.bc-glass-prism-beam:nth-child(14) { /* warm orange · 45° */
+  width: 440px; height: 9px;
+  color: rgba(255, 160, 90, 0.65);
+  left: 450px; top: 420px;
+  filter: blur(10px);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.bc-glass-prism-beam:nth-child(15) { /* cool indigo · 48° */
+  width: 360px; height: 4px;
+  color: rgba(120, 140, 250, 0.58);
+  left: 423px; top: 445px;
+  filter: blur(6px);
+  transform: translate(-50%, -50%) rotate(48deg);
+}
+.bc-glass-prism-beam:nth-child(16) { /* warm amber · 43° */
+  width: 300px; height: 5px;
+  color: rgba(255, 200, 100, 0.55);
+  left: 532px; top: 462px;
+  filter: blur(12px);
+  transform: translate(-50%, -50%) rotate(43deg);
 }
 
 /* Marble — thresholded-turbulence two-tone ink texture. glass-effect.ts rasterises the
