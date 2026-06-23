@@ -1,8 +1,39 @@
 import type { GlassSettings } from '@/ui/glass/glass-settings';
-import { BG_STYLE_CAMOUFLAGE, BG_STYLE_PRISM, BG_STYLE_AURORA } from '@/ui/glass/glass-settings';
+import { BG_STYLE_CAMOUFLAGE, BG_STYLE_PRISM, BG_STYLE_MARBLE } from '@/ui/glass/glass-settings';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const FILTER_ID = 'bc-panel-glass-filter';
+
+// Marble style: a two-tone grey "ink marble" produced by thresholding SVG fractal-noise
+// turbulence. fractalNoise gives the organic field, luminanceToAlpha + a discrete
+// component transfer hardens it into blobs, and two translucent greys colour it (light
+// shapes over a darker wash). It is rasterised ONCE into a fixed-size tile and used as a
+// repeating background-image (stitchTiles makes the turbulence seam-free), so there is no
+// per-resize repaint cost and growing the panel just reveals more — like the camo field.
+// Visibility is gated by --glass-marble.
+const MARBLE_TILE = 600;
+
+function buildMarbleLayer(): HTMLDivElement {
+  const container = document.createElement('div');
+  container.className = 'bc-glass-marble';
+  container.setAttribute('aria-hidden', 'true');
+
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${MARBLE_TILE}" height="${MARBLE_TILE}">` +
+    '<filter id="m" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">' +
+    '<feTurbulence type="fractalNoise" baseFrequency="0.008 0.017" numOctaves="3" seed="7" stitchTiles="stitch" result="n"/>' +
+    '<feColorMatrix in="n" type="luminanceToAlpha" result="l"/>' +
+    '<feComponentTransfer in="l" result="mask"><feFuncA type="discrete" tableValues="0 0 1 1"/></feComponentTransfer>' +
+    '<feFlood flood-color="#e2e2e6" flood-opacity="0.5" result="light"/>' +
+    '<feComposite in="light" in2="mask" operator="in" result="blobs"/>' +
+    '<feFlood flood-color="#9ea0a8" flood-opacity="0.5" result="dark"/>' +
+    '<feComposite in="blobs" in2="dark" operator="over"/>' +
+    '</filter>' +
+    `<rect width="100%" height="100%" filter="url(#m)"/>` +
+    '</svg>';
+  container.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  return container;
+}
 
 /** Must match the .bc-panel-root border-radius in panel-shell.ts. */
 const PANEL_CORNER_RADIUS = 14;
@@ -162,16 +193,8 @@ export function createPanelGlass(root: HTMLElement): PanelGlassController {
   }
   root.appendChild(prism);
 
-  // Aurora: a soft colour gradient overlaid with a few large, very subtle blurred
-  // colour blobs that read as overlapping curved layers. Shown only for the Aurora
-  // style (gated by --glass-aurora); the gradient and blob shapes live in GLASS_CSS.
-  const aurora = document.createElement('div');
-  aurora.className = 'bc-glass-aurora';
-  aurora.setAttribute('aria-hidden', 'true');
-  for (let i = 0; i < 4; i += 1) {
-    aurora.appendChild(document.createElement('div')).className = 'bc-glass-aurora-layer';
-  }
-  root.appendChild(aurora);
+  // Marble: a thresholded-turbulence two-tone ink texture, shown only for the Marble style.
+  root.appendChild(buildMarbleLayer());
 
   // Specular rim light: a pointer-transparent overlay whose inset highlights
   // are scaled by --glass-specular (see GLASS_CSS).
@@ -293,7 +316,7 @@ export function createPanelGlass(root: HTMLElement): PanelGlassController {
       // collapses its opacity to 0.
       root.style.setProperty('--glass-camo', settings.bgStyle === BG_STYLE_CAMOUFLAGE ? String(settings.camo) : '0');
       root.style.setProperty('--glass-prism', settings.bgStyle === BG_STYLE_PRISM ? '1' : '0');
-      root.style.setProperty('--glass-aurora', settings.bgStyle === BG_STYLE_AURORA ? '1' : '0');
+      root.style.setProperty('--glass-marble', settings.bgStyle === BG_STYLE_MARBLE ? '1' : '0');
       root.style.setProperty('--glass-camo-blur', `${settings.camoBlur}px`);
       root.style.setProperty('--glass-camo-tone', String(settings.camoTone));
       if (__BUILD_TARGET__ === 'chrome') {

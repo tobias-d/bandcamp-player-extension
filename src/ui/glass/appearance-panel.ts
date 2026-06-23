@@ -33,8 +33,8 @@ const formatPosition = (position: number): string => `${Math.round(position * 10
  * key-tuning and Alt+D debugger panels). Styled to match the main UI panel (light
  * glass), it sits just to the left of it. A "Frost" slider drives tint and blur
  * together (see withGlassPosition); a "Background" stepper (‹ name ›) cycles through
- * the background styles in BACKGROUND_STYLES (None, Camouflage, Prism, Aurora; the
- * camo amount/blur/shade are fixed constants in GLASS_DEFAULTS). The remaining glass
+ * the background styles in BACKGROUND_STYLES (None, Camouflage, Prism, Marble; the camo
+ * amount/blur/shade are fixed constants in GLASS_DEFAULTS). The remaining glass
  * parameters keep their defaults. Loads persisted
  * settings and applies them immediately on creation, so a tuned look survives
  * reloads even when the panel is never opened.
