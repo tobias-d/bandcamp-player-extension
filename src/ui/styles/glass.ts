@@ -213,21 +213,35 @@ export const GLASS_CSS = `
   color: #1f2228;
 }
 
-.bc-appearance-panel-reset,
-.bc-appearance-panel-close {
-  border: 1px solid rgba(78, 86, 97, 0.28);
-  border-radius: 7px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  line-height: 1;
-  padding: 3px 8px;
-  cursor: pointer;
+/* Head icon box — title on the left, reset + close as separate individual buttons on the right. */
+.bc-appearance-panel-head-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
 }
 
-.bc-appearance-panel-reset:hover,
-.bc-appearance-panel-close:hover {
+.bc-appearance-panel-head-icon {
+  width: 19px;
+  height: 19px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #1f2228;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.12s, color 0.12s;
+}
+
+.bc-appearance-panel-head-icon:hover {
   background: rgba(14, 16, 20, 0.08);
+  text-decoration: none;
 }
 
 .bc-appearance-panel-row {
@@ -267,42 +281,66 @@ export const GLASS_CSS = `
   color: #1f2228;
 }
 
-/* The background-style value is a name, not a number: let it size to the text and
-   sit a touch smaller so it shares the row with the stepper arrows. */
+/* Background value — centered in the space between the label and the stepper box. */
 .bc-appearance-panel-bg-value {
-  min-width: 0;
+  flex: 1;
+  text-align: center;
   font-size: 12px;
+  font-weight: 600;
+  color: #1f2228;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Background row: label on the left, the name + ‹ › arrows grouped on the right. */
+/* Background row: label left, value centered, arrow box right. */
 .bc-appearance-panel-bg-row {
   align-items: center;
 }
 
+/* Arrow box — same pill-with-separator pattern as bc-header-icons / head-icons. */
 .bc-appearance-panel-stepper {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  align-items: stretch;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 16.8px;
+  border-radius: 7px;
+  background: rgba(14, 16, 20, 0.05);
+  overflow: hidden;
 }
 
 .bc-appearance-panel-arrow {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 100%;
+  height: 100%;
   padding: 0;
-  border: 1px solid rgba(78, 86, 97, 0.28);
-  border-radius: 6px;
+  border: 0;
   background: transparent;
   color: #1f2228;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
+  position: relative;
+  text-decoration: none;
+  transition: background 0.12s;
+}
+
+.bc-appearance-panel-arrow + .bc-appearance-panel-arrow::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  width: 1px;
+  height: 70%;
+  background: rgba(78, 86, 97, 0.28);
+  pointer-events: none;
 }
 
 .bc-appearance-panel-arrow:hover {
   background: rgba(14, 16, 20, 0.08);
+  text-decoration: none;
 }
 
 .bc-appearance-panel-arrow:disabled {
@@ -310,13 +348,13 @@ export const GLASS_CSS = `
   cursor: default;
 }
 
-/* Compact inline control: takes the space between the label and value on the
-   slider row. Custom track + thumb (not accent-color) so the thumb stays
-   grabbable at this smaller size. */
+/* Compact inline control: fixed shorter width so it doesn't dominate the row.
+   Custom track + thumb (not accent-color) so the thumb stays grabbable at this smaller size. */
 .bc-appearance-panel-slider {
   -webkit-appearance: none;
   appearance: none;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  width: 80px;
   min-width: 0;
   height: 16px;
   margin: 0;

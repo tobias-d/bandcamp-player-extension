@@ -66,7 +66,7 @@ export function createAppearancePanel(
     max: '1',
     step: String(POSITION_STEP),
     value: String(position),
-    'aria-label': 'Frost'
+    'aria-label': 'Opacity'
   }) as HTMLInputElement;
   const valueEl = dom('span', { class: 'bc-appearance-panel-value' }, [formatPosition(position)]);
 
@@ -82,7 +82,7 @@ export function createAppearancePanel(
   // ─── Background style stepper (‹ name ›) ───────────────────────────────
   const bgValueEl = dom(
     'span',
-    { class: 'bc-appearance-panel-value bc-appearance-panel-bg-value' },
+    { class: 'bc-appearance-panel-bg-value' },
     [BACKGROUND_STYLES[settings.bgStyle]]
   );
   const bgPrev = dom('button', {
@@ -111,7 +111,7 @@ export function createAppearancePanel(
   bgNext.addEventListener('click', () => setBgStyle(settings.bgStyle + 1));
 
   // ─── Reset ─────────────────────────────────────────────────────────────
-  const resetButton = dom('button', { type: 'button', class: 'bc-appearance-panel-reset' }, ['Reset']);
+  const resetButton = dom('button', { type: 'button', class: 'bc-appearance-panel-head-icon', 'aria-label': 'Reset to defaults', title: 'Reset' }, ['↺']);
   resetButton.addEventListener('click', () => {
     setBgStyle(GLASS_DEFAULTS.bgStyle);
     setPosition(positionFromSettings(GLASS_DEFAULTS));
@@ -119,24 +119,24 @@ export function createAppearancePanel(
 
   const closeButton = dom(
     'button',
-    { type: 'button', class: 'bc-appearance-panel-close', 'aria-label': 'Close' },
-    ['×']
+    { type: 'button', class: 'bc-appearance-panel-head-icon bc-appearance-panel-head-icon-close', 'aria-label': 'Close' },
+    ['✕']
   );
 
   const host = dom('div', { class: 'bc-appearance-panel', role: 'dialog', 'aria-label': 'Appearance' }, [
     dom('div', { class: 'bc-appearance-panel-head' }, [
       dom('span', { class: 'bc-appearance-panel-title' }, ['Appearance']),
-      resetButton,
-      closeButton
+      dom('div', { class: 'bc-appearance-panel-head-icons' }, [resetButton, closeButton])
     ]),
     dom('div', { class: 'bc-appearance-panel-row bc-appearance-panel-slider-row' }, [
-      dom('span', { class: 'bc-appearance-panel-label' }, ['Frost']),
+      dom('span', { class: 'bc-appearance-panel-label' }, ['Opacity']),
       slider,
       valueEl
     ]),
     dom('div', { class: 'bc-appearance-panel-row bc-appearance-panel-bg-row' }, [
       dom('span', { class: 'bc-appearance-panel-label' }, ['Background']),
-      dom('div', { class: 'bc-appearance-panel-stepper' }, [bgValueEl, bgPrev, bgNext])
+      bgValueEl,
+      dom('div', { class: 'bc-appearance-panel-stepper' }, [bgPrev, bgNext])
     ])
   ]);
   document.body.appendChild(host);
