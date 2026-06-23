@@ -196,6 +196,8 @@ const WELCOME_CSS = `
 }
 
 .bc-welcome-gate-page-text {
+  margin: 0;
+  padding: 0;
   font-size: 11.5px;
   line-height: 1.45;
   color: var(--panel-text-dim, #1f2228);
