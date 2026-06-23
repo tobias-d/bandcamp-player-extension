@@ -131,6 +131,58 @@ export const GLASS_CSS = `
   transform: translate(-50%, -50%) translate(68px, 66px) rotate(34deg);
 }
 
+/* Aurora — a soft colour gradient overlaid with a few large, very subtle blurred blobs
+   that read as overlapping curved colour layers (cool lavender/blue/violet). Each blob is
+   an organic rounded shape (asymmetric border-radius) sized as a fraction of the panel
+   and heavily blurred, so the boundaries stay smooth and watery at any panel size. The
+   container holds the base gradient, sits below the content (z-index 0), is engine-
+   agnostic, and is gated by --glass-aurora (0 = off / pure glass). */
+.bc-glass-aurora {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  opacity: var(--glass-aurora, 0);
+}
+
+/* Each curved layer is its own colour and covers only part of the panel, so the blobs
+   read as distinct pink / purple / blue regions while the gaps between them stay clearer
+   glass — some areas strongly tinted, others barely. No base wash, to keep that contrast. */
+.bc-glass-aurora-layer {
+  position: absolute;
+  filter: blur(30px);
+}
+
+/* Pink — top-right corner (strongest). */
+.bc-glass-aurora-layer:nth-child(1) {
+  left: 40%; top: -30%; width: 78%; height: 78%;
+  background: rgba(234, 140, 212, 0.42);
+  border-radius: 58% 42% 55% 45% / 52% 56% 44% 48%;
+  transform: rotate(-12deg);
+}
+/* Purple — left. */
+.bc-glass-aurora-layer:nth-child(2) {
+  left: -30%; top: 6%; width: 70%; height: 82%;
+  background: rgba(150, 116, 246, 0.34);
+  border-radius: 46% 54% 60% 40% / 58% 42% 58% 42%;
+  transform: rotate(9deg);
+}
+/* Blue — bottom-right. */
+.bc-glass-aurora-layer:nth-child(3) {
+  left: 40%; top: 44%; width: 78%; height: 80%;
+  background: rgba(132, 188, 255, 0.34);
+  border-radius: 52% 48% 42% 58% / 46% 54% 46% 54%;
+  transform: rotate(14deg);
+}
+/* Light lavender accent — lower-left (faintest). */
+.bc-glass-aurora-layer:nth-child(4) {
+  left: -14%; top: 52%; width: 60%; height: 62%;
+  background: rgba(228, 222, 255, 0.18);
+  border-radius: 60% 40% 50% 50% / 55% 50% 50% 45%;
+  transform: rotate(-6deg);
+}
+
 /* Specular rim light: glass reads as glass through a thin, uniform edge
    light — not a top-light/bottom-dark bevel. All strengths scale with
    --glass-specular so one slider drives the whole rim. */

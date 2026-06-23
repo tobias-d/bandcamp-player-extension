@@ -1,5 +1,5 @@
 import type { GlassSettings } from '@/ui/glass/glass-settings';
-import { BG_STYLE_CAMOUFLAGE, BG_STYLE_PRISM } from '@/ui/glass/glass-settings';
+import { BG_STYLE_CAMOUFLAGE, BG_STYLE_PRISM, BG_STYLE_AURORA } from '@/ui/glass/glass-settings';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const FILTER_ID = 'bc-panel-glass-filter';
@@ -162,6 +162,17 @@ export function createPanelGlass(root: HTMLElement): PanelGlassController {
   }
   root.appendChild(prism);
 
+  // Aurora: a soft colour gradient overlaid with a few large, very subtle blurred
+  // colour blobs that read as overlapping curved layers. Shown only for the Aurora
+  // style (gated by --glass-aurora); the gradient and blob shapes live in GLASS_CSS.
+  const aurora = document.createElement('div');
+  aurora.className = 'bc-glass-aurora';
+  aurora.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 4; i += 1) {
+    aurora.appendChild(document.createElement('div')).className = 'bc-glass-aurora-layer';
+  }
+  root.appendChild(aurora);
+
   // Specular rim light: a pointer-transparent overlay whose inset highlights
   // are scaled by --glass-specular (see GLASS_CSS).
   const rim = document.createElement('div');
@@ -282,6 +293,7 @@ export function createPanelGlass(root: HTMLElement): PanelGlassController {
       // collapses its opacity to 0.
       root.style.setProperty('--glass-camo', settings.bgStyle === BG_STYLE_CAMOUFLAGE ? String(settings.camo) : '0');
       root.style.setProperty('--glass-prism', settings.bgStyle === BG_STYLE_PRISM ? '1' : '0');
+      root.style.setProperty('--glass-aurora', settings.bgStyle === BG_STYLE_AURORA ? '1' : '0');
       root.style.setProperty('--glass-camo-blur', `${settings.camoBlur}px`);
       root.style.setProperty('--glass-camo-tone', String(settings.camoTone));
       if (__BUILD_TARGET__ === 'chrome') {

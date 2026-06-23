@@ -26,15 +26,17 @@ export interface GlassSettings {
   bgStyle: number;
 }
 
-/** Selectable panel background styles. Index 0 is always "no background"; the last is a
- *  reserved placeholder for a style still to be designed (it currently shows no background). */
-export const BACKGROUND_STYLES = ['None', 'Camouflage', 'Prism', 'Style 4'] as const;
+/** Selectable panel background styles. Index 0 is always "no background". */
+export const BACKGROUND_STYLES = ['None', 'Camouflage', 'Prism', 'Aurora'] as const;
 
 /** Index in BACKGROUND_STYLES whose selection shows the grey camouflage layer. */
 export const BG_STYLE_CAMOUFLAGE = 1;
 
 /** Index in BACKGROUND_STYLES whose selection shows the prism light-beam layer. */
 export const BG_STYLE_PRISM = 2;
+
+/** Index in BACKGROUND_STYLES whose selection shows the aurora colour-glow layer. */
+export const BG_STYLE_AURORA = 3;
 
 /** Only the numeric tuning settings are min/max-clamped; bgStyle is an index clamped separately. */
 type NumericGlassKey = {
