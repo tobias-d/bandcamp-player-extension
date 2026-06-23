@@ -341,6 +341,7 @@ export const GLASS_CSS = `
 .bc-appearance-panel-slider-row {
   align-items: center;
   gap: 10px;
+  padding-bottom: 10px;
 }
 
 /* Switch rows host a .bc-settings-toggle-btn (no text baseline), so centre it. */
@@ -358,6 +359,7 @@ export const GLASS_CSS = `
 
 .bc-appearance-panel-value {
   flex: 0 0 auto;
+  align-self: center;
   min-width: 34px;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -376,9 +378,11 @@ export const GLASS_CSS = `
   font-variant-numeric: tabular-nums;
 }
 
-/* Background row: label left, value centered, arrow box right. */
+/* Background row: label left, value centered, arrow box right. Separator above. */
 .bc-appearance-panel-bg-row {
   align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid rgba(78, 86, 97, 0.15);
 }
 
 /* Arrow box — same pill-with-separator pattern as bc-header-icons / head-icons. */
