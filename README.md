@@ -396,8 +396,12 @@ and the approaches that were tried and rejected:
   preload, and analysis-request routing.
 - [`rules/metadata-rules.md`](rules/metadata-rules.md) — Tralbum metadata, custom-domain releases,
   identity, and host permissions.
-- [`rules/ui-rules.md`](rules/ui-rules.md) — the injected page panel.
-- [`rules/debugger-rules.md`](rules/debugger-rules.md) — the always-live debug panel.
+- [`rules/ui-rules.md`](rules/ui-rules.md) — the injected page panel: components, the liquid-glass
+  surface, and the Appearance panel / background styles.
+- [`rules/debugger-rules.md`](rules/debugger-rules.md) — the always-live debug panel: named areas,
+  resource diagnostics, and the anonymized export.
+- [`rules/welcome-gate-rules.md`](rules/welcome-gate-rules.md) — welcome-gate layout, slides, content
+  rules, and update announcements.
 
 ---
 
