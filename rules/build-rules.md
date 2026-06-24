@@ -48,8 +48,8 @@ Browser load paths:
 
 | Fact | Current value |
 |------|---------------|
-| Package version | `3.5.1` |
-| Last verified | `2026-06-03` |
+| Package version | `3.6.4` |
+| Last verified | `2026-06-24` |
 | Verified commands | `npm run release:all` |
 | Firefox production build | Passing |
 | Chrome production build | Passing |
