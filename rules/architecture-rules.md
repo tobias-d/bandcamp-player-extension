@@ -7,7 +7,8 @@ hub that points at the deep area docs.
 > Deep references: `rules/audio-rules.md` (runtime audio), `rules/bpm-analysis-rules.md` (tempo
 > accuracy), `rules/wishlist-and-collection.md` (likes/wishlist/collection),
 > `rules/playlist-rules.md` (playlist/preload/analysis routing), `rules/metadata-rules.md`
-> (metadata/identity), `rules/build-rules.md` (build/release), `rules/debug-ui-rules.md` (UI/debug).
+> (metadata/identity), `rules/build-rules.md` (build/release), `rules/ui-rules.md` (injected UI),
+> `rules/debugger-rules.md` (debug panel).
 
 ## Architecture Rules
 

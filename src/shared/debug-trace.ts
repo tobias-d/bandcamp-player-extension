@@ -1,6 +1,6 @@
 // Structured debug-trace model shared by the debug-body builders (producers) and the
 // debug panel (consumer). The builders emit `DebugSection[]` directly so the panel never
-// has to re-parse a flat string back into sections. See rules/debug-ui-rules.md.
+// has to re-parse a flat string back into sections. See rules/debugger-rules.md.
 
 export const SECTION_ORDER = [
   'context',

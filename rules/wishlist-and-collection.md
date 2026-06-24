@@ -293,7 +293,7 @@ background guard constants in `handlers/likes.ts`.
 ## 7. Debug signatures (prove each path ran)
 
 The debug panel is always live (info menu or **Alt+D**); the likes area carries the inventory and
-mutation traces. The anonymized export omits fan/account identity (see `debug-ui-rules.md`).
+mutation traces. The anonymized export omits fan/account identity (see `debugger-rules.md`).
 
 **Sync process events** (`inventory.pushProcessEvent`): `sync.start` (with `trigger`/`ageMs`) →
 `fan.id.resolved|missing` → `bought.cache.hit` / `shared.cache.hit` → `endpoint.page.<endpoint>`

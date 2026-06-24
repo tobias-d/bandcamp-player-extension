@@ -42,7 +42,8 @@ files below. Read the relevant area file before changing that part of the projec
 - Metadata, Tralbum, custom-domain permissions, and identity resolution: read `rules/metadata-rules.md`.
 - Likes, wishlist/collection inventory sync, like-state, and collect/uncollect mutation: read `rules/wishlist-and-collection.md`.
 - Playlist resolution/sorting/selection, preload, and analysis request routing: read `rules/playlist-rules.md`.
-- UI panel and debugger behavior: read `rules/debug-ui-rules.md`.
+- Injected UI panel behavior: read `rules/ui-rules.md`.
+- Debug panel and debugger behavior: read `rules/debugger-rules.md`.
 - Welcome gate layout, slides, content rules, and update announcements: read `rules/welcome-gate-rules.md`.
 
 ## Verification
