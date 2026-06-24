@@ -2,23 +2,18 @@
 
 All notable changes to Bandcamp Deck are recorded here, one entry per released version. It is written for people rebuilding the extension, so entries carry the technical detail needed to understand what changed and why. This file reflects version updates only — entries are added when the version number is bumped, not per commit.
 
-## Unreleased
-
-- About panel: rewrote the About text (`src/ui/components/why-two-keys-panel.ts`) to lead with the extension's own audio engine and the two projects behind the core features (Signalsmith Stretch for Tempo Adjust, Essentia for BPM/key/waveform), added a memory/Performance-mode note, and shortened the key-analysis section.
-- Welcome panel: reworked the welcome gate (`src/ui/components/welcome-gate.ts`) into a paged walkthrough — three curved-divider bands (welcome / slides / dismiss), Back/Next arrows with a dot indicator, trackpad swipe navigation, feature chips, a compact keyboard-shortcuts grid, and a revised feedback/tip slide.
-- Appearance: the panel background can now be switched between styles in Settings → Appearance.
-- Docs: split `rules/debug-ui-rules.md` into `rules/ui-rules.md` (injected panel, glass surface, Appearance panel + background-style extension recipe) and `rules/debugger-rules.md` (debug panel structure verified against the code: full `SECTION_ORDER` area list, copy/export modes, live/pause/auto-hold), each carrying a simplify-first mandate. References updated across `AGENTS.md`, `README.md`, `architecture-rules.md`, `wishlist-and-collection.md`, and `debug-trace.ts`.
-
 ## 3.6.4 — 2026-06-22
 
 Version `3.6.4` is a UI-appearance release.
 
 Main improvements:
-- Appearance panel: the Alt+G glass tuner becomes a full Appearance panel (`appearance-panel.ts`, Settings → **Appearance / Edit**), restyled to the main UI's light glass and attached flush to the panel's left edge with live drag/resize tracking and an inline Frost slider.
-- Camouflage layer: a new toggle adds tiled grey radial blobs that blend into the glass and keep their form as the panel grows.
+- Appearance panel: the Alt+G glass tuner is now a full Appearance panel (`appearance-panel.ts`, Settings → **Appearance / Edit**) in light glass, attached to the panel's left edge with live drag/resize and an inline Frost slider.
+- Background styles: the panel background is selectable in Settings → Appearance — None, Camouflage (tiled grey blobs), Prism (light beams), and Marble.
 - Letterpress idle wordmark: `BANDCAMP // DECK` is pressed into the glass with a layered text-shadow.
-- Welcome-gate copy now points to Settings → Appearance and uses a centered, unnumbered list.
-- Open-album button: now hidden whenever the panel is idle on every page type. Visibility is decided once in the panel (`panel.ts`, idle + valid album URL); the redundant source/playback gate in `state-sync.ts` was removed, so it no longer lingered on idle release pages.
+- About panel: rewritten (`why-two-keys-panel.ts`) to lead with the audio engine and the projects behind core features (Signalsmith Stretch, Essentia), with a memory/Performance-mode note.
+- Welcome gate: reworked (`welcome-gate.ts`) into a paged walkthrough — curved-divider bands, Back/Next with a dot indicator, swipe navigation, feature chips, and a shortcuts grid.
+- Open-album button: now hidden whenever the panel is idle on every page type (decided once in `panel.ts`; the redundant `state-sync.ts` gate was removed).
+- Docs: split `rules/debug-ui-rules.md` into `rules/ui-rules.md` and `rules/debugger-rules.md`, each verified against the code with a simplify-first mandate; references updated.
 
 ## 3.6.3 — 2026-06-20
 
