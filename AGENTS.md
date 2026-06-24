@@ -43,6 +43,7 @@ files below. Read the relevant area file before changing that part of the projec
 - Likes, wishlist/collection inventory sync, like-state, and collect/uncollect mutation: read `rules/wishlist-and-collection.md`.
 - Playlist resolution/sorting/selection, preload, and analysis request routing: read `rules/playlist-rules.md`.
 - UI panel and debugger behavior: read `rules/debug-ui-rules.md`.
+- Welcome gate layout, slides, content rules, and update announcements: read `rules/welcome-gate-rules.md`.
 
 ## Verification
 
