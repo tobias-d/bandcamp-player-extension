@@ -1,6 +1,7 @@
 import type { BackgroundPush } from '@/shared/types';
 import type { KeyboardShortcutAction } from '@/shared/keyboard-shortcuts';
 import { sendMessage } from '@/utils/messaging';
+import { isExtensionContextValid, markExtensionContextInvalidated } from '@/utils/extension-context';
 import { browserApi } from '@/utils/browser-api';
 import { createLogger } from '@/utils/debug';
 
@@ -42,6 +43,14 @@ export function createPlaybackHandoff(input: CreatePlaybackHandoffInput): Playba
 
   return {
     reportPlaybackState(isPlaying, src): void {
+      // This fires on every playback tick (~2s). If the content script has been
+      // orphaned, every notify would throw and spam the warning log forever, so
+      // latch the state once and stop sending instead of catching repeatedly.
+      if (!isExtensionContextValid()) {
+        markExtensionContextInvalidated();
+        return;
+      }
+
       const normalizedSrc = String(src || '').trim();
       const now = Date.now();
 

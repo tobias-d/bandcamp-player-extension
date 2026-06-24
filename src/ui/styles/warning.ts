@@ -34,6 +34,22 @@ export const WARNING_CSS = `
   animation: bc-inline-warning-pop 3600ms ease forwards;
 }
 
+/* Sticky notice (e.g. extension reloaded): pop in, then hold until replaced. */
+.bc-inline-warning.is-visible.is-sticky {
+  animation: bc-inline-warning-pop-in 360ms ease forwards;
+}
+
+@keyframes bc-inline-warning-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes bc-inline-warning-pop {
   0% {
     opacity: 0;

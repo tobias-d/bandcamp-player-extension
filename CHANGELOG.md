@@ -2,9 +2,9 @@
 
 All notable changes to Bandcamp Deck are recorded here, one entry per released version. It is written for people rebuilding the extension, so entries carry the technical detail needed to understand what changed and why. This file reflects version updates only — entries are added when the version number is bumped, not per commit.
 
-## 3.6.4 — 2026-06-22
+## 3.6.4 — 2026-06-24
 
-Version `3.6.4` is a UI-appearance release.
+Version `3.6.4` is a UI-appearance release, plus a reliability fix for orphaned content scripts.
 
 Main improvements:
 - Appearance panel: the Alt+G glass tuner is now a full Appearance panel (`appearance-panel.ts`, Settings → **Appearance / Edit**) in light glass, attached to the panel's left edge with live drag/resize and an inline Frost slider.
@@ -14,6 +14,7 @@ Main improvements:
 - Welcome gate: reworked (`welcome-gate.ts`) into a paged walkthrough — curved-divider bands, Back/Next with a dot indicator, swipe navigation, feature chips, and a shortcuts grid.
 - Open-album button: now hidden whenever the panel is idle on every page type (decided once in `panel.ts`; the redundant `state-sync.ts` gate was removed).
 - Docs: split `rules/debug-ui-rules.md` into `rules/ui-rules.md` and `rules/debugger-rules.md`, each verified against the code with a simplify-first mandate; references updated.
+- Extension-reloaded notice: when the content script is orphaned by an extension reload, update, or disable (a dev rebuild, or Chrome silently auto-updating the extension on a long-open tab), it can no longer reach the background — Bandcamp's native audio keeps playing while BPM, waveform, and metadata silently stop. A new one-way latch (`utils/extension-context.ts`) detects the orphaned state (no `runtime.id`) the moment a `sendMessage` or playback-state report would otherwise throw the opaque "Extension context invalidated", and the warning banner surfaces a sticky "Bandcamp Deck updated — Reload this tab to continue" notice (`warning-banner.ts` sticky mode, wired in `panel.ts`) that holds until the tab is reloaded, instead of failing silently or spamming the log. The sticky notice wins over transient like notices once shown (`ui/styles/warning.ts`).
 
 ## 3.6.3 — 2026-06-20
 

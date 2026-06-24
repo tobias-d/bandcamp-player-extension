@@ -16,6 +16,7 @@ import { createSettings } from '@/ui/components/settings';
 import { createTapTempo } from '@/ui/components/tap-tempo';
 import { createTransport } from '@/ui/components/transport';
 import { createWarningBanner } from '@/ui/components/warning-banner';
+import { isExtensionContextValid, onExtensionContextInvalidated } from '@/utils/extension-context';
 import { createWaveformCanvas } from '@/ui/components/waveform-canvas';
 import { createWelcomeGate } from '@/ui/components/welcome-gate';
 import { createWhyTwoKeysPanel } from '@/ui/components/why-two-keys-panel';
@@ -50,6 +51,8 @@ const SHORTCUTS_PANEL_TOP_OFFSET_PX = 27;
 const SHORTCUTS_PANEL_VIEWPORT_PADDING_PX = 8;
 const PAGE_MEDIA_SESSION_MESSAGE_SOURCE = 'bc-player-origin-bridge';
 const OPEN_LINK_ICON_URL = extensionAssetUrl('public/new-tab.svg');
+// Shown (CSS uppercases it) when this content script is orphaned by an extension reload.
+const EXTENSION_RELOADED_NOTICE = 'Bandcamp Deck updated\nReload this tab to continue';
 
 interface PanelPosition {
   left: number;
@@ -1088,6 +1091,13 @@ export function showResultsPanel(
   });
   const bpmDisplay = createBpmDisplay(transport.getBottomSlot());
   const warningBanner = createWarningBanner(transport.getBottomSlot());
+  // Orphaned content script (extension reloaded/updated): native audio keeps
+  // playing but BPM/waveform/metadata are dead. Surface a sticky reload notice the
+  // moment it is detected, instead of failing silently. One-way latch (see
+  // extension-context.ts), so once shown it must win over transient like notices.
+  const unsubscribeContextNotice = onExtensionContextInvalidated(() => {
+    warningBanner.update(EXTENSION_RELOADED_NOTICE, true);
+  });
   const tapTempo   = createTapTempo(transport.getTapSlot());
   const playlist   = createPlaylistView(playlistSlot, {
     onSelectPlaylistTrack: handlers.onSelectPlaylistTrack,
@@ -1324,7 +1334,11 @@ export function showResultsPanel(
       next.runtimePlaylistPreparation,
       next.runtimePlaylistSelectionPending
     );
-    warningBanner.update(String(next.likeNotice || '').trim());
+    if (isExtensionContextValid()) {
+      warningBanner.update(String(next.likeNotice || '').trim());
+    } else {
+      warningBanner.update(EXTENSION_RELOADED_NOTICE, true);
+    }
     mediaSessionController.sync(lastInput);
     settings.update({
       hidden: !settingsOpen,
@@ -1372,6 +1386,7 @@ export function showResultsPanel(
       bpmDisplay.destroy();
       tapTempo.destroy();
       playlist.destroy();
+      unsubscribeContextNotice();
       warningBanner.destroy();
       settings.destroy();
       keyboardShortcutsPanel.destroy();

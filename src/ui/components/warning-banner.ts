@@ -1,7 +1,12 @@
 import { dom, setText } from '@/utils/dom';
 
 export interface WarningBannerComponent {
-  update(message: string): void;
+  /**
+   * Show `message`, or hide when empty. A transient notice (default) plays the
+   * pop animation and fades out; a `sticky` notice holds on screen until replaced
+   * or cleared — used for the extension-reloaded "refresh this tab" notice.
+   */
+  update(message: string, sticky?: boolean): void;
   destroy(): void;
 }
 
@@ -19,7 +24,7 @@ export function createWarningBanner(container: HTMLElement): WarningBannerCompon
   let lastMessage = '';
 
   const hide = (): void => {
-    root.classList.remove('is-visible');
+    root.classList.remove('is-visible', 'is-sticky');
     root.setAttribute('aria-hidden', 'true');
     setText(root, '');
     visible = false;
@@ -27,7 +32,7 @@ export function createWarningBanner(container: HTMLElement): WarningBannerCompon
   };
 
   return {
-    update(message) {
+    update(message, sticky = false) {
       const nextMessage = String(message || '').trim();
       if (!nextMessage) {
         hide();
@@ -41,6 +46,7 @@ export function createWarningBanner(container: HTMLElement): WarningBannerCompon
       root.classList.remove('is-visible');
       // Force reflow so repeated warnings restart the animation.
       void root.offsetHeight;
+      root.classList.toggle('is-sticky', sticky);
       root.classList.add('is-visible');
       root.setAttribute('aria-hidden', 'false');
       visible = true;
