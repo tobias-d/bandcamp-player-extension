@@ -531,6 +531,18 @@ function buildWelcomePages(): HTMLElement[] {
   const newBadge = (): HTMLElement =>
     dom('span', { class: 'bc-welcome-gate-feature bc-welcome-gate-feature-new' }, ['NEW']);
 
+  // Announcement slide for the newest feature — shown first, with a NEW badge (see
+  // rules/welcome-gate-rules.md "Update Announcement Pattern"). Ask the user before removing it.
+  const listeningMode = page(
+    'Listening mode',
+    text(
+      feature('Listening mode'),
+      ' ',
+      newBadge(),
+      ' turns Bandcamp Deck into a simple player: it hides the BPM and key readouts and the DJ tools. Turn it on in Settings.'
+    )
+  );
+
   const appearance = page(
     'Appearance',
     dom('ul', { class: 'bc-welcome-gate-list' }, [
@@ -604,7 +616,7 @@ function buildWelcomePages(): HTMLElement[] {
     text('No ads, no accounts, no catch — if Bandcamp Deck earns a place in your workflow, a small tip is hugely appreciated. ', link(KOFI_URL, 'Leave a tip', 'bc-welcome-gate-support-link'))
   );
 
-  return [appearance, performance, keyAnalysis, shortcuts, feedback];
+  return [listeningMode, appearance, performance, keyAnalysis, shortcuts, feedback];
 }
 
 // Background shape: the darker middle band plus its two curved divider lines, all from the
