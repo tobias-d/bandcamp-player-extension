@@ -219,6 +219,17 @@ function init(): void {
       maybeStartCurrentSourceAnalysis(state.sourceVersion);
       requestRender();
     },
+    onListeningModeChanged() {
+      // Switching either direction re-kicks analysis for the current source: ON drops to the
+      // waveform-only path (no BPM), OFF resumes the full tempo pass. Reset the dedup keys so the
+      // re-kick is not swallowed as a duplicate of the prior request.
+      analysisReqCtrl.cancelAll();
+      analysisReqCtrl.resetRequestKeys();
+      applyPlaylistAnalysisDecorations();
+      syncPreloadQueue(state.sourceVersion);
+      maybeStartCurrentSourceAnalysis(state.sourceVersion);
+      requestRender();
+    },
     onAutoPlayChanged() {
       requestRender();
     },
@@ -506,6 +517,11 @@ function init(): void {
       return;
     }
     if (!isCurrentSourceReadyForTempoBootstrap()) {
+      return;
+    }
+    // Listening mode disables BPM analysis: paint the waveform without ever requesting tempo.
+    if (settings.listeningModeEnabled) {
+      analysisReqCtrl.requestWaveformOnly();
       return;
     }
     analysisReqCtrl.requestTempo();
@@ -2812,6 +2828,7 @@ function init(): void {
         if (
           capturedVersion !== state.sourceVersion
           || String(state.currentSrc || '').trim() !== capturedSrc
+          || settings.listeningModeEnabled
         ) {
           return;
         }

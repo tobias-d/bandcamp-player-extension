@@ -298,6 +298,16 @@ export function initDiscoverController(): void {
       maybeStartNowPlayingAnalysis();
       render();
     },
+    onListeningModeChanged() {
+      // Re-kick analysis for the now-playing track: ON drops to waveform-only (no BPM), OFF
+      // resumes the full tempo pass. Reset the dedup keys so the re-kick is not swallowed.
+      analysisReqCtrl.cancelAll();
+      analysisReqCtrl.resetRequestKeys();
+      preloadCtrl.applyPlaylistAnalysisDecorations();
+      preloadCtrl.syncDiscoverPreloadQueue();
+      maybeStartNowPlayingAnalysis();
+      render();
+    },
     onAutoPlayChanged() {
       render();
     },
@@ -1382,7 +1392,11 @@ export function initDiscoverController(): void {
       const capturedRunId = tempoRunId;
       const capturedSource = String(nowPlaying.streamUrl || '').trim();
       window.setTimeout(() => {
-        if (capturedRunId !== tempoRunId || String(nowPlaying.streamUrl || '').trim() !== capturedSource) {
+        if (
+          capturedRunId !== tempoRunId
+          || String(nowPlaying.streamUrl || '').trim() !== capturedSource
+          || settings.listeningModeEnabled
+        ) {
           return;
         }
         analysisReqCtrl.requestTempo();
@@ -1405,6 +1419,15 @@ export function initDiscoverController(): void {
       return;
     }
     if (!isNowPlayingContextReadyForAnalysis(normalizedSource)) {
+      return;
+    }
+    startNowPlayingAnalysisRequest();
+  };
+
+  // Listening mode disables BPM analysis: paint the waveform without ever requesting tempo.
+  const startNowPlayingAnalysisRequest = (): void => {
+    if (settings.listeningModeEnabled) {
+      analysisReqCtrl.requestWaveformOnly();
       return;
     }
     analysisReqCtrl.requestTempo();
@@ -1610,7 +1633,7 @@ export function initDiscoverController(): void {
     // discover jumps do not keep showing the previous track while bridge sync catches up.
     seedAnalysisFromSelectedDiscoverTrack(target, streamUrl, 'user-select');
     refreshMetadataPhase(playlistRunId, nowPlaying, false);
-    analysisReqCtrl.requestTempo();
+    startNowPlayingAnalysisRequest();
     pendingManualRuntimeSyncSourceUrl = streamUrl;
     syncRuntimeAudioSource(streamUrl);
     if (runtimeAudioController) {
@@ -1950,7 +1973,8 @@ export function initDiscoverController(): void {
         ? resolveRuntimePlaylistPreparationUiState(playlistState, runtimeAudioEngine.getDebugSnapshot())
         : undefined,
       runtimePlaylistSelectionPending,
-      settings.performanceModeEnabled
+      settings.performanceModeEnabled,
+      settings.listeningModeEnabled
     );
 
     if (pendingSeekFraction === null) {
@@ -2054,6 +2078,14 @@ export function initDiscoverController(): void {
     },
     onToggleKeyAnalysis(enabled) {
       settings.setKeyAnalysisEnabled(Boolean(enabled));
+    },
+    onToggleListeningMode(enabled) {
+      // Reset a BPM sort before entering listening mode so the now-hidden BPM column can't leave
+      // the playlist stuck in a sort the user can no longer change.
+      if (enabled && playlistState.sortKey === 'bpm') {
+        playlistState = togglePlaylistSort(playlistState, 'index');
+      }
+      settings.setListeningModeEnabled(Boolean(enabled));
     },
     onToggleAutoPlay(enabled) {
       settings.setAutoPlayEnabled(Boolean(enabled));

@@ -692,6 +692,7 @@ export function buildPanelInput(
   settingsSnapshot: {
     preloadTracksEnabled: boolean;
     keyAnalysisEnabled: boolean;
+    listeningModeEnabled: boolean;
     autoPlayEnabled: boolean;
     performanceModeEnabled: boolean;
     keyboardShortcuts?: PanelInput['keyboardShortcuts'];
@@ -849,6 +850,7 @@ export function buildPanelInput(
     likeState,
     preloadTracks: settingsSnapshot.preloadTracksEnabled,
     keyAnalysisEnabled: settingsSnapshot.keyAnalysisEnabled,
+    listeningModeEnabled: settingsSnapshot.listeningModeEnabled,
     autoPlayEnabled: settingsSnapshot.autoPlayEnabled,
     performanceModeEnabled: settingsSnapshot.performanceModeEnabled,
     keyboardShortcuts: settingsSnapshot.keyboardShortcuts,

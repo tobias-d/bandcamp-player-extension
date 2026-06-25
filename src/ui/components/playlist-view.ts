@@ -15,6 +15,7 @@ export interface PlaylistViewComponent {
     state: PlaylistState,
     likeState?: LikeViewState,
     keyAnalysisEnabled?: boolean,
+    listeningModeEnabled?: boolean,
     runtimePlaylistPreparation?: RuntimePlaylistPreparationUiState,
     runtimePlaylistSelectionPending?: boolean
   ): void;
@@ -357,6 +358,7 @@ export function createPlaylistView(container: HTMLElement, handlers: PlaylistHan
     trackStates: {}
   };
   let keyAnalysisEnabled = false;
+  let listeningModeEnabled = false;
   let currentRuntimePrep: RuntimePlaylistPreparationUiState | undefined;
   let currentRuntimeSelectionPending = false;
 
@@ -453,7 +455,10 @@ export function createPlaylistView(container: HTMLElement, handlers: PlaylistHan
 
   const render = (state: PlaylistState, likeState: LikeViewState): void => {
     const likeUiMode = resolveLikeUiMode(state, likeState);
-    root.classList.toggle('bc-key-disabled', !keyAnalysisEnabled);
+    // Listening mode hides both the BPM column and the key columns (key is a DJ feature and is
+    // forced off here regardless of the persisted key-analysis setting).
+    root.classList.toggle('bc-key-disabled', !keyAnalysisEnabled || listeningModeEnabled);
+    root.classList.toggle('bc-bpm-disabled', listeningModeEnabled);
 
     renderSortLabel(headerIndex, '#', '↑', state.sortKey === 'index');
     renderSortLabel(headerK1, 'K1', state.sortKey === 'key' ? (state.sortAsc ? '↑' : '↓') : '↕', state.sortKey === 'key');
@@ -591,8 +596,9 @@ export function createPlaylistView(container: HTMLElement, handlers: PlaylistHan
   bindSort(headerBpm, 'bpm');
 
   return {
-    update(state, likeState, keyAnalysisEnabledInput, runtimePlaylistPreparation, runtimePlaylistSelectionPending) {
+    update(state, likeState, keyAnalysisEnabledInput, listeningModeEnabledInput, runtimePlaylistPreparation, runtimePlaylistSelectionPending) {
       keyAnalysisEnabled = Boolean(keyAnalysisEnabledInput);
+      listeningModeEnabled = Boolean(listeningModeEnabledInput);
       currentRuntimePrep = runtimePlaylistPreparation;
       currentRuntimeSelectionPending = Boolean(runtimePlaylistSelectionPending);
       const shouldReveal =

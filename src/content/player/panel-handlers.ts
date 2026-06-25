@@ -491,6 +491,17 @@ export function createPlayerPanelHandlers(input: CreatePlayerPanelHandlersInput)
       render();
     },
 
+    onToggleListeningMode(enabled) {
+      // Reset a BPM sort before entering listening mode so the now-hidden BPM column can't leave
+      // the playlist stuck in a sort the user can no longer change.
+      if (enabled && state.playlist.sortKey === 'bpm') {
+        state.playlist = togglePlaylistSort(state.playlist, 'index');
+      }
+      settings.setListeningModeEnabled(Boolean(enabled));
+      recordUiAction('toggle-listening-mode', `enabled=${settings.listeningModeEnabled ? '1' : '0'}`);
+      render();
+    },
+
     onToggleAutoPlay(enabled) {
       settings.setAutoPlayEnabled(Boolean(enabled));
       recordUiAction('toggle-auto-play', `enabled=${settings.autoPlayEnabled ? '1' : '0'}`);

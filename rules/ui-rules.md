@@ -87,9 +87,35 @@ entries appear by themselves. Reuse the existing gated-layer pattern rather than
 new toggling mechanism; keep prefer-CSS, no per-resize repaint behavior (the existing layers
 are seam-free and expand without restitching).
 
+## Listening Mode
+
+A persisted Settings toggle (`listeningModeEnabled`, default off) that disables every DJ-oriented
+feature for a clean listening UI. It is gated by a single root CSS class, `bc-listening-mode`,
+toggled on `.bc-panel-root` in `panel.ts apply()`, so the whole mode is instant and reversible —
+**prefer extending that class with CSS over deleting/rebuilding DOM**.
+
+What it does when on:
+- Keeps the waveform unchanged (it already owns seeking — there is no equalizer/extra seek bar; a
+  live spectrum tap is impossible because Bandcamp's cross-origin stream taints a
+  `MediaElementAudioSourceNode` to silence — see `rules/audio-rules.md` §10).
+- Transport meta row collapses to the centered playtime; the BPM and Key readouts are hidden
+  (`src/ui/styles/transport.ts`, `.bc-listening-mode`).
+- Tempo Adjust + Tap buttons are hidden and the volume control is pinned to the right edge of the
+  controls pill; their keyboard shortcuts are made inert in `panel.ts onDocumentKeyDown`.
+- Settings **deactivates** the Analyze Key row (dimmed + non-interactive via `bc-settings-row-disabled`, `settings.ts update()`); key analysis is forced off.
+- Enabling it opens an opt-in explainer dialog (`createConfirmDialog`, same style as Key analysis); only on confirm is it persisted. It applies live — **no page reload**.
+- Playlist hides the BPM column (`.bc-bpm-disabled` in `src/ui/styles/playlist.ts`) and the key
+  columns, and a `bpm` sort is reset to `index` on entry (`panel-handlers.ts` /
+  `discover/controller.ts`).
+- **No BPM analysis runs:** the player/Discover request the waveform only via
+  `analysisReqCtrl.requestWaveformOnly()` instead of `requestTempo()` (gated in
+  `player/index.ts` and `discover/controller.ts`). The setting is global, so the mode applies to
+  both the player and Discover.
+
 ## Fix Map
 
 | Problem | Look in |
 |---------|---------|
 | UI panel issue | `src/ui/panel.ts`, `src/ui/components/`, `src/ui/styles/`. |
 | Glass / Appearance / background style issue | `src/ui/glass/` (`glass-settings.ts`, `glass-effect.ts`, `appearance-panel.ts`) and `src/ui/styles/glass.ts`. |
+| Listening mode (DJ features disabled) | Toggle/setting: `player-user-settings.ts`, `settings-controller.ts`, `settings.ts`. Gating: `panel.ts` (`bc-listening-mode` class), `transport.ts` + `playlist.ts` styles, `analysis-request-controller.ts` (`requestWaveformOnly`). |

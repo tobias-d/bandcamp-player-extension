@@ -83,6 +83,8 @@ export interface AnalysisRequestCallbacks {
 
 export interface AnalysisRequestController {
   requestTempo(): void;
+  // Listening mode: paint the waveform without ever requesting BPM analysis.
+  requestWaveformOnly(): void;
   requestKey(sourceUrl: string, bpm: number, cacheKey: string | undefined): void;
 
   cancelTempo(): void;
@@ -1062,8 +1064,84 @@ export function createAnalysisRequestController(
     );
   };
 
+  // Listening mode entry point: seed the analysis object for the current source and request the
+  // waveform only — never the tempo/BPM pass. Reuses the same source/cacheKey/requestKey resolution
+  // and the standalone `requestCurrentWaveform` the normal path fires in parallel, so the waveform
+  // paints at decode time exactly as it does with BPM enabled, just without any BPM work.
+  const requestWaveformOnly = (): void => {
+    const sourceUrl = cb.getCurrentSourceUrl();
+    const seed = cb.getRequestSeed();
+    const fetchUrl = String(cb.resolveFetchUrl?.(sourceUrl) || '').trim();
+    const effectiveFetchUrl = fetchUrl || sourceUrl;
+    const sourceCacheKey = cb.resolveSourceCacheKey(sourceUrl);
+    const requestIdentity = sourceCacheKey || sourceUrl;
+    const requestKeyValue = `${seed}|${sourceUrl}|${requestIdentity}`;
+    const trace = cb.getTrace();
+
+    if (!sourceUrl) {
+      clearKeyAnalysisTrace(trace);
+      cancelTempo();
+      cancelKey();
+      lastTempoRequestKey = '';
+      lastKeyRequestKey = '';
+      tempoCancelRetryKey = '';
+      tempoCancelRetryCount = 0;
+      cb.onEmptySourceReset();
+      return;
+    }
+
+    if (requestKeyValue === lastTempoRequestKey) {
+      return;
+    }
+
+    cancelTempo();
+    cancelKey();
+    lastKeyRequestKey = '';
+    clearActiveTempoTrackAnalyzing();
+    clearKeyAnalysisTrace(trace);
+    appendKeyAnalysisTrace(
+      trace,
+      'request',
+      `version=${seed} source=${sourceUrl} fetch=${effectiveFetchUrl} mode=listening`
+    );
+    lastTempoRequestKey = requestKeyValue;
+    if (sourceCacheKey) {
+      cb.clearFailed(sourceCacheKey);
+      activeTempoTrackCacheKey = sourceCacheKey;
+    }
+
+    // No BPM in listening mode, even if a value lingers in the cache from a prior session: force
+    // an empty (no-bpm, key-disabled) snapshot so only the waveform binds to the analysis object.
+    const cachedWaveform = sourceCacheKey ? cb.getCachedWaveform(sourceCacheKey) : undefined;
+    const initial = buildInitialAnalysisState(
+      sourceUrl,
+      sourceCacheKey,
+      {
+        bpm: undefined,
+        confidence: undefined,
+        keyAnalysis: undefined,
+        keyStatus: cb.resolveKeyStatus(null),
+        waveform: cachedWaveform,
+        hasBpm: false
+      },
+      'disabled'
+    );
+    cb.setAnalysis({ ...initial, analysisStatus: '' });
+
+    if (cachedWaveform) {
+      lastWaveformRequestKey = requestKeyValue;
+      cb.onWaveformSettled();
+      cb.syncPreloadQueue();
+    }
+    cb.applyDecorations();
+    cb.render();
+
+    requestCurrentWaveform(sourceUrl, effectiveFetchUrl, sourceCacheKey, requestKeyValue, trace, seed);
+  };
+
   return {
     requestTempo,
+    requestWaveformOnly,
     requestKey,
     cancelTempo,
     cancelKey,

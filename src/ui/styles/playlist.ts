@@ -18,6 +18,18 @@ export const PLAYLIST_CSS = `
   --pl-columns: var(--pl-columns-no-key);
 }
 
+/* Listening mode: collapse the BPM column (the first metadata column) and hide its cells. */
+.bc-playlist.bc-bpm-disabled {
+  --pl-metadata-columns: 0px 38px 20px 24px;
+}
+
+.bc-playlist.bc-bpm-disabled .bc-pl-col-bpm,
+.bc-playlist.bc-bpm-disabled .bc-pl-bpm {
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .bc-pl-list {
   overflow-y: hidden;
   scrollbar-gutter: stable;
@@ -532,6 +544,20 @@ export const PLAYLIST_CSS = `
 
 .bc-settings-row:hover {
   background: color-mix(in srgb, var(--panel-surface-active) 52%, transparent);
+}
+
+/* A row whose control is deactivated by another setting (e.g. Analyze Key while
+   Listening mode is on): dimmed, no hover affordance, toggle not interactive. */
+.bc-settings-row-disabled {
+  opacity: 0.42;
+}
+
+.bc-settings-row-disabled:hover {
+  background: transparent;
+}
+
+.bc-settings-row-disabled .bc-settings-toggle-btn {
+  cursor: not-allowed;
 }
 
 .bc-settings-toggle-btn:focus-visible {
