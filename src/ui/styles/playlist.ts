@@ -471,7 +471,6 @@ export const PLAYLIST_CSS = `
   border-radius: 6px;
   font-size: 11px;
   color: var(--panel-text);
-  transition: background 0.12s ease;
 }
 
 .bc-settings-label {
@@ -542,64 +541,10 @@ export const PLAYLIST_CSS = `
   transform: translate3d(10px, -50%, 0) scale(2.6);
 }
 
-/* DJ / Lite mode selector: "DJ mode · toggle · Lite mode", centered, with the active side
-   bolded. The toggle is a neutral darker grey in BOTH states — state is conveyed by the bold
-   label and the thumb position, not by colour. These rules follow the base toggle block, so on
-   the dual-class element they win over the default grey/green by source order. */
-.bc-settings-row-djlite {
-  justify-content: center;
-  gap: 9px;
-}
-
-.bc-settings-mode-label {
-  flex: 0 0 auto;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.2;
-  color: var(--panel-text-dim);
-  transition: color 0.12s ease, font-weight 0.12s ease;
-}
-
-.bc-settings-mode-label.is-active {
-  color: var(--panel-text);
-  font-weight: 700;
-}
-
-.bc-settings-toggle-djlite,
-.bc-settings-toggle-djlite.is-on {
-  background: #8b919b;
-}
-
-.bc-settings-toggle-djlite::before,
-.bc-settings-toggle-djlite.is-on::before {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.bc-settings-toggle-djlite::after,
-.bc-settings-toggle-djlite.is-on::after {
-  background: #ffffff;
-}
-
-.bc-settings-toggle-djlite.is-on::before {
-  transform: translate3d(10px, -50%, 0) scale(1);
-}
-
-.bc-settings-toggle-djlite.is-on::after {
-  transform: translate3d(10px, -50%, 0);
-}
-
-.bc-settings-toggle-djlite.is-on:active::before {
-  transform: translate3d(10px, -50%, 0) scale(2.6);
-}
-
-.bc-settings-row:hover {
-  background: color-mix(in srgb, var(--panel-surface-active) 52%, transparent);
-}
-
-/* Preload tracks: a stacked block (label + (i) on top, full-width Off/Normal/High segments
-   below) instead of the usual label-left/control-right row, so three segments don't force the
-   Settings panel wider. position:relative anchors the info popover below it. */
-.bc-settings-preload {
+/* A stacked settings block: a full-width segmented control on its own row(s), optionally with a
+   label + (i) head above it (Preload). Used where the control is too wide to sit beside a label
+   (DJ/Lite, Preload). position:relative anchors the Preload info popover below it. */
+.bc-settings-block {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -608,34 +553,23 @@ export const PLAYLIST_CSS = `
   border-radius: 6px;
   /* Match .bc-settings-row so the label inherits 11px like every other menu row. */
   font-size: 11px;
-  transition: background 0.12s ease;
-}
-
-.bc-settings-preload:hover {
-  background: color-mix(in srgb, var(--panel-surface-active) 52%, transparent);
 }
 
 .bc-settings-preload-head {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 
-/* Round (i) affordance next to the label; opens the short level explainer popover. */
+/* Small borderless (i) glyph sitting directly next to the label; opens the level explainer. */
 .bc-settings-info {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex: 0 0 auto;
-  width: 15px;
-  height: 15px;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--panel-text) 40%, transparent);
-  border-radius: 50%;
+  padding: 0 1px;
+  border: 0;
   background: transparent;
   color: var(--panel-text-dim);
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 11px;
+  font-size: 10px;
   font-style: italic;
   font-weight: 700;
   line-height: 1;
@@ -644,7 +578,6 @@ export const PLAYLIST_CSS = `
 
 .bc-settings-info:hover {
   color: var(--panel-text);
-  border-color: color-mix(in srgb, var(--panel-text) 64%, transparent);
 }
 
 .bc-settings-info:focus-visible {
@@ -652,14 +585,23 @@ export const PLAYLIST_CSS = `
   outline-offset: 1px;
 }
 
-/* Segmented control: a dim track holding 2 (Firefox) or 3 (Chrome) equal-width buttons; the
-   active segment reads as a raised "thumb" via a brighter fill and undimmed bold text. */
+/* The one toggle shape used throughout the Settings menu: a dim track holding equal buttons, the
+   active one a raised "thumb" (brighter fill + bold). --full fills its row (DJ/Lite, Preload);
+   --compact hugs its content on the right of a label row (Auto-play, Analyze Key). */
 .bc-settings-seg {
   display: flex;
   gap: 2px;
   padding: 2px;
   border-radius: 7px;
   background: color-mix(in srgb, var(--panel-surface-active) 34%, transparent);
+}
+
+.bc-settings-seg--full {
+  width: 100%;
+}
+
+.bc-settings-seg--compact {
+  flex: 0 0 auto;
 }
 
 .bc-settings-seg-btn {
@@ -678,14 +620,27 @@ export const PLAYLIST_CSS = `
   transition: background 0.12s ease, color 0.12s ease;
 }
 
-.bc-settings-seg-btn:hover {
+/* Compact segments size to their label rather than splitting the track evenly. */
+.bc-settings-seg--compact .bc-settings-seg-btn {
+  flex: 0 0 auto;
+  padding: 2px 10px;
+}
+
+/* Per-button hover (not per-row): an inactive segment lifts toward the active fill on hover. */
+.bc-settings-seg-btn:not(.is-active):not(:disabled):hover {
+  background: color-mix(in srgb, var(--panel-surface-active) 58%, transparent);
   color: var(--panel-text);
 }
 
 .bc-settings-seg-btn.is-active {
-  background: color-mix(in srgb, var(--panel-surface-active) 96%, white 10%);
-  color: var(--panel-text);
+  background: #5b606b;
+  color: #ffffff;
   font-weight: 700;
+  box-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.22);
+}
+
+.bc-settings-seg-btn:disabled {
+  cursor: not-allowed;
 }
 
 .bc-settings-seg-btn:focus-visible {
@@ -725,22 +680,22 @@ export const PLAYLIST_CSS = `
   margin-bottom: 0;
 }
 
+/* Closing note that applies to all options, set off from the per-level lines. */
+.bc-settings-info-pop .bc-settings-info-note {
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--panel-divider) 70%, transparent);
+  color: var(--panel-text-dim);
+}
+
 .bc-settings-info-pop strong {
   font-weight: 700;
 }
 
 /* A row whose control is deactivated by another setting (e.g. Analyze Key while
-   Lite mode is on): dimmed, no hover affordance, toggle not interactive. */
+   Lite mode is on): dimmed and non-interactive. */
 .bc-settings-row-disabled {
   opacity: 0.42;
-}
-
-.bc-settings-row-disabled:hover {
-  background: transparent;
-}
-
-.bc-settings-row-disabled .bc-settings-toggle-btn {
-  cursor: not-allowed;
 }
 
 .bc-settings-toggle-btn:focus-visible {
@@ -769,6 +724,11 @@ export const PLAYLIST_CSS = `
   /* Match the 11px used everywhere else in the Settings menu (the shared rule above sets 10px
      for the shortcuts-panel buttons, which are a separate surface). */
   font-size: 11px;
+}
+
+/* Per-button hover for the Edit actions (rows no longer carry a hover affordance). */
+.bc-settings-action-btn:hover {
+  background: color-mix(in srgb, var(--panel-surface-active) 92%, transparent);
 }
 
 .bc-shortcuts-panel {

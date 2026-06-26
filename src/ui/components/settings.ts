@@ -18,20 +18,20 @@ function keyAnalysisConfirmBodyNodes(): (string | Node)[] {
 
 // Short, level-specific explainer shown by the (i) next to "Preload tracks". Deliberately terse —
 // the broader prose about the memory trade-off lives in the About panel; this only names what each
-// segment does. The High line is Chrome-only (the segment does not exist on Firefox).
+// segment does. The High line is Chrome-only (the segment does not exist on Firefox). The closing
+// note applies to every option: any change reloads the page (the engine reads its preload policy
+// once on load).
 function preloadInfoNodes(): HTMLElement[] {
   const lines: HTMLElement[] = [
-    dom('p', {}, [dom('strong', {}, ['Off']), ' — upcoming tracks are not prepared ahead.']),
+    dom('p', {}, [dom('strong', {}, ['Off']), ' — saves memory, CPU and network traffic; upcoming tracks are not prepared ahead.']),
     dom('p', {}, [dom('strong', {}, ['Normal']), ' — prepares a few tracks ahead so playback starts instantly.'])
   ];
   if (__BUILD_TARGET__ === 'chrome') {
     lines.push(
-      dom('p', {}, [
-        dom('strong', {}, ['High']),
-        ' — prepares many more for instant skipping; uses more memory and reloads the page.'
-      ])
+      dom('p', {}, [dom('strong', {}, ['High']), ' — prepares many more for instant skipping; uses more memory.'])
     );
   }
+  lines.push(dom('p', { class: 'bc-settings-info-note' }, ['Changing this reloads the page.']));
   return lines;
 }
 
@@ -46,6 +46,45 @@ function liteModeConfirmBodyNodes(): (string | Node)[] {
     dom('strong', {}, ['Tap Tempo']),
     ' tools, and stops all BPM analysis — leaving just the waveform, playtime, and transport. Turn it off any time to bring the DJ features back.'
   ];
+}
+
+// A segmented control: a track holding N equal buttons, where the active one reads as a raised
+// "thumb". Every toggle in the Settings menu uses this one shape — full-width (DJ/Lite, Preload)
+// or compact on the right of a row (Auto-play, Analyze Key) — so the menu looks consistent.
+interface SegGroup {
+  el: HTMLElement;
+  buttons: Map<string, HTMLButtonElement>;
+}
+
+function buildSegGroup(
+  ariaLabel: string,
+  options: { value: string; label: string }[],
+  variant: 'full' | 'compact'
+): SegGroup {
+  const el = dom('div', {
+    class: `bc-settings-seg bc-settings-seg--${variant}`,
+    role: 'group',
+    'aria-label': ariaLabel
+  });
+  const buttons = new Map<string, HTMLButtonElement>();
+  for (const option of options) {
+    const button = dom(
+      'button',
+      { class: 'bc-settings-seg-btn', type: 'button', 'aria-pressed': 'false' },
+      [option.label]
+    ) as HTMLButtonElement;
+    buttons.set(option.value, button);
+    el.appendChild(button);
+  }
+  return { el, buttons };
+}
+
+function setActiveSeg(group: SegGroup, active: string): void {
+  for (const [value, button] of group.buttons) {
+    const isOn = value === active;
+    button.classList.toggle('is-active', isOn);
+    button.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+  }
 }
 
 interface SettingsHandlers {
@@ -77,16 +116,25 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
   const title = dom('div', { class: 'bc-settings-title' }, ['Settings']);
   const list = dom('div', { class: 'bc-settings-list' });
 
-  // Preload tracks: a single 3-level control (Off / Normal / High) that replaces the old
-  // separate "Preload tracks" toggle and Chrome-only "Performance mode" toggle. It is laid out as
-  // a STACKED block — label + (i) on top, full-width segments below — rather than the usual
-  // label-left/control-right row, because three segments are too wide to sit beside the label
-  // without forcing the whole Settings panel wider. The segment maps onto the two persisted
-  // booleans: Off = preload off, Normal = preload on (auto device tier), High = preload on +
-  // performance mode (Chrome only). High is omitted from the Firefox bundle (no performance tier).
-  type PreloadLevel = 'off' | 'normal' | 'high';
   const isChromeBuild = __BUILD_TARGET__ === 'chrome';
 
+  // DJ / Lite mode: a full-width segmented control between the standard DJ mode (full DJ features)
+  // and Lite mode, which disables all DJ-oriented features (BPM/key readouts and analysis, Tempo
+  // Adjust, Tap Tempo, playlist BPM) for a clean listening-focused UI. The control fills the row;
+  // the active half is the highlighted thumb. Enabling Lite opens an opt-in explainer first.
+  const liteSeg = buildSegGroup('DJ or Lite mode', [
+    { value: 'dj', label: 'DJ mode' },
+    { value: 'lite', label: 'Lite mode' }
+  ], 'full');
+  const liteBlock = dom('div', { class: 'bc-settings-block' }, [liteSeg.el]);
+
+  // Preload tracks: a single Off / Normal / High control that replaces the old separate "Preload
+  // tracks" toggle and Chrome-only "Performance mode" toggle. Laid out as a STACKED block — label
+  // + (i) on top, full-width segments below — so three segments don't force the panel wider. The
+  // segment maps onto the two persisted booleans: Off = preload off, Normal = preload on (auto
+  // device tier), High = preload on + performance mode (Chrome only). High is omitted from the
+  // Firefox bundle (no performance tier there).
+  type PreloadLevel = 'off' | 'normal' | 'high';
   const deriveLevel = (preloadTracks: boolean, performanceMode: boolean): PreloadLevel => {
     if (preloadTracks && performanceMode && isChromeBuild) {
       return 'high';
@@ -94,8 +142,6 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
     return preloadTracks ? 'normal' : 'off';
   };
 
-  const preloadBlock = dom('div', { class: 'bc-settings-preload' });
-  const preloadHead = dom('div', { class: 'bc-settings-preload-head' });
   const preloadText = dom('span', { class: 'bc-settings-label' }, ['Preload tracks']);
   const preloadInfoButton = dom(
     'button',
@@ -107,78 +153,44 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
     },
     ['i']
   ) as HTMLButtonElement;
-  preloadHead.appendChild(preloadText);
-  preloadHead.appendChild(preloadInfoButton);
-
+  const preloadHead = dom('div', { class: 'bc-settings-preload-head' }, [preloadText, preloadInfoButton]);
   // Built from preloadInfoNodes() so the High line can be dropped on Firefox.
   const preloadInfoPop = dom('div', { class: 'bc-settings-info-pop', role: 'note' }, preloadInfoNodes());
 
-  const preloadSeg = dom('div', { class: 'bc-settings-seg', role: 'group', 'aria-label': 'Preload level' });
-  const segLevels: PreloadLevel[] = isChromeBuild ? ['off', 'normal', 'high'] : ['off', 'normal'];
-  const segLabels: Record<PreloadLevel, string> = { off: 'Off', normal: 'Normal', high: 'High' };
-  const segButtons = new Map<PreloadLevel, HTMLButtonElement>();
-  for (const level of segLevels) {
-    const button = dom(
-      'button',
-      { class: 'bc-settings-seg-btn', type: 'button', 'aria-pressed': 'false' },
-      [segLabels[level]]
-    ) as HTMLButtonElement;
-    segButtons.set(level, button);
-    preloadSeg.appendChild(button);
+  const preloadOptions = [
+    { value: 'off', label: 'Off' },
+    { value: 'normal', label: 'Normal' }
+  ];
+  if (isChromeBuild) {
+    preloadOptions.push({ value: 'high', label: 'High' });
   }
+  const preloadSeg = buildSegGroup('Preload level', preloadOptions, 'full');
+  const preloadBlock = dom('div', { class: 'bc-settings-block' }, [preloadHead, preloadSeg.el, preloadInfoPop]);
 
-  preloadBlock.appendChild(preloadHead);
-  preloadBlock.appendChild(preloadSeg);
-  preloadBlock.appendChild(preloadInfoPop);
+  // Auto-play and Analyze Key: compact Off/On segments on the right of a normal label-left row.
+  const autoPlaySeg = buildSegGroup('Auto-play next track', [
+    { value: 'off', label: 'Off' },
+    { value: 'on', label: 'On' }
+  ], 'compact');
+  const autoPlayRow = dom('div', { class: 'bc-settings-row' }, [
+    dom('span', { class: 'bc-settings-label' }, ['Auto-play next track']),
+    autoPlaySeg.el
+  ]);
 
-  const keyRow = dom('div', { class: 'bc-settings-row' });
-  const keyText = dom('span', { class: 'bc-settings-label' }, ['Analyze Key']);
-  const keyToggle = dom('button', {
-    class: 'bc-settings-toggle-btn',
-    type: 'button',
-    role: 'switch',
-    'aria-label': 'Toggle key analysis',
-    'aria-pressed': 'false'
-  }) as HTMLButtonElement;
-  keyRow.appendChild(keyText);
-  keyRow.appendChild(keyToggle);
-
-  // DJ / Lite mode: one toggle between the standard full-featured DJ mode (off) and Lite mode
-  // (on), which disables all DJ-oriented features (BPM/key readouts and analysis, Tempo Adjust,
-  // Tap Tempo, playlist BPM) for a clean listening-focused UI. Laid out as "DJ mode · toggle ·
-  // Lite mode" with the active side bolded; the toggle itself stays a neutral darker grey in
-  // both states (state is shown by the bold label and the thumb position).
-  const liteRow = dom('div', { class: 'bc-settings-row bc-settings-row-djlite' });
-  const djLabel = dom('span', { class: 'bc-settings-mode-label' }, ['DJ mode']);
-  const liteLabel = dom('span', { class: 'bc-settings-mode-label' }, ['Lite mode']);
-  const liteToggle = dom('button', {
-    class: 'bc-settings-toggle-btn bc-settings-toggle-djlite',
-    type: 'button',
-    role: 'switch',
-    'aria-label': 'Toggle DJ/Lite mode',
-    'aria-pressed': 'false'
-  }) as HTMLButtonElement;
-  liteRow.appendChild(djLabel);
-  liteRow.appendChild(liteToggle);
-  liteRow.appendChild(liteLabel);
-
-  const autoPlayRow = dom('div', { class: 'bc-settings-row' });
-  const autoPlayText = dom('span', { class: 'bc-settings-label' }, ['Auto-play next track']);
-  const autoPlayToggle = dom('button', {
-    class: 'bc-settings-toggle-btn',
-    type: 'button',
-    role: 'switch',
-    'aria-label': 'Toggle auto-play next track',
-    'aria-pressed': 'false'
-  }) as HTMLButtonElement;
-  autoPlayRow.appendChild(autoPlayText);
-  autoPlayRow.appendChild(autoPlayToggle);
+  const keySeg = buildSegGroup('Analyze Key', [
+    { value: 'off', label: 'Off' },
+    { value: 'on', label: 'On' }
+  ], 'compact');
+  const keyRow = dom('div', { class: 'bc-settings-row' }, [
+    dom('span', { class: 'bc-settings-label' }, ['Analyze Key']),
+    keySeg.el
+  ]);
 
   // The High segment maps onto Chrome-only Performance mode (Chrome caps deviceMemory at 8, so
-  // high-RAM machines need an explicit opt-in to use the headroom). Entering OR leaving High
-  // changes the predecode policy, which the engine reads once at construction — so unlike the
-  // soft Off<->Normal flip, any High transition routes through this confirm dialog and reloads on
-  // confirm. The dialog is null on Firefox (no High segment is built there).
+  // high-RAM machines need an explicit opt-in to use the headroom). Entering OR leaving High shows
+  // a RAM-cost warning, so it routes through this confirm dialog, which persists both booleans and
+  // reloads on confirm. (Off<->Normal reloads too, but directly — no warning needed.) The dialog is
+  // null on Firefox (no High segment is built there).
   let openPerformanceConfirm: ((targetPerf: boolean, targetPreload: boolean) => void) | null = null;
   // Body-mounted confirm dialog, tracked so destroy() can remove it (it is not under root).
   let performanceConfirm: PerformanceConfirmDialog | null = null;
@@ -195,10 +207,9 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
     };
   }
 
-  // Turning Key analysis ON opens this explainer first (same modal style as Performance mode). Only
-  // on confirm do we call the handler; cancel leaves the toggle off. Turning it OFF needs no dialog.
+  // Turning Key analysis or Lite mode ON opens an explainer first. Only on confirm do we call the
+  // handler; cancel leaves it off (update() re-syncs the active segment from the persisted value).
   const keyConfirm: ConfirmDialog = createConfirmDialog(root, 'Key analysis');
-  // Same opt-in explainer pattern for Lite mode. No reload — it applies live.
   const liteConfirm: ConfirmDialog = createConfirmDialog(root, 'Lite mode');
 
   const shortcutsRow = dom('div', { class: 'bc-settings-row' });
@@ -230,8 +241,8 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
   glassRow.appendChild(glassButton);
 
   // Order: DJ/Lite mode, Preload tracks (Off/Normal/High), Auto-play, Analyze Key, Keyboard
-  // shortcuts, Appearance. The Preload block is the stacked label+segments unit defined above.
-  list.appendChild(liteRow);
+  // shortcuts, Appearance.
+  list.appendChild(liteBlock);
   list.appendChild(preloadBlock);
   list.appendChild(autoPlayRow);
   list.appendChild(keyRow);
@@ -241,9 +252,12 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
   root.appendChild(list);
   root.style.display = 'none';
 
-  // The active preload segment, tracked so a click knows whether the transition touches High
-  // (perf change → confirm + reload) or is a soft Off<->Normal flip. Kept in sync by update().
+  // Tracked persisted state so a click knows the current value: the preload level (does a click
+  // touch High → confirm + reload, or is it a soft Off<->Normal flip?) and the lite/key flags
+  // (so re-clicking the already-active segment is a no-op rather than re-opening a confirm).
   let currentLevel: PreloadLevel = 'off';
+  let liteOn = false;
+  let keyOn = false;
   let infoOpen = false;
   const closeInfoPop = (): void => {
     if (!infoOpen) {
@@ -265,14 +279,6 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
     }
   });
 
-  const setToggleState = (toggle: HTMLButtonElement, enabled: boolean): void => {
-    toggle.classList.toggle('is-on', enabled);
-    toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-  };
-
-  const readToggleState = (toggle: HTMLButtonElement): boolean =>
-    toggle.getAttribute('aria-pressed') === 'true';
-
   preloadInfoButton.addEventListener('click', (event) => {
     // Stop here so the root listener above does not treat this as an outside click and re-close.
     event.stopPropagation();
@@ -289,57 +295,60 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
     if (target === currentLevel) {
       return;
     }
-    // Any transition into or out of High changes Performance mode → confirm + reload owns it.
+    // Entering or leaving High also needs the RAM-cost warning, so it routes through the confirm
+    // dialog (which persists both booleans and reloads on confirm).
     if ((target === 'high' || currentLevel === 'high') && openPerformanceConfirm) {
       openPerformanceConfirm(target === 'high', target !== 'off');
       return;
     }
-    // Soft path: Off<->Normal just flips preload live. update() re-syncs the active segment.
+    // Off<->Normal: persist, then reload directly (no warning needed). The info popover tells the
+    // user every change reloads, and the engine reads its preload policy once on load.
     handlers.onTogglePreloadTracks(target !== 'off');
+    window.location.reload();
   };
-
-  for (const [level, button] of segButtons) {
-    button.addEventListener('click', () => selectPreloadLevel(level));
+  for (const [level, button] of preloadSeg.buttons) {
+    button.addEventListener('click', () => selectPreloadLevel(level as PreloadLevel));
   }
 
-  keyToggle.addEventListener('click', () => {
-    const next = !readToggleState(keyToggle);
-    if (next) {
-      // Do not flip/persist here — the confirm dialog owns enabling. The toggle's visual state is
-      // re-synced from the persisted value by update() on the render that follows onToggleKeyAnalysis,
-      // so a cancelled dialog leaves it off and a confirmed one shows it on.
-      keyConfirm.open({
-        title: 'Key analysis',
-        body: keyAnalysisConfirmBodyNodes(),
-        confirmLabel: 'Enable',
-        onConfirm: () => handlers.onToggleKeyAnalysis(true)
-      });
+  liteSeg.buttons.get('lite')?.addEventListener('click', () => {
+    if (liteOn) {
       return;
     }
-    handlers.onToggleKeyAnalysis(false);
+    // Do not flip/persist here — the confirm dialog owns enabling. update() re-syncs the active
+    // half from the persisted value, so a cancelled dialog leaves it on DJ.
+    liteConfirm.open({
+      title: 'Lite mode',
+      body: liteModeConfirmBodyNodes(),
+      confirmLabel: 'Enable',
+      onConfirm: () => handlers.onToggleLiteMode(true)
+    });
   });
-
-  liteToggle.addEventListener('click', () => {
-    const next = !readToggleState(liteToggle);
-    if (next) {
-      // Do not flip/persist here — the confirm dialog owns enabling. The toggle's visual state is
-      // re-synced from the persisted value by update() on the render that follows, so a cancelled
-      // dialog leaves it off and a confirmed one shows it on.
-      liteConfirm.open({
-        title: 'Lite mode',
-        body: liteModeConfirmBodyNodes(),
-        confirmLabel: 'Enable',
-        onConfirm: () => handlers.onToggleLiteMode(true)
-      });
+  liteSeg.buttons.get('dj')?.addEventListener('click', () => {
+    if (!liteOn) {
       return;
     }
     handlers.onToggleLiteMode(false);
   });
 
-  autoPlayToggle.addEventListener('click', () => {
-    const next = !readToggleState(autoPlayToggle);
-    setToggleState(autoPlayToggle, next);
-    handlers.onToggleAutoPlay(next);
+  autoPlaySeg.buttons.get('on')?.addEventListener('click', () => handlers.onToggleAutoPlay(true));
+  autoPlaySeg.buttons.get('off')?.addEventListener('click', () => handlers.onToggleAutoPlay(false));
+
+  keySeg.buttons.get('on')?.addEventListener('click', () => {
+    if (keyOn) {
+      return;
+    }
+    keyConfirm.open({
+      title: 'Key analysis',
+      body: keyAnalysisConfirmBodyNodes(),
+      confirmLabel: 'Enable',
+      onConfirm: () => handlers.onToggleKeyAnalysis(true)
+    });
+  });
+  keySeg.buttons.get('off')?.addEventListener('click', () => {
+    if (!keyOn) {
+      return;
+    }
+    handlers.onToggleKeyAnalysis(false);
   });
 
   shortcutsButton.addEventListener('click', () => {
@@ -358,23 +367,20 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
       if (input.hidden) {
         closeInfoPop();
       }
-      // Derive the active preload segment from the two persisted booleans and highlight it.
+      // Derive each control's active segment from the persisted values.
       currentLevel = deriveLevel(Boolean(input.preloadTracks), Boolean(input.performanceModeEnabled));
-      for (const [level, button] of segButtons) {
-        const active = level === currentLevel;
-        button.classList.toggle('is-active', active);
-        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      setActiveSeg(preloadSeg, currentLevel);
+      liteOn = Boolean(input.liteModeEnabled);
+      setActiveSeg(liteSeg, liteOn ? 'lite' : 'dj');
+      setActiveSeg(autoPlaySeg, input.autoPlayEnabled ? 'on' : 'off');
+      keyOn = Boolean(input.keyAnalysisEnabled);
+      setActiveSeg(keySeg, keyOn ? 'on' : 'off');
+      // Key analysis is a DJ feature: deactivate (dim + non-interactive) its row while Lite mode
+      // is on, rather than hiding it, so the user can see it is unavailable.
+      keyRow.classList.toggle('bc-settings-row-disabled', liteOn);
+      for (const button of keySeg.buttons.values()) {
+        button.disabled = liteOn;
       }
-      setToggleState(keyToggle, Boolean(input.keyAnalysisEnabled));
-      setToggleState(liteToggle, Boolean(input.liteModeEnabled));
-      // Highlight (bold) the currently active mode label flanking the toggle.
-      djLabel.classList.toggle('is-active', !input.liteModeEnabled);
-      liteLabel.classList.toggle('is-active', Boolean(input.liteModeEnabled));
-      setToggleState(autoPlayToggle, Boolean(input.autoPlayEnabled));
-      // Key analysis is a DJ feature: deactivate (dim + non-interactive) its row while Lite
-      // mode is on, rather than hiding it, so the user can see it is unavailable.
-      keyToggle.disabled = Boolean(input.liteModeEnabled);
-      keyRow.classList.toggle('bc-settings-row-disabled', Boolean(input.liteModeEnabled));
     },
     destroy() {
       root.remove();
