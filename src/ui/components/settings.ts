@@ -84,10 +84,12 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
 
   // DJ / Lite mode: one toggle between the standard full-featured DJ mode (off) and Lite mode
   // (on), which disables all DJ-oriented features (BPM/key readouts and analysis, Tempo Adjust,
-  // Tap Tempo, playlist BPM) for a clean listening-focused UI. The toggle is colour-coded —
-  // green = DJ (standard), yellow = Lite — via the bc-settings-toggle-djlite modifier.
-  const liteRow = dom('div', { class: 'bc-settings-row' });
-  const liteText = dom('span', { class: 'bc-settings-label' }, ['DJ / Lite mode']);
+  // Tap Tempo, playlist BPM) for a clean listening-focused UI. Laid out as "DJ mode · toggle ·
+  // Lite mode" with the active side bolded; the toggle itself stays a neutral darker grey in
+  // both states (state is shown by the bold label and the thumb position).
+  const liteRow = dom('div', { class: 'bc-settings-row bc-settings-row-djlite' });
+  const djLabel = dom('span', { class: 'bc-settings-mode-label' }, ['DJ mode']);
+  const liteLabel = dom('span', { class: 'bc-settings-mode-label' }, ['Lite mode']);
   const liteToggle = dom('button', {
     class: 'bc-settings-toggle-btn bc-settings-toggle-djlite',
     type: 'button',
@@ -95,8 +97,9 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
     'aria-label': 'Toggle DJ/Lite mode',
     'aria-pressed': 'false'
   }) as HTMLButtonElement;
-  liteRow.appendChild(liteText);
+  liteRow.appendChild(djLabel);
   liteRow.appendChild(liteToggle);
+  liteRow.appendChild(liteLabel);
 
   const autoPlayRow = dom('div', { class: 'bc-settings-row' });
   const autoPlayText = dom('span', { class: 'bc-settings-label' }, ['Auto-play next track']);
@@ -175,9 +178,9 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
   glassRow.appendChild(glassText);
   glassRow.appendChild(glassButton);
 
+  list.appendChild(liteRow);
   list.appendChild(preloadRow);
   list.appendChild(keyRow);
-  list.appendChild(liteRow);
   list.appendChild(autoPlayRow);
   if (performanceRow) {
     list.appendChild(performanceRow);
@@ -270,6 +273,9 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
       setToggleState(preloadToggle, Boolean(input.preloadTracks));
       setToggleState(keyToggle, Boolean(input.keyAnalysisEnabled));
       setToggleState(liteToggle, Boolean(input.liteModeEnabled));
+      // Highlight (bold) the currently active mode label flanking the toggle.
+      djLabel.classList.toggle('is-active', !input.liteModeEnabled);
+      liteLabel.classList.toggle('is-active', Boolean(input.liteModeEnabled));
       setToggleState(autoPlayToggle, Boolean(input.autoPlayEnabled));
       // Key analysis is a DJ feature: deactivate (dim + non-interactive) its row while Lite
       // mode is on, rather than hiding it, so the user can see it is unavailable.
