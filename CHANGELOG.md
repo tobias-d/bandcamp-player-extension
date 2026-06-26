@@ -8,6 +8,7 @@ Version `3.6.4` is a UI-appearance release, plus a reliability fix for orphaned 
 
 Main improvements:
 - Lite mode: a new DJ/Lite toggle in Settings that disables all DJ features (BPM/key readouts and analysis, Tempo Adjust, Tap Tempo, playlist BPM) for a clean listening UI.
+- Settings controls: every toggle now uses one segmented-control style, and Preload tracks + the Chrome-only Performance mode are merged into a single Off/Normal/High Preload control (High = the old Performance tier) with an `(i)` explainer. Any change reloads the page.
 - Appearance panel: the Alt+G glass tuner is now a full Appearance panel (`appearance-panel.ts`, Settings → **Appearance / Edit**) in light glass, attached to the panel's left edge with live drag/resize and an inline Frost slider.
 - Background styles: the panel background is selectable in Settings → Appearance — None, Camouflage (tiled grey blobs), Prism (light beams), and Marble.
 - Letterpress idle wordmark: `BANDCAMP // DECK` is pressed into the glass with a layered text-shadow.
