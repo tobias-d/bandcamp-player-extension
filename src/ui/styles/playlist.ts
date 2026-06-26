@@ -481,22 +481,6 @@ export const PLAYLIST_CSS = `
   line-height: 1.2;
 }
 
-/* Stacked label: a feature title plus a small caption naming the toggle's other state
-   (e.g. Lite mode / "Off = DJ mode"), so the two modes are explicit in the menu. */
-.bc-settings-label-stacked {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.bc-settings-label-sub {
-  font-size: 9.5px;
-  font-weight: 500;
-  line-height: 1.1;
-  color: var(--panel-text-dim);
-  opacity: 0.85;
-}
-
 .bc-settings-toggle-btn {
   width: 22px;
   height: 12px;
@@ -555,6 +539,40 @@ export const PLAYLIST_CSS = `
 }
 
 .bc-settings-toggle-btn.is-on:active::before {
+  transform: translate3d(10px, -50%, 0) scale(2.6);
+}
+
+/* DJ / Lite toggle: unlike the default grey-off toggle, BOTH states are coloured —
+   off = DJ mode (green, the standard), on = Lite mode (yellow). The thumb still slides
+   left/right so state is not conveyed by colour alone. These rules follow the base toggle
+   block, so on the dual-class element they win over the default grey/green by source order. */
+.bc-settings-toggle-djlite {
+  background: #d0efa8;
+}
+
+.bc-settings-toggle-djlite::before {
+  background: rgba(131, 177, 84, 0.075);
+}
+
+.bc-settings-toggle-djlite::after {
+  background: #83b154;
+}
+
+.bc-settings-toggle-djlite.is-on {
+  background: #f4e3a0;
+}
+
+.bc-settings-toggle-djlite.is-on::before {
+  background: rgba(214, 167, 14, 0.10);
+  transform: translate3d(10px, -50%, 0) scale(1);
+}
+
+.bc-settings-toggle-djlite.is-on::after {
+  background: #e0b000;
+  transform: translate3d(10px, -50%, 0);
+}
+
+.bc-settings-toggle-djlite.is-on:active::before {
   transform: translate3d(10px, -50%, 0) scale(2.6);
 }
 

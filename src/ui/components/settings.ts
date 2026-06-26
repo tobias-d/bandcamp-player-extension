@@ -82,20 +82,17 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
   keyRow.appendChild(keyText);
   keyRow.appendChild(keyToggle);
 
-  // Lite mode: disables all DJ-oriented features (BPM/key readouts and analysis, Tempo
-  // Adjust, Tap Tempo, playlist BPM) for a clean listening-focused UI. The DJ controls and the Analyze
-  // Key row are hidden/deactivated by CSS / by update() while it is on. The caption makes the
-  // two states explicit: on = Lite mode, off = DJ mode.
+  // DJ / Lite mode: one toggle between the standard full-featured DJ mode (off) and Lite mode
+  // (on), which disables all DJ-oriented features (BPM/key readouts and analysis, Tempo Adjust,
+  // Tap Tempo, playlist BPM) for a clean listening-focused UI. The toggle is colour-coded —
+  // green = DJ (standard), yellow = Lite — via the bc-settings-toggle-djlite modifier.
   const liteRow = dom('div', { class: 'bc-settings-row' });
-  const liteText = dom('span', { class: 'bc-settings-label bc-settings-label-stacked' }, [
-    dom('span', { class: 'bc-settings-label-title' }, ['Lite mode']),
-    dom('span', { class: 'bc-settings-label-sub' }, ['Off = DJ mode'])
-  ]);
+  const liteText = dom('span', { class: 'bc-settings-label' }, ['DJ / Lite mode']);
   const liteToggle = dom('button', {
-    class: 'bc-settings-toggle-btn',
+    class: 'bc-settings-toggle-btn bc-settings-toggle-djlite',
     type: 'button',
     role: 'switch',
-    'aria-label': 'Switch between DJ mode and Lite mode',
+    'aria-label': 'Toggle DJ/Lite mode',
     'aria-pressed': 'false'
   }) as HTMLButtonElement;
   liteRow.appendChild(liteText);
