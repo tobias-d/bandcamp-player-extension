@@ -178,13 +178,15 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
   glassRow.appendChild(glassText);
   glassRow.appendChild(glassButton);
 
+  // Order: DJ/Lite mode, Performance mode (Chrome-only), Preload tracks, Auto-play, Analyze Key,
+  // Keyboard shortcuts, Appearance. Performance mode is null on Firefox, so the rest shift up.
   list.appendChild(liteRow);
-  list.appendChild(preloadRow);
-  list.appendChild(keyRow);
-  list.appendChild(autoPlayRow);
   if (performanceRow) {
     list.appendChild(performanceRow);
   }
+  list.appendChild(preloadRow);
+  list.appendChild(autoPlayRow);
+  list.appendChild(keyRow);
   list.appendChild(shortcutsRow);
   list.appendChild(glassRow);
   root.appendChild(title);
