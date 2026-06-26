@@ -7,6 +7,7 @@ All notable changes to Bandcamp Deck are recorded here, one entry per released v
 Version `3.6.4` is a UI-appearance release, plus a reliability fix for orphaned content scripts.
 
 Main improvements:
+- Lite mode: a new DJ/Lite toggle in Settings that disables all DJ features (BPM/key readouts and analysis, Tempo Adjust, Tap Tempo, playlist BPM) for a clean listening UI.
 - Appearance panel: the Alt+G glass tuner is now a full Appearance panel (`appearance-panel.ts`, Settings → **Appearance / Edit**) in light glass, attached to the panel's left edge with live drag/resize and an inline Frost slider.
 - Background styles: the panel background is selectable in Settings → Appearance — None, Camouflage (tiled grey blobs), Prism (light beams), and Marble.
 - Letterpress idle wordmark: `BANDCAMP // DECK` is pressed into the glass with a layered text-shadow.
