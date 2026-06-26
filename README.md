@@ -28,6 +28,8 @@ heavy work is scheduled to keep the browser responsive. The rest is a thin UI ov
 Release notes live in [`CHANGELOG.md`](CHANGELOG.md) — one entry per version, added on
 `npm run bump <version>`.
 
+![Bandcamp Deck floating player](bandcamp-deck-player-transparent.png)
+
 ---
 
 ## Architecture
