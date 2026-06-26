@@ -1,4 +1,5 @@
-const WELCOME_PENDING_VERSION_KEY = 'bc:welcome:pending-version:v2';
+// Keep the version suffix in sync with welcome-gate.ts (bumped v2 → v3 to re-show the gate).
+const WELCOME_PENDING_VERSION_KEY = 'bc:welcome:pending-version:v3';
 
 function setPendingWelcomeVersion(version: string): void {
   if (!version) {

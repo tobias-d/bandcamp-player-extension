@@ -5,8 +5,11 @@ import {
 } from '@/shared/keyboard-shortcuts';
 
 const WELCOME_STYLE_ID = 'bc-player-welcome-gate-styles';
-const WELCOME_STORAGE_KEY = 'bc:welcome:last-seen-version:v2';
-const WELCOME_PENDING_VERSION_KEY = 'bc:welcome:pending-version:v2';
+// Storage-key version suffix. Bumping it (v2 → v3) clears every user's "last seen" record so the
+// gate shows again once for everyone — used to re-announce a content change (the Lite mode slide)
+// without bumping the extension's manifest version. Keep this in sync with welcome-marker.ts.
+const WELCOME_STORAGE_KEY = 'bc:welcome:last-seen-version:v3';
+const WELCOME_PENDING_VERSION_KEY = 'bc:welcome:pending-version:v3';
 const FEEDBACK_FORM_URL = 'https://forms.gle/CMyrodpNPThdr5Aw8';
 const KOFI_URL = 'https://ko-fi.com/lany_';
 

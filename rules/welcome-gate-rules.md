@@ -86,7 +86,7 @@ To force the welcome gate to reappear during testing, clear both storage locatio
 
 ```js
 // In the page console on a Bandcamp tab:
-localStorage.removeItem('bc:welcome:last-seen-version:v2');
+localStorage.removeItem('bc:welcome:last-seen-version:v3');
 // In the extension service-worker console:
-chrome.storage.local.remove('bc:welcome:last-seen-version:v2');
+chrome.storage.local.remove('bc:welcome:last-seen-version:v3');
 ```
