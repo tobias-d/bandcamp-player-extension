@@ -596,6 +596,139 @@ export const PLAYLIST_CSS = `
   background: color-mix(in srgb, var(--panel-surface-active) 52%, transparent);
 }
 
+/* Preload tracks: a stacked block (label + (i) on top, full-width Off/Normal/High segments
+   below) instead of the usual label-left/control-right row, so three segments don't force the
+   Settings panel wider. position:relative anchors the info popover below it. */
+.bc-settings-preload {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 4px 6px 5px;
+  border-radius: 6px;
+  /* Match .bc-settings-row so the label inherits 11px like every other menu row. */
+  font-size: 11px;
+  transition: background 0.12s ease;
+}
+
+.bc-settings-preload:hover {
+  background: color-mix(in srgb, var(--panel-surface-active) 52%, transparent);
+}
+
+.bc-settings-preload-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Round (i) affordance next to the label; opens the short level explainer popover. */
+.bc-settings-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--panel-text) 40%, transparent);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--panel-text-dim);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bc-settings-info:hover {
+  color: var(--panel-text);
+  border-color: color-mix(in srgb, var(--panel-text) 64%, transparent);
+}
+
+.bc-settings-info:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--panel-text) 62%, transparent);
+  outline-offset: 1px;
+}
+
+/* Segmented control: a dim track holding 2 (Firefox) or 3 (Chrome) equal-width buttons; the
+   active segment reads as a raised "thumb" via a brighter fill and undimmed bold text. */
+.bc-settings-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--panel-surface-active) 34%, transparent);
+}
+
+.bc-settings-seg-btn {
+  flex: 1 1 0;
+  min-height: 18px;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--panel-text-dim);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.bc-settings-seg-btn:hover {
+  color: var(--panel-text);
+}
+
+.bc-settings-seg-btn.is-active {
+  background: color-mix(in srgb, var(--panel-surface-active) 96%, white 10%);
+  color: var(--panel-text);
+  font-weight: 700;
+}
+
+.bc-settings-seg-btn:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--panel-text) 62%, transparent);
+  outline-offset: 1px;
+}
+
+/* Short level explainer, anchored below the block; overlays whatever sits beneath it. */
+.bc-settings-info-pop {
+  display: none;
+  position: absolute;
+  z-index: 6;
+  left: 4px;
+  right: 4px;
+  top: calc(100% + 2px);
+  padding: 8px 9px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel-surface-bg);
+  box-shadow: var(--panel-surface-sheen);
+  backdrop-filter: blur(20.8px) saturate(130%);
+  -webkit-backdrop-filter: blur(20.8px) saturate(130%);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--panel-text);
+}
+
+.bc-settings-info-pop.is-open {
+  display: block;
+}
+
+.bc-settings-info-pop p {
+  margin: 0 0 5px;
+}
+
+.bc-settings-info-pop p:last-child {
+  margin-bottom: 0;
+}
+
+.bc-settings-info-pop strong {
+  font-weight: 700;
+}
+
 /* A row whose control is deactivated by another setting (e.g. Analyze Key while
    Lite mode is on): dimmed, no hover affordance, toggle not interactive. */
 .bc-settings-row-disabled {
@@ -633,6 +766,9 @@ export const PLAYLIST_CSS = `
   min-width: 34px;
   height: 20px;
   padding: 0 8px;
+  /* Match the 11px used everywhere else in the Settings menu (the shared rule above sets 10px
+     for the shortcuts-panel buttons, which are a separate surface). */
+  font-size: 11px;
 }
 
 .bc-shortcuts-panel {
