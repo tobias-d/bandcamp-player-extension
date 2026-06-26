@@ -6,9 +6,9 @@ import {
 export interface PlayerUserSettings {
   preloadTracks: boolean;
   keyAnalysisEnabled: boolean;
-  // Listening mode: disables all DJ-oriented features (BPM/key readouts and
-  // analysis, Tempo Adjust, Tap Tempo, playlist BPM) for a clean listening UI.
-  listeningModeEnabled: boolean;
+  // Lite mode: disables all DJ-oriented features (BPM/key readouts and
+  // analysis, Tempo Adjust, Tap Tempo, playlist BPM) for a clean listening-focused UI.
+  liteModeEnabled: boolean;
   autoPlayEnabled: boolean;
   // Chrome-only opt-in higher predecode tier. Persisted unconditionally; the Chrome-only gate
   // is enforced in code (index.ts) so a synced/edited `true` cannot activate on Firefox.
@@ -21,7 +21,7 @@ const STORAGE_KEY = 'bc-player:user-settings:v1';
 const DEFAULT_SETTINGS: PlayerUserSettings = {
   preloadTracks: true,
   keyAnalysisEnabled: false,
-  listeningModeEnabled: false,
+  liteModeEnabled: false,
   autoPlayEnabled: true,
   performanceModeEnabled: false,
   keyboardShortcuts: normalizeShortcutMap(null)
@@ -55,7 +55,7 @@ export function readPersistedPlayerUserSettings(): PlayerUserSettings {
     return {
       preloadTracks,
       keyAnalysisEnabled: coerceBoolean(parsed?.keyAnalysisEnabled, DEFAULT_SETTINGS.keyAnalysisEnabled),
-      listeningModeEnabled: coerceBoolean(parsed?.listeningModeEnabled, DEFAULT_SETTINGS.listeningModeEnabled),
+      liteModeEnabled: coerceBoolean(parsed?.liteModeEnabled, DEFAULT_SETTINGS.liteModeEnabled),
       autoPlayEnabled: coerceBoolean(parsed?.autoPlayEnabled, DEFAULT_SETTINGS.autoPlayEnabled),
       performanceModeEnabled: coerceBoolean(parsed?.performanceModeEnabled, DEFAULT_SETTINGS.performanceModeEnabled),
       keyboardShortcuts: normalizeShortcutMap(parsed?.keyboardShortcuts)
@@ -74,7 +74,7 @@ export function writePersistedPlayerUserSettings(settings: PlayerUserSettings): 
         // Backward compatibility for users on prior builds.
         autoPreload: Boolean(settings.preloadTracks),
         keyAnalysisEnabled: Boolean(settings.keyAnalysisEnabled),
-        listeningModeEnabled: Boolean(settings.listeningModeEnabled),
+        liteModeEnabled: Boolean(settings.liteModeEnabled),
         autoPlayEnabled: Boolean(settings.autoPlayEnabled),
         performanceModeEnabled: Boolean(settings.performanceModeEnabled),
         keyboardShortcuts: normalizeShortcutMap(settings.keyboardShortcuts)

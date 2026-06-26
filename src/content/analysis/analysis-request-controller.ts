@@ -83,7 +83,7 @@ export interface AnalysisRequestCallbacks {
 
 export interface AnalysisRequestController {
   requestTempo(): void;
-  // Listening mode: paint the waveform without ever requesting BPM analysis.
+  // Lite mode: paint the waveform without ever requesting BPM analysis.
   requestWaveformOnly(): void;
   requestKey(sourceUrl: string, bpm: number, cacheKey: string | undefined): void;
 
@@ -1064,7 +1064,7 @@ export function createAnalysisRequestController(
     );
   };
 
-  // Listening mode entry point: seed the analysis object for the current source and request the
+  // Lite mode entry point: seed the analysis object for the current source and request the
   // waveform only — never the tempo/BPM pass. Reuses the same source/cacheKey/requestKey resolution
   // and the standalone `requestCurrentWaveform` the normal path fires in parallel, so the waveform
   // paints at decode time exactly as it does with BPM enabled, just without any BPM work.
@@ -1102,7 +1102,7 @@ export function createAnalysisRequestController(
     appendKeyAnalysisTrace(
       trace,
       'request',
-      `version=${seed} source=${sourceUrl} fetch=${effectiveFetchUrl} mode=listening`
+      `version=${seed} source=${sourceUrl} fetch=${effectiveFetchUrl} mode=lite`
     );
     lastTempoRequestKey = requestKeyValue;
     if (sourceCacheKey) {
@@ -1110,7 +1110,7 @@ export function createAnalysisRequestController(
       activeTempoTrackCacheKey = sourceCacheKey;
     }
 
-    // No BPM in listening mode, even if a value lingers in the cache from a prior session: force
+    // No BPM in lite mode, even if a value lingers in the cache from a prior session: force
     // an empty (no-bpm, key-disabled) snapshot so only the waveform binds to the analysis object.
     const cachedWaveform = sourceCacheKey ? cb.getCachedWaveform(sourceCacheKey) : undefined;
     const initial = buildInitialAnalysisState(

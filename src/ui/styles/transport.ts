@@ -968,34 +968,34 @@ export const TRANSPORT_CSS = `
   pointer-events: none;
 }
 
-/* ─── Listening mode ────────────────────────────────────────────────────
+/* ─── Lite mode ────────────────────────────────────────────────────
    DJ-oriented transport features are hidden: BPM/Key readouts drop out (only the
    centered playtime remains), the Tempo Adjust + Tap buttons disappear, and the
    volume control moves to the far right of the controls row. */
-.bc-listening-mode .bc-transport-meta-item:not(.bc-transport-time-item) {
+.bc-lite-mode .bc-transport-meta-item:not(.bc-transport-time-item) {
   display: none;
 }
 
-.bc-listening-mode .bc-transport-meta-grid {
+.bc-lite-mode .bc-transport-meta-grid {
   grid-template-columns: max-content;
   justify-content: center;
   padding-left: 0;
   padding-right: 0;
 }
 
-.bc-listening-mode .bc-transport-right-controls {
+.bc-lite-mode .bc-transport-right-controls {
   display: none;
 }
 
 /* Right controls are gone, so the volume control becomes the rightmost element;
    pin it to the right edge of the pill (prev/play/next stay grouped at the left). */
-.bc-listening-mode .bc-volume-control {
+.bc-lite-mode .bc-volume-control {
   justify-self: end;
 }
 
-/* Guard against a DJ sub-panel that was open when listening mode was switched on. */
-.bc-listening-mode .bc-transport-cell-tempo,
-.bc-listening-mode .bc-transport-cell-tap {
+/* Guard against a DJ sub-panel that was open when lite mode was switched on. */
+.bc-lite-mode .bc-transport-cell-tempo,
+.bc-lite-mode .bc-transport-cell-tap {
   display: none;
 }
 

@@ -859,7 +859,7 @@ export function showResultsPanel(
       hidden: !settingsOpen,
       preloadTracks: Boolean(lastInput.preloadTracks),
       keyAnalysisEnabled: Boolean(lastInput.keyAnalysisEnabled),
-      listeningModeEnabled: Boolean(lastInput.listeningModeEnabled),
+      liteModeEnabled: Boolean(lastInput.liteModeEnabled),
       autoPlayEnabled: Boolean(lastInput.autoPlayEnabled),
       performanceModeEnabled: Boolean(lastInput.performanceModeEnabled)
     });
@@ -1109,7 +1109,7 @@ export function showResultsPanel(
   const settings = createSettings(settingsSlot, {
     onTogglePreloadTracks: handlers.onTogglePreloadTracks,
     onToggleKeyAnalysis: handlers.onToggleKeyAnalysis,
-    onToggleListeningMode: handlers.onToggleListeningMode,
+    onToggleLiteMode: handlers.onToggleLiteMode,
     onToggleAutoPlay: handlers.onToggleAutoPlay,
     onTogglePerformanceMode: handlers.onTogglePerformanceMode,
     onOpenKeyboardShortcuts() {
@@ -1195,9 +1195,9 @@ export function showResultsPanel(
       return;
     }
 
-    // Listening mode hides the Tempo Adjust + Tap controls, so their shortcuts are inert too.
+    // Lite mode hides the Tempo Adjust + Tap controls, so their shortcuts are inert too.
     if (
-      lastInput.listeningModeEnabled
+      lastInput.liteModeEnabled
       && (action === 'tap-tempo' || action === 'tempo-up' || action === 'tempo-down')
     ) {
       return;
@@ -1276,7 +1276,7 @@ export function showResultsPanel(
     };
     const panelIdle = isPanelIdle(next);
     root.classList.toggle('bc-panel-idle', panelIdle);
-    root.classList.toggle('bc-listening-mode', Boolean(next.listeningModeEnabled));
+    root.classList.toggle('bc-lite-mode', Boolean(next.liteModeEnabled));
     // One global rule for the "Open album in a new tab" affordance: surface it
     // only when the panel is active and we have a real album URL to open. An
     // idle panel never shows it, on every page type. The album URL itself is
@@ -1342,7 +1342,7 @@ export function showResultsPanel(
       next.playlist,
       next.likeState,
       next.keyAnalysisEnabled,
-      Boolean(next.listeningModeEnabled),
+      Boolean(next.liteModeEnabled),
       next.runtimePlaylistPreparation,
       next.runtimePlaylistSelectionPending
     );
@@ -1356,7 +1356,7 @@ export function showResultsPanel(
       hidden: !settingsOpen,
       preloadTracks: Boolean(next.preloadTracks),
       keyAnalysisEnabled: Boolean(next.keyAnalysisEnabled),
-      listeningModeEnabled: Boolean(next.listeningModeEnabled),
+      liteModeEnabled: Boolean(next.liteModeEnabled),
       autoPlayEnabled: Boolean(next.autoPlayEnabled),
       performanceModeEnabled: Boolean(next.performanceModeEnabled)
     });

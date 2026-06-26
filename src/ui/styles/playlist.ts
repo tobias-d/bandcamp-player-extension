@@ -18,7 +18,7 @@ export const PLAYLIST_CSS = `
   --pl-columns: var(--pl-columns-no-key);
 }
 
-/* Listening mode: collapse the BPM column (the first metadata column) and hide its cells. */
+/* Lite mode: collapse the BPM column (the first metadata column) and hide its cells. */
 .bc-playlist.bc-bpm-disabled {
   --pl-metadata-columns: 0px 38px 20px 24px;
 }
@@ -481,6 +481,22 @@ export const PLAYLIST_CSS = `
   line-height: 1.2;
 }
 
+/* Stacked label: a feature title plus a small caption naming the toggle's other state
+   (e.g. Lite mode / "Off = DJ mode"), so the two modes are explicit in the menu. */
+.bc-settings-label-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.bc-settings-label-sub {
+  font-size: 9.5px;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--panel-text-dim);
+  opacity: 0.85;
+}
+
 .bc-settings-toggle-btn {
   width: 22px;
   height: 12px;
@@ -547,7 +563,7 @@ export const PLAYLIST_CSS = `
 }
 
 /* A row whose control is deactivated by another setting (e.g. Analyze Key while
-   Listening mode is on): dimmed, no hover affordance, toggle not interactive. */
+   Lite mode is on): dimmed, no hover affordance, toggle not interactive. */
 .bc-settings-row-disabled {
   opacity: 0.42;
 }

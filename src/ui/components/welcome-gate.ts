@@ -533,10 +533,10 @@ function buildWelcomePages(): HTMLElement[] {
 
   // Announcement slide for the newest feature — shown first, with a NEW badge (see
   // rules/welcome-gate-rules.md "Update Announcement Pattern"). Ask the user before removing it.
-  const listeningMode = page(
-    'Listening mode',
+  const liteMode = page(
+    'Lite mode',
     text(
-      feature('Listening mode'),
+      feature('Lite mode'),
       ' ',
       newBadge(),
       ' turns Bandcamp Deck into a simple player: it hides the BPM and key readouts and the DJ tools. Turn it on in Settings.'
@@ -616,7 +616,7 @@ function buildWelcomePages(): HTMLElement[] {
     text('No ads, no accounts, no catch — if Bandcamp Deck earns a place in your workflow, a small tip is hugely appreciated. ', link(KOFI_URL, 'Leave a tip', 'bc-welcome-gate-support-link'))
   );
 
-  return [listeningMode, appearance, performance, keyAnalysis, shortcuts, feedback];
+  return [liteMode, appearance, performance, keyAnalysis, shortcuts, feedback];
 }
 
 // Background shape: the darker middle band plus its two curved divider lines, all from the

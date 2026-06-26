@@ -10,13 +10,13 @@ import {
 export interface SettingsController {
   readonly preloadTracksEnabled: boolean;
   readonly keyAnalysisEnabled: boolean;
-  readonly listeningModeEnabled: boolean;
+  readonly liteModeEnabled: boolean;
   readonly autoPlayEnabled: boolean;
   readonly performanceModeEnabled: boolean;
   readonly keyboardShortcuts: KeyboardShortcutMap;
   setPreloadTracksEnabled(enabled: boolean): void;
   setKeyAnalysisEnabled(enabled: boolean): void;
-  setListeningModeEnabled(enabled: boolean): void;
+  setLiteModeEnabled(enabled: boolean): void;
   setAutoPlayEnabled(enabled: boolean): void;
   setPerformanceModeEnabled(enabled: boolean): void;
   setKeyboardShortcuts(shortcuts: KeyboardShortcutMap): void;
@@ -25,7 +25,7 @@ export interface SettingsController {
 export interface SettingsControllerCallbacks {
   onPreloadTracksChanged(enabled: boolean): void;
   onKeyAnalysisChanged(enabled: boolean): void;
-  onListeningModeChanged(enabled: boolean): void;
+  onLiteModeChanged(enabled: boolean): void;
   onAutoPlayChanged(enabled: boolean): void;
   onPerformanceModeChanged(enabled: boolean): void;
   onKeyboardShortcutsChanged(shortcuts: KeyboardShortcutMap): void;
@@ -37,7 +37,7 @@ export function createSettingsController(
   const persisted = readPersistedPlayerUserSettings();
   let _preloadTracksEnabled = persisted.preloadTracks;
   let _keyAnalysisEnabled = persisted.keyAnalysisEnabled;
-  let _listeningModeEnabled = persisted.listeningModeEnabled;
+  let _liteModeEnabled = persisted.liteModeEnabled;
   let _autoPlayEnabled = persisted.autoPlayEnabled;
   let _performanceModeEnabled = persisted.performanceModeEnabled;
   let _keyboardShortcuts = normalizeShortcutMap(persisted.keyboardShortcuts);
@@ -46,7 +46,7 @@ export function createSettingsController(
     writePersistedPlayerUserSettings({
       preloadTracks: _preloadTracksEnabled,
       keyAnalysisEnabled: _keyAnalysisEnabled,
-      listeningModeEnabled: _listeningModeEnabled,
+      liteModeEnabled: _liteModeEnabled,
       autoPlayEnabled: _autoPlayEnabled,
       performanceModeEnabled: _performanceModeEnabled,
       keyboardShortcuts: _keyboardShortcuts
@@ -60,8 +60,8 @@ export function createSettingsController(
     get keyAnalysisEnabled() {
       return _keyAnalysisEnabled;
     },
-    get listeningModeEnabled() {
-      return _listeningModeEnabled;
+    get liteModeEnabled() {
+      return _liteModeEnabled;
     },
     get autoPlayEnabled() {
       return _autoPlayEnabled;
@@ -82,10 +82,10 @@ export function createSettingsController(
       persist();
       callbacks.onKeyAnalysisChanged(_keyAnalysisEnabled);
     },
-    setListeningModeEnabled(enabled: boolean) {
-      _listeningModeEnabled = Boolean(enabled);
+    setLiteModeEnabled(enabled: boolean) {
+      _liteModeEnabled = Boolean(enabled);
       persist();
-      callbacks.onListeningModeChanged(_listeningModeEnabled);
+      callbacks.onLiteModeChanged(_liteModeEnabled);
     },
     setAutoPlayEnabled(enabled: boolean) {
       _autoPlayEnabled = Boolean(enabled);

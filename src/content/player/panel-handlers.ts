@@ -491,14 +491,14 @@ export function createPlayerPanelHandlers(input: CreatePlayerPanelHandlersInput)
       render();
     },
 
-    onToggleListeningMode(enabled) {
-      // Reset a BPM sort before entering listening mode so the now-hidden BPM column can't leave
+    onToggleLiteMode(enabled) {
+      // Reset a BPM sort before entering lite mode so the now-hidden BPM column can't leave
       // the playlist stuck in a sort the user can no longer change.
       if (enabled && state.playlist.sortKey === 'bpm') {
         state.playlist = togglePlaylistSort(state.playlist, 'index');
       }
-      settings.setListeningModeEnabled(Boolean(enabled));
-      recordUiAction('toggle-listening-mode', `enabled=${settings.listeningModeEnabled ? '1' : '0'}`);
+      settings.setLiteModeEnabled(Boolean(enabled));
+      recordUiAction('toggle-lite-mode', `enabled=${settings.liteModeEnabled ? '1' : '0'}`);
       render();
     },
 

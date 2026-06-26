@@ -431,8 +431,8 @@ export interface PanelInput {
   likeState: LikeViewState;
   preloadTracks: boolean;
   keyAnalysisEnabled: boolean;
-  // Listening mode hides all DJ-oriented UI (BPM/key, Tempo Adjust, Tap, playlist BPM).
-  listeningModeEnabled?: boolean;
+  // Lite mode hides all DJ-oriented UI (BPM/key, Tempo Adjust, Tap, playlist BPM).
+  liteModeEnabled?: boolean;
   autoPlayEnabled: boolean;
   // Chrome-only Performance mode toggle state; rendered only on the Chrome build.
   performanceModeEnabled?: boolean;
@@ -462,7 +462,7 @@ export interface PanelHandlers {
   onToggleTrackLike(index: number): void;
   onTogglePreloadTracks(enabled: boolean): void;
   onToggleKeyAnalysis(enabled: boolean): void;
-  onToggleListeningMode(enabled: boolean): void;
+  onToggleLiteMode(enabled: boolean): void;
   onToggleAutoPlay(enabled: boolean): void;
   onTogglePerformanceMode(enabled: boolean): void;
   onKeyboardShortcutsChanged(shortcuts: KeyboardShortcutMap): void;

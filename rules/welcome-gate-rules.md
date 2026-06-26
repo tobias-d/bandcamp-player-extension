@@ -30,7 +30,7 @@ array is the display order.
 
 **Current slides (in order):**
 
-1. **Listening mode** — announcement slide (NEW badge) for the non-DJ mode. First slide; ask the user before removing it.
+1. **Lite mode** — announcement slide (NEW badge) for the non-DJ mode. First slide; ask the user before removing it.
 2. **Appearance** — resize gesture, Appearance setting (opacity + background pattern).
 3. **Performance** — Track preloading, Performance mode (Chrome).
 4. **Key analysis** — off by default, differs from Rekordbox/Mixed In Key.

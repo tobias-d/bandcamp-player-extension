@@ -219,7 +219,7 @@ function init(): void {
       maybeStartCurrentSourceAnalysis(state.sourceVersion);
       requestRender();
     },
-    onListeningModeChanged() {
+    onLiteModeChanged() {
       // Switching either direction re-kicks analysis for the current source: ON drops to the
       // waveform-only path (no BPM), OFF resumes the full tempo pass. Reset the dedup keys so the
       // re-kick is not swallowed as a duplicate of the prior request.
@@ -519,8 +519,8 @@ function init(): void {
     if (!isCurrentSourceReadyForTempoBootstrap()) {
       return;
     }
-    // Listening mode disables BPM analysis: paint the waveform without ever requesting tempo.
-    if (settings.listeningModeEnabled) {
+    // Lite mode disables BPM analysis: paint the waveform without ever requesting tempo.
+    if (settings.liteModeEnabled) {
       analysisReqCtrl.requestWaveformOnly();
       return;
     }
@@ -2828,7 +2828,7 @@ function init(): void {
         if (
           capturedVersion !== state.sourceVersion
           || String(state.currentSrc || '').trim() !== capturedSrc
-          || settings.listeningModeEnabled
+          || settings.liteModeEnabled
         ) {
           return;
         }

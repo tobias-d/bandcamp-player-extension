@@ -16,10 +16,10 @@ function keyAnalysisConfirmBodyNodes(): (string | Node)[] {
   ];
 }
 
-// Explainer shown when the user turns Listening mode ON. Same modal style as Key analysis.
-function listeningModeConfirmBodyNodes(): (string | Node)[] {
+// Explainer shown when the user turns Lite mode ON. Same modal style as Key analysis.
+function liteModeConfirmBodyNodes(): (string | Node)[] {
   return [
-    'Listening mode turns Bandcamp Deck into a ',
+    'Lite mode turns Bandcamp Deck into a ',
     dom('strong', {}, ['simple player']),
     '. It hides the BPM and key readouts, the playlist BPM column, and the ',
     dom('strong', {}, ['Tempo Adjust']),
@@ -32,7 +32,7 @@ function listeningModeConfirmBodyNodes(): (string | Node)[] {
 interface SettingsHandlers {
   onTogglePreloadTracks(enabled: boolean): void;
   onToggleKeyAnalysis(enabled: boolean): void;
-  onToggleListeningMode(enabled: boolean): void;
+  onToggleLiteMode(enabled: boolean): void;
   onToggleAutoPlay(enabled: boolean): void;
   onTogglePerformanceMode(enabled: boolean): void;
   onOpenKeyboardShortcuts(): void;
@@ -43,7 +43,7 @@ interface SettingsUpdateInput {
   hidden: boolean;
   preloadTracks: boolean;
   keyAnalysisEnabled: boolean;
-  listeningModeEnabled: boolean;
+  liteModeEnabled: boolean;
   autoPlayEnabled: boolean;
   performanceModeEnabled: boolean;
 }
@@ -82,20 +82,24 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
   keyRow.appendChild(keyText);
   keyRow.appendChild(keyToggle);
 
-  // Listening mode: disables all DJ-oriented features (BPM/key readouts and analysis, Tempo
-  // Adjust, Tap Tempo, playlist BPM) for a clean listening UI. The DJ controls and the Analyze
-  // Key row are hidden by CSS / by update() while it is on.
-  const listeningRow = dom('div', { class: 'bc-settings-row' });
-  const listeningText = dom('span', { class: 'bc-settings-label' }, ['Listening mode']);
-  const listeningToggle = dom('button', {
+  // Lite mode: disables all DJ-oriented features (BPM/key readouts and analysis, Tempo
+  // Adjust, Tap Tempo, playlist BPM) for a clean listening-focused UI. The DJ controls and the Analyze
+  // Key row are hidden/deactivated by CSS / by update() while it is on. The caption makes the
+  // two states explicit: on = Lite mode, off = DJ mode.
+  const liteRow = dom('div', { class: 'bc-settings-row' });
+  const liteText = dom('span', { class: 'bc-settings-label bc-settings-label-stacked' }, [
+    dom('span', { class: 'bc-settings-label-title' }, ['Lite mode']),
+    dom('span', { class: 'bc-settings-label-sub' }, ['Off = DJ mode'])
+  ]);
+  const liteToggle = dom('button', {
     class: 'bc-settings-toggle-btn',
     type: 'button',
     role: 'switch',
-    'aria-label': 'Toggle listening mode',
+    'aria-label': 'Switch between DJ mode and Lite mode',
     'aria-pressed': 'false'
   }) as HTMLButtonElement;
-  listeningRow.appendChild(listeningText);
-  listeningRow.appendChild(listeningToggle);
+  liteRow.appendChild(liteText);
+  liteRow.appendChild(liteToggle);
 
   const autoPlayRow = dom('div', { class: 'bc-settings-row' });
   const autoPlayText = dom('span', { class: 'bc-settings-label' }, ['Auto-play next track']);
@@ -143,8 +147,8 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
   // Turning Key analysis ON opens this explainer first (same modal style as Performance mode). Only
   // on confirm do we call the handler; cancel leaves the toggle off. Turning it OFF needs no dialog.
   const keyConfirm: ConfirmDialog = createConfirmDialog(root, 'Key analysis');
-  // Same opt-in explainer pattern for Listening mode. No reload — it applies live.
-  const listeningConfirm: ConfirmDialog = createConfirmDialog(root, 'Listening mode');
+  // Same opt-in explainer pattern for Lite mode. No reload — it applies live.
+  const liteConfirm: ConfirmDialog = createConfirmDialog(root, 'Lite mode');
 
   const shortcutsRow = dom('div', { class: 'bc-settings-row' });
   const shortcutsText = dom('span', { class: 'bc-settings-label' }, ['Keyboard shortcuts']);
@@ -176,7 +180,7 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
 
   list.appendChild(preloadRow);
   list.appendChild(keyRow);
-  list.appendChild(listeningRow);
+  list.appendChild(liteRow);
   list.appendChild(autoPlayRow);
   if (performanceRow) {
     list.appendChild(performanceRow);
@@ -219,21 +223,21 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
     handlers.onToggleKeyAnalysis(false);
   });
 
-  listeningToggle.addEventListener('click', () => {
-    const next = !readToggleState(listeningToggle);
+  liteToggle.addEventListener('click', () => {
+    const next = !readToggleState(liteToggle);
     if (next) {
       // Do not flip/persist here — the confirm dialog owns enabling. The toggle's visual state is
       // re-synced from the persisted value by update() on the render that follows, so a cancelled
       // dialog leaves it off and a confirmed one shows it on.
-      listeningConfirm.open({
-        title: 'Listening mode',
-        body: listeningModeConfirmBodyNodes(),
+      liteConfirm.open({
+        title: 'Lite mode',
+        body: liteModeConfirmBodyNodes(),
         confirmLabel: 'Enable',
-        onConfirm: () => handlers.onToggleListeningMode(true)
+        onConfirm: () => handlers.onToggleLiteMode(true)
       });
       return;
     }
-    handlers.onToggleListeningMode(false);
+    handlers.onToggleLiteMode(false);
   });
 
   autoPlayToggle.addEventListener('click', () => {
@@ -268,12 +272,12 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
       root.style.display = input.hidden ? 'none' : 'block';
       setToggleState(preloadToggle, Boolean(input.preloadTracks));
       setToggleState(keyToggle, Boolean(input.keyAnalysisEnabled));
-      setToggleState(listeningToggle, Boolean(input.listeningModeEnabled));
+      setToggleState(liteToggle, Boolean(input.liteModeEnabled));
       setToggleState(autoPlayToggle, Boolean(input.autoPlayEnabled));
-      // Key analysis is a DJ feature: deactivate (dim + non-interactive) its row while listening
+      // Key analysis is a DJ feature: deactivate (dim + non-interactive) its row while Lite
       // mode is on, rather than hiding it, so the user can see it is unavailable.
-      keyToggle.disabled = Boolean(input.listeningModeEnabled);
-      keyRow.classList.toggle('bc-settings-row-disabled', Boolean(input.listeningModeEnabled));
+      keyToggle.disabled = Boolean(input.liteModeEnabled);
+      keyRow.classList.toggle('bc-settings-row-disabled', Boolean(input.liteModeEnabled));
       if (performanceToggle) {
         setToggleState(performanceToggle, Boolean(input.performanceModeEnabled));
       }
@@ -282,7 +286,7 @@ export function createSettings(container: HTMLElement, handlers: SettingsHandler
       root.remove();
       performanceConfirm?.destroy();
       keyConfirm.destroy();
-      listeningConfirm.destroy();
+      liteConfirm.destroy();
     }
   };
 }

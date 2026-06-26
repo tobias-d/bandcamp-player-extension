@@ -40,7 +40,7 @@ export function buildInput(
   runtimePlaylistPreparation: RuntimePlaylistPreparationUiState | undefined = undefined,
   runtimePlaylistSelectionPending = false,
   performanceModeEnabled = false,
-  listeningModeEnabled = false
+  liteModeEnabled = false
 ): PanelInput {
   const rawCurrent = Number(nowPlaying?.currentTimeSec ?? 0);
   const rawDuration = Number(nowPlaying?.durationSec ?? 0);
@@ -72,7 +72,7 @@ export function buildInput(
     likeState,
     preloadTracks,
     keyAnalysisEnabled,
-    listeningModeEnabled,
+    liteModeEnabled,
     autoPlayEnabled,
     performanceModeEnabled,
     tempoScale,

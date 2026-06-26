@@ -298,7 +298,7 @@ export function initDiscoverController(): void {
       maybeStartNowPlayingAnalysis();
       render();
     },
-    onListeningModeChanged() {
+    onLiteModeChanged() {
       // Re-kick analysis for the now-playing track: ON drops to waveform-only (no BPM), OFF
       // resumes the full tempo pass. Reset the dedup keys so the re-kick is not swallowed.
       analysisReqCtrl.cancelAll();
@@ -1395,7 +1395,7 @@ export function initDiscoverController(): void {
         if (
           capturedRunId !== tempoRunId
           || String(nowPlaying.streamUrl || '').trim() !== capturedSource
-          || settings.listeningModeEnabled
+          || settings.liteModeEnabled
         ) {
           return;
         }
@@ -1424,9 +1424,9 @@ export function initDiscoverController(): void {
     startNowPlayingAnalysisRequest();
   };
 
-  // Listening mode disables BPM analysis: paint the waveform without ever requesting tempo.
+  // Lite mode disables BPM analysis: paint the waveform without ever requesting tempo.
   const startNowPlayingAnalysisRequest = (): void => {
-    if (settings.listeningModeEnabled) {
+    if (settings.liteModeEnabled) {
       analysisReqCtrl.requestWaveformOnly();
       return;
     }
@@ -1974,7 +1974,7 @@ export function initDiscoverController(): void {
         : undefined,
       runtimePlaylistSelectionPending,
       settings.performanceModeEnabled,
-      settings.listeningModeEnabled
+      settings.liteModeEnabled
     );
 
     if (pendingSeekFraction === null) {
@@ -2079,13 +2079,13 @@ export function initDiscoverController(): void {
     onToggleKeyAnalysis(enabled) {
       settings.setKeyAnalysisEnabled(Boolean(enabled));
     },
-    onToggleListeningMode(enabled) {
-      // Reset a BPM sort before entering listening mode so the now-hidden BPM column can't leave
+    onToggleLiteMode(enabled) {
+      // Reset a BPM sort before entering lite mode so the now-hidden BPM column can't leave
       // the playlist stuck in a sort the user can no longer change.
       if (enabled && playlistState.sortKey === 'bpm') {
         playlistState = togglePlaylistSort(playlistState, 'index');
       }
-      settings.setListeningModeEnabled(Boolean(enabled));
+      settings.setLiteModeEnabled(Boolean(enabled));
     },
     onToggleAutoPlay(enabled) {
       settings.setAutoPlayEnabled(Boolean(enabled));

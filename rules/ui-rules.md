@@ -87,10 +87,10 @@ entries appear by themselves. Reuse the existing gated-layer pattern rather than
 new toggling mechanism; keep prefer-CSS, no per-resize repaint behavior (the existing layers
 are seam-free and expand without restitching).
 
-## Listening Mode
+## Lite Mode
 
-A persisted Settings toggle (`listeningModeEnabled`, default off) that disables every DJ-oriented
-feature for a clean listening UI. It is gated by a single root CSS class, `bc-listening-mode`,
+A persisted Settings toggle (`liteModeEnabled`, default off) that disables every DJ-oriented
+feature for a clean listening-focused UI. It is gated by a single root CSS class, `bc-lite-mode`,
 toggled on `.bc-panel-root` in `panel.ts apply()`, so the whole mode is instant and reversible —
 **prefer extending that class with CSS over deleting/rebuilding DOM**.
 
@@ -99,7 +99,7 @@ What it does when on:
   live spectrum tap is impossible because Bandcamp's cross-origin stream taints a
   `MediaElementAudioSourceNode` to silence — see `rules/audio-rules.md` §10).
 - Transport meta row collapses to the centered playtime; the BPM and Key readouts are hidden
-  (`src/ui/styles/transport.ts`, `.bc-listening-mode`).
+  (`src/ui/styles/transport.ts`, `.bc-lite-mode`).
 - Tempo Adjust + Tap buttons are hidden and the volume control is pinned to the right edge of the
   controls pill; their keyboard shortcuts are made inert in `panel.ts onDocumentKeyDown`.
 - Settings **deactivates** the Analyze Key row (dimmed + non-interactive via `bc-settings-row-disabled`, `settings.ts update()`); key analysis is forced off.
@@ -118,4 +118,4 @@ What it does when on:
 |---------|---------|
 | UI panel issue | `src/ui/panel.ts`, `src/ui/components/`, `src/ui/styles/`. |
 | Glass / Appearance / background style issue | `src/ui/glass/` (`glass-settings.ts`, `glass-effect.ts`, `appearance-panel.ts`) and `src/ui/styles/glass.ts`. |
-| Listening mode (DJ features disabled) | Toggle/setting: `player-user-settings.ts`, `settings-controller.ts`, `settings.ts`. Gating: `panel.ts` (`bc-listening-mode` class), `transport.ts` + `playlist.ts` styles, `analysis-request-controller.ts` (`requestWaveformOnly`). |
+| Lite mode (DJ features disabled) | Toggle/setting: `player-user-settings.ts`, `settings-controller.ts`, `settings.ts`. Gating: `panel.ts` (`bc-lite-mode` class), `transport.ts` + `playlist.ts` styles, `analysis-request-controller.ts` (`requestWaveformOnly`). |
