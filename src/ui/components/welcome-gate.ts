@@ -224,6 +224,12 @@ const WELCOME_CSS = `
   color: var(--panel-text-dim, #1f2228);
 }
 
+/* Tighter inter-item gap for lists with more rows (e.g. the three Preload levels), so they
+   fit the slide's mid band without scrolling. */
+.bc-welcome-gate-list.is-compact {
+  gap: 6px;
+}
+
 /* Keyboard shortcuts page: the real default mapping in a compact two-column grid —
    transport in the left column, playback/tempo in the right. Keys sit in neutral
    (uncoloured) boxes that hug each glyph. */
@@ -514,15 +520,15 @@ async function shouldShowWelcome(version: string): Promise<boolean> {
   return (await readLastSeenVersion()) !== version;
 }
 
-// Each page of the walkthrough is a titled section the user steps through. Performance and
+// Each page of the walkthrough is a titled section the user steps through. Preload tracks and
 // Key analysis carry a short explanation of what the feature actually does, since those are the
-// settings most worth understanding before turning on. Performance mode is Chrome-only but we
-// describe it on both browsers (clearly labelled) so Firefox users know the capability exists.
+// settings most worth understanding before changing them. The High preload level is Chrome-only
+// but we label it on both browsers so Firefox users know the capability exists.
 function buildWelcomePages(): HTMLElement[] {
   // Pages carry no visible heading — the items speak for themselves. The `label` is used only as
-  // the section's accessible name. Performance and Key analysis explain what the feature does,
-  // since those are the settings most worth understanding before turning them on. Performance mode
-  // is Chrome-only but described on both browsers (clearly labelled) so Firefox users know it exists.
+  // the section's accessible name. Preload tracks and Key analysis explain what the feature does,
+  // since those are the settings most worth understanding before changing them. The High preload
+  // level is Chrome-only but labelled on both browsers so Firefox users know it exists.
   const page = (label: string, ...content: HTMLElement[]): HTMLElement =>
     dom('section', { class: 'bc-welcome-gate-page', role: 'group', 'aria-label': label }, content);
   const text = (...nodes: (string | HTMLElement)[]): HTMLElement =>
@@ -536,13 +542,17 @@ function buildWelcomePages(): HTMLElement[] {
 
   // Announcement slide for the newest feature — shown first, with a NEW badge (see
   // rules/welcome-gate-rules.md "Update Announcement Pattern"). Ask the user before removing it.
-  const liteMode = page(
-    'Lite mode',
+  const djLiteMode = page(
+    'DJ / Lite mode',
     text(
-      feature('Lite mode'),
+      feature('DJ / Lite mode'),
       ' ',
       newBadge(),
-      ' turns Bandcamp Deck into a simple player: it hides the BPM and key readouts and the DJ tools. Turn it on in Settings.'
+      ' is a switch in Settings. ',
+      dom('strong', {}, ['DJ mode']),
+      ' keeps every feature; ',
+      dom('strong', {}, ['Lite mode']),
+      ' hides the BPM and key readouts and the DJ tools for a clean, simple player.'
     )
   );
 
@@ -552,26 +562,24 @@ function buildWelcomePages(): HTMLElement[] {
       dom('li', {}, [dom('strong', {}, ['Resize the panel']), ' by dragging any corner.']),
       dom('li', {}, [
         feature('Appearance'),
-        ' ',
-        newBadge(),
         ' in Settings sets the panel’s opacity and background pattern.'
       ])
     ])
   );
 
-  const performance = page(
-    'Performance',
-    dom('ul', { class: 'bc-welcome-gate-list' }, [
-      dom('li', {}, [
-        feature('Track preloading'),
-        ' readies upcoming tracks for instant playback — turn it off if your machine or connection is slow.'
-      ]),
-      dom('li', {}, [
-        feature('Performance mode'),
-        ' (Chrome) prepares even more ahead for instant skips.'
-      ])
+  // Preload tracks: the single Off/Normal/High control that replaced the old separate preload
+  // toggle and Performance mode. High is the Chrome-only higher tier (clearly labelled so Firefox
+  // users know what it is even though they don't have it).
+  const preload = page(
+    'Preload tracks',
+    text(feature('Preload tracks'), ' ', newBadge()),
+    dom('ul', { class: 'bc-welcome-gate-list is-compact' }, [
+      dom('li', {}, [dom('strong', {}, ['Off']), ' — saves memory, CPU and network.']),
+      dom('li', {}, [dom('strong', {}, ['Normal']), ' — readies a few tracks ahead.']),
+      dom('li', {}, [dom('strong', {}, ['High']), ' (Chrome) — many more, for instant skips.'])
     ])
   );
+  preload.classList.add('is-tight');
 
   const keyAnalysis = page(
     'Key analysis',
@@ -619,7 +627,7 @@ function buildWelcomePages(): HTMLElement[] {
     text('No ads, no accounts, no catch — if Bandcamp Deck earns a place in your workflow, a small tip is hugely appreciated. ', link(KOFI_URL, 'Leave a tip', 'bc-welcome-gate-support-link'))
   );
 
-  return [liteMode, appearance, performance, keyAnalysis, shortcuts, feedback];
+  return [djLiteMode, appearance, preload, keyAnalysis, shortcuts, feedback];
 }
 
 // Background shape: the darker middle band plus its two curved divider lines, all from the

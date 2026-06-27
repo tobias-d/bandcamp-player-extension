@@ -30,9 +30,9 @@ array is the display order.
 
 **Current slides (in order):**
 
-1. **Lite mode** — announcement slide (NEW badge) for the non-DJ mode. First slide; ask the user before removing it.
+1. **DJ / Lite mode** — announcement slide (NEW badge) for the DJ↔Lite switch. First slide; ask the user before removing it.
 2. **Appearance** — resize gesture, Appearance setting (opacity + background pattern).
-3. **Performance** — Track preloading, Performance mode (Chrome).
+3. **Preload tracks** — the Off/Normal/High control (NEW badge); High is Chrome-only.
 4. **Key analysis** — off by default, differs from Rekordbox/Mixed In Key.
 5. **Keyboard shortcuts** — default key mapping grid (transport left, playback/tempo right).
 6. **Feedback** — bug report link, tip link. Always the last slide.
