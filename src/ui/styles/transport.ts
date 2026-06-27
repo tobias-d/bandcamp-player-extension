@@ -304,10 +304,10 @@ export const TRANSPORT_CSS = `
   background: var(--panel-surface-bg);
   border: 1px solid var(--panel-divider);
   color: var(--transport-ink);
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   font-size: 15px; cursor: pointer; padding: 4px; line-height: 1;
   min-width: 26px;
-  transition: color 0.12s, background 0.12s, border-color 0.12s; display: flex; align-items: center;
+  transition: color var(--panel-duration-fast), background var(--panel-duration-fast), border-color var(--panel-duration-fast); display: flex; align-items: center;
   justify-content: center;
 }
 .bc-btn:hover {
@@ -438,7 +438,7 @@ export const TRANSPORT_CSS = `
   top: 2px;
   width: 3px;
   height: 10px;
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   background: currentColor;
   clip-path: none;
 }
@@ -461,7 +461,7 @@ export const TRANSPORT_CSS = `
   top: 12%;
   width: 2px;
   height: 76%;
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   background: currentColor;
 }
 
@@ -543,7 +543,7 @@ export const TRANSPORT_CSS = `
   width: 2px;
   height: 15px;
   background: currentColor;
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   opacity: 0;
   transform: translateY(-50%) rotate(38deg);
 }
@@ -689,7 +689,7 @@ export const TRANSPORT_CSS = `
   right: var(--vol-track-right);
   top: calc(50% - (var(--vol-track-height) / 2));
   height: var(--vol-track-height);
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   background:
     linear-gradient(
       to right,
@@ -706,7 +706,7 @@ export const TRANSPORT_CSS = `
   width: var(--vol-thumb-size);
   height: var(--vol-thumb-size);
   transform: translate(-50%, -50%);
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   background: var(--transport-ink);
 }
 
@@ -743,7 +743,7 @@ export const TRANSPORT_CSS = `
   display: none;
   grid-template-columns: 1fr 1px 1fr;
   align-items: stretch;
-  border-radius: 10px;
+  border-radius: var(--panel-radius-lg);
   background: rgba(14, 16, 20, 0.045);
   padding: 8px 9px 9px;
   box-sizing: border-box;
@@ -835,7 +835,7 @@ export const TRANSPORT_CSS = `
   pointer-events: none;
   z-index: 0;
   will-change: transform, opacity;
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   opacity: 0.84;
   contain: paint;
   backface-visibility: hidden;

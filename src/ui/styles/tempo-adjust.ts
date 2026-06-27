@@ -64,7 +64,7 @@ export const TEMPO_ADJUST_CSS = `
   z-index: 0;
   isolation: isolate;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--panel-radius-lg);
   background: rgba(14, 16, 20, 0.045);
   padding: 8px 9px 9px;
   box-sizing: border-box;
@@ -147,7 +147,7 @@ export const TEMPO_ADJUST_CSS = `
   width: 100%;
   height: 2px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   background: var(--tempo-slider-track);
   box-shadow: none;
 }
@@ -167,7 +167,7 @@ export const TEMPO_ADJUST_CSS = `
   width: 100%;
   height: 2px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   background: var(--tempo-slider-track);
   box-shadow: none;
 }
@@ -175,7 +175,7 @@ export const TEMPO_ADJUST_CSS = `
 .bc-tempo-adjust-slider::-moz-range-progress {
   height: 2px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   background: var(--tempo-slider-track);
 }
 
@@ -244,7 +244,7 @@ export const TEMPO_ADJUST_CSS = `
   min-height: 22px;
   padding: 2px 6px;
   box-sizing: border-box;
-  border-radius: 6px;
+  border-radius: var(--panel-radius-sm);
   font-size: 10px;
   color: var(--panel-text);
 }

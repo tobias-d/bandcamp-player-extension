@@ -48,14 +48,14 @@ export const PLAYLIST_CSS = `
 
 .bc-pl-list::-webkit-scrollbar-track {
   background: transparent;
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
 }
 
 .bc-pl-list::-webkit-scrollbar-thumb {
   background: var(--panel-scroll-thumb);
   border: 2px solid transparent;
   background-clip: content-box;
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
 }
 
 .bc-pl-list::-webkit-scrollbar-corner {
@@ -188,7 +188,7 @@ export const PLAYLIST_CSS = `
   height: var(--pl-row-height);
   padding: 0 var(--pl-row-padding-x); align-items: center;
   border-bottom: 1px solid var(--panel-divider);
-  transition: background 0.12s, box-shadow 0.12s; cursor: default;
+  transition: background var(--panel-duration-fast), box-shadow var(--panel-duration-fast); cursor: default;
 }
 .bc-pl-track.bc-pl-track-disabled {
   cursor: default;
@@ -468,7 +468,7 @@ export const PLAYLIST_CSS = `
   gap: 10px;
   min-height: 24px;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: var(--panel-radius-sm);
   font-size: 11px;
   color: var(--panel-text);
 }
@@ -484,7 +484,7 @@ export const PLAYLIST_CSS = `
   width: 22px;
   height: 12px;
   padding: 1px;
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   border: 0;
   background: #ccc;
   flex: 0 0 auto;
@@ -550,7 +550,7 @@ export const PLAYLIST_CSS = `
   flex-direction: column;
   gap: 5px;
   padding: 4px 6px 5px;
-  border-radius: 6px;
+  border-radius: var(--panel-radius-sm);
   /* Match .bc-settings-row so the label inherits 11px like every other menu row. */
   font-size: 11px;
 }
@@ -617,7 +617,7 @@ export const PLAYLIST_CSS = `
   font-weight: 600;
   line-height: 1.2;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--panel-duration-fast) ease, color var(--panel-duration-fast) ease;
 }
 
 /* Compact segments size to their label rather than splitting the track evenly. */
@@ -658,7 +658,7 @@ export const PLAYLIST_CSS = `
   top: calc(100% + 2px);
   padding: 8px 9px;
   border: 1px solid var(--panel-border);
-  border-radius: 10px;
+  border-radius: var(--panel-radius-lg);
   background: var(--panel-surface-bg);
   box-shadow: var(--panel-surface-sheen);
   backdrop-filter: blur(20.8px) saturate(130%);
@@ -707,7 +707,7 @@ export const PLAYLIST_CSS = `
 .bc-shortcuts-key-btn,
 .bc-shortcuts-reset-btn {
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--panel-radius-sm);
   background: color-mix(in srgb, var(--panel-surface-active) 72%, transparent);
   color: var(--panel-text);
   font: inherit;
@@ -736,7 +736,7 @@ export const PLAYLIST_CSS = `
   min-width: 220px;
   padding: 8px;
   border: 1px solid var(--panel-border);
-  border-radius: 14px;
+  border-radius: var(--panel-radius-card);
   background: var(--panel-surface-bg);
   box-shadow: var(--panel-surface-sheen);
   backdrop-filter: blur(20.8px) saturate(130%);
@@ -771,11 +771,11 @@ export const PLAYLIST_CSS = `
   gap: 2px;
   padding: 2px;
   border: 1px solid color-mix(in srgb, var(--panel-divider) 72%, transparent);
-  border-radius: 8px;
+  border-radius: var(--panel-radius-md);
   background: var(--panel-glass-soft-bg);
   box-shadow: var(--panel-surface-sheen);
-  backdrop-filter: blur(var(--panel-surface-blur)) saturate(125%);
-  -webkit-backdrop-filter: blur(var(--panel-surface-blur)) saturate(125%);
+  backdrop-filter: var(--panel-blur-surface);
+  -webkit-backdrop-filter: var(--panel-blur-surface);
 }
 
 .bc-shortcuts-row {
@@ -785,7 +785,7 @@ export const PLAYLIST_CSS = `
   gap: 10px;
   min-height: 26px;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: var(--panel-radius-sm);
   font-size: 11px;
   color: var(--panel-text);
 }

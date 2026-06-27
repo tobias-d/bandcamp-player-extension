@@ -238,7 +238,7 @@ export const GLASS_CSS = `
 .bc-glass-rim {
   position: absolute;
   inset: 0;
-  border-radius: 14px;
+  border-radius: var(--panel-radius-card);
   pointer-events: none;
   z-index: 60;
   box-shadow:
@@ -272,7 +272,7 @@ export const GLASS_CSS = `
   -webkit-backdrop-filter: blur(18px) saturate(150%);
   box-shadow: -10px 10px 30px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.45);
   color: #1f2228;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: var(--font-mono);
   font-size: 12px;
   user-select: none;
   transform: scale(var(--appearance-scale, 1.15));
@@ -314,14 +314,14 @@ export const GLASS_CSS = `
   justify-content: center;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--panel-radius-sm);
   background: transparent;
   color: #1f2228;
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.12s, color 0.12s;
+  transition: background var(--panel-duration-fast), color var(--panel-duration-fast);
 }
 
 .bc-appearance-panel-head-icon:hover {
@@ -413,7 +413,7 @@ export const GLASS_CSS = `
   cursor: pointer;
   position: relative;
   text-decoration: none;
-  transition: background 0.12s;
+  transition: background var(--panel-duration-fast);
 }
 
 .bc-appearance-panel-arrow + .bc-appearance-panel-arrow::before {
@@ -454,12 +454,12 @@ export const GLASS_CSS = `
 
 .bc-appearance-panel-slider::-webkit-slider-runnable-track {
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   background: rgba(31, 34, 40, 0.16);
 }
 .bc-appearance-panel-slider::-moz-range-track {
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   background: rgba(31, 34, 40, 0.16);
 }
 

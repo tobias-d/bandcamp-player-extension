@@ -8,6 +8,8 @@ All notable changes to Bandcamp Deck are recorded here, one entry per released v
      notable; `npm run bump <version>` folds this section into the dated entry below.
      Audience: people rebuilding the extension — keep the detail technical. -->
 
+- Panel CSS design tokens: panel custom properties moved into a single source of truth (`ui/styles/tokens.ts`, injected first), with new `--panel-radius-*`, `--panel-duration-fast`, and `--panel-blur-surface` tokens. ~70 duplicated radius/timing/font/blur literals across the style modules now reference these tokens — no visual change. The body-mounted Appearance panel (`.bc-appearance-panel`) was added to the token selector since it lives outside `.bc-panel-root` and would otherwise not inherit the tokens.
+
 ## 3.7.0 — 2026-06-26
 
 Version `3.7.0` reworks the Settings menu and adds Lite mode.

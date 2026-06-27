@@ -86,7 +86,7 @@ export const WAVEFORM_CSS = `
   left: 0;
   width: calc(var(--dot-tail, 22px) + var(--dot-size, 3px));
   height: var(--dot-size, 3px);
-  border-radius: 999px;
+  border-radius: var(--panel-radius-pill);
   background: linear-gradient(
     90deg,
     rgba(var(--dot-rgb, 113,106,169), 0) 0%,

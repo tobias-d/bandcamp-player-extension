@@ -1,108 +1,6 @@
 export const PANEL_SHELL_CSS = `
-/* ─── CSS custom properties ───────────────────────────────────────────
-   Light mode defaults; dark mode overrides set on .bc-theme-dark
-──────────────────────────────────────────────────────────────────── */
-.bc-panel-root,
-.bc-shortcuts-host {
-  --panel-scale:      1.15;
-  --panel-header-height: 88px;
-  --panel-content-inset: 10px;
-  --header-album-action-glyph-size: calc(var(--heart-symbol-size) * 1.55);
-  --header-album-action-size: calc(var(--header-album-action-glyph-size) + 4px);
-  --header-album-actions-width: calc((var(--header-album-action-size) * 2) + 4px);
-  --header-metadata-side-width: 19ch;
-  --header-release-date-reserved-width: 104px;
-  --panel-surface-bg:  rgba(247, 240, 240, 0.58);
-  --panel-glass-soft-bg: rgba(184, 173, 173, 0.025);
-  --panel-surface-hover: var(--panel-surface-bg);
-  --panel-surface-active: var(--panel-surface-bg);
-  --panel-border:      rgba(88, 88, 88, 0.44);
-  --panel-header-bg:   var(--panel-surface-bg);
-  --panel-body-bg:     var(--panel-surface-bg);
-  --panel-divider:     rgba(78, 86, 97, 0.24);
-  --panel-text:        #1f2228;
-  --panel-text-bright: #1f2228;
-  --panel-text-dim:    #1f2228;
-  --panel-icon:        #1f2228;
-  --panel-waveform-bg: #4a4747;
-  --panel-wf-bg:       var(--panel-surface-bg);
-  --panel-track-bg:    var(--panel-surface-bg);
-  --panel-track-hover: var(--panel-surface-bg);
-  --panel-active-bg:   var(--panel-surface-bg);
-  --panel-like:        #363636;
-  --panel-like-empty:  #363636;
-  --panel-like-wishlist: #F5BC38;
-  --panel-like-collection: #D6110B;
-  --panel-accent:      #1f2228;
-  --panel-accent-soft: var(--panel-surface-active);
-  --panel-surface-bg-strong: var(--panel-surface-bg);
-  --panel-surface-blur: 10.4px;
-  --panel-surface-sheen: 0 1px 0 rgba(255, 255, 255, 0.22) inset;
-  --panel-scroll-thumb: rgba(93, 102, 114, 0.42);
-  --panel-scroll-thumb-hover: rgba(93, 102, 114, 0.62);
-  --panel-waveform-grad-top: rgba(156, 143, 134, 0.035);
-  --panel-waveform-grad-bottom: rgba(184, 173, 173, 0.015);
-  --wave-baseline:     rgba(0, 0, 0, 0.10);
-  --wave-future-low:   #59486f;
-  --wave-future-mid:   #716aa9;
-  --wave-future-high:  #af9bd3;
-  --wave-past-low:     rgba(80, 80, 80, 0.55);
-  --wave-past-mid:     rgba(110, 110, 110, 0.50);
-  --wave-past-high:    rgba(140, 140, 140, 0.45);
-  --wave-played-overlay: rgba(200, 200, 205, 0.12);
-  --wave-playhead:     rgba(30, 33, 40, 0.95);
-  --wave-outline:      rgba(0, 0, 0, 0.22);
-  --bpm-dot:           #1f2228;
-  --key-dot:           #1f2228;
-  --heart-symbol-size: 13px;
-  --font-display:      'Bandcamp Deck Lexend', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --font-mono:         -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --font-playtime:     'Bandcamp Deck Roboto Mono', ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
-}
-
-.bc-panel-root.bc-theme-dark,
-.bc-shortcuts-host.bc-theme-dark {
-  --panel-scale:      1.15;
-  --panel-header-height: 88px;
-  --panel-content-inset: 10px;
-  --header-album-action-glyph-size: calc(var(--heart-symbol-size) * 1.55);
-  --header-album-action-size: calc(var(--header-album-action-glyph-size) + 4px);
-  --header-album-actions-width: calc((var(--header-album-action-size) * 2) + 4px);
-  --header-metadata-side-width: 19ch;
-  --header-release-date-reserved-width: 104px;
-  --panel-surface-bg:  rgba(247, 240, 240, 0.58);
-  --panel-glass-soft-bg: rgba(184, 173, 173, 0.025);
-  --panel-surface-hover: var(--panel-surface-bg);
-  --panel-surface-active: var(--panel-surface-bg);
-  --panel-border:      rgba(88, 88, 88, 0.44);
-  --panel-header-bg:   var(--panel-surface-bg);
-  --panel-body-bg:     var(--panel-surface-bg);
-  --panel-divider:     rgba(180, 191, 211, 0.2);
-  --panel-text:        #1f2228;
-  --panel-text-bright: #1f2228;
-  --panel-text-dim:    #1f2228;
-  --panel-icon:        #1f2228;
-  --panel-waveform-bg: #4a4747;
-  --panel-wf-bg:       var(--panel-surface-bg);
-  --panel-track-bg:    var(--panel-surface-bg);
-  --panel-track-hover: var(--panel-surface-bg);
-  --panel-active-bg:   var(--panel-surface-bg);
-  --panel-like:        #363636;
-  --panel-like-empty:  #363636;
-  --panel-like-wishlist: #F5BC38;
-  --panel-like-collection: #D6110B;
-  --panel-accent:      #1f2228;
-  --panel-accent-soft: var(--panel-surface-active);
-  --panel-surface-bg-strong: var(--panel-surface-bg);
-  --panel-surface-blur: 10.4px;
-  --panel-surface-sheen: 0 1px 0 rgba(255, 255, 255, 0.16) inset;
-  --panel-scroll-thumb: rgba(169, 180, 197, 0.42);
-  --panel-scroll-thumb-hover: rgba(189, 199, 216, 0.62);
-  --panel-waveform-grad-top: rgba(156, 143, 134, 0.035);
-  --panel-waveform-grad-bottom: rgba(184, 173, 173, 0.015);
-  --bpm-dot:           #1f2228;
-  --key-dot:           #1f2228;
-}
+/* Design tokens (custom properties) live in src/ui/styles/tokens.ts and are
+   injected first; the rules below consume them. */
 
 /* ─── Root panel shell ─────────────────────────────────────────────── */
 .bc-panel-root {
@@ -112,9 +10,9 @@ export const PANEL_SHELL_CSS = `
   width: 360px;
   max-width: calc((100vw - 32px) / var(--panel-scale));
   z-index: 2147483000;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: var(--font-mono);
   border: 1px solid var(--panel-border);
-  border-radius: 14px;
+  border-radius: var(--panel-radius-card);
   box-shadow: none;
   overflow: hidden;
   user-select: none;
@@ -149,7 +47,7 @@ export const PANEL_SHELL_CSS = `
   left: 0;
   top: 0;
   z-index: 2147483005;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: var(--font-mono);
   color: var(--panel-text);
   user-select: none;
   pointer-events: none;
@@ -649,7 +547,7 @@ export const PANEL_SHELL_CSS = `
   width: 100%;
   height: 100%;
   font-size: 9.45px; color: var(--panel-icon);
-  cursor: pointer; line-height: 1; transition: color 0.12s;
+  cursor: pointer; line-height: 1; transition: color var(--panel-duration-fast);
   border-radius: 0;
   background: transparent;
   border: 0;
@@ -657,7 +555,7 @@ export const PANEL_SHELL_CSS = `
   box-sizing: border-box;
   background-clip: content-box;
   display: flex; align-items: center; justify-content: center;
-  transition: color 0.12s, background 0.12s, border-color 0.12s;
+  transition: color var(--panel-duration-fast), background var(--panel-duration-fast), border-color var(--panel-duration-fast);
   position: relative;
 }
 
@@ -690,7 +588,7 @@ export const PANEL_SHELL_CSS = `
   min-width: 142px;
   padding: 4px;
   border: 1px solid var(--panel-divider);
-  border-radius: 8px;
+  border-radius: var(--panel-radius-md);
   background: color-mix(in srgb, var(--panel-surface-bg) 84%, white 16%);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
   backdrop-filter: blur(30px) saturate(150%);
@@ -746,7 +644,7 @@ export const PANEL_SHELL_CSS = `
 .bc-info-link {
   display: block;
   padding: 5px 6px;
-  border-radius: 6px;
+  border-radius: var(--panel-radius-sm);
   font-size: 11px;
   font-weight: 550;
   line-height: 1.2;

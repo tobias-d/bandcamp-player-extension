@@ -13,7 +13,7 @@ export const WARNING_CSS = `
   justify-content: center;
   padding: 0 10px;
   border: 1px solid color-mix(in srgb, var(--panel-like-wishlist) 58%, #8a6511 42%);
-  border-radius: 10px;
+  border-radius: var(--panel-radius-lg);
   background: var(--panel-like-wishlist);
   color: #1f2228;
   font-size: 9px;

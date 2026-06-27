@@ -1,5 +1,6 @@
 import { injectStylesheet } from '@/utils/dom';
 import { extensionAssetUrl } from '@/utils/asset-url';
+import { TOKENS_CSS } from '@/ui/styles/tokens';
 import { DEBUG_PANEL_CSS } from '@/ui/styles/debug-panel';
 import { GLASS_CSS } from '@/ui/styles/glass';
 import { LIKE_HEART_CSS } from '@/ui/styles/like-heart';
@@ -32,6 +33,7 @@ const FONT_FACE_CSS = `
 
 const PANEL_CSS = [
   FONT_FACE_CSS,
+  TOKENS_CSS,
   PANEL_SHELL_CSS,
   TRANSPORT_CSS,
   TEMPO_ADJUST_CSS,
