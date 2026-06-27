@@ -26,7 +26,8 @@
     "clean": "rm -rf dist",
     "check:bpm-offset": "node tools/check-bpm-offset.mjs",
     "verify:worklet": "node tools/build/verify-signalsmith-worklet-feeding.js",
-    "bump": "node tools/build/bump-version.js"
+    "bump": "node tools/build/bump-version.js",
+    "test": "node --test \"tools/**/*.test.js\""
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",

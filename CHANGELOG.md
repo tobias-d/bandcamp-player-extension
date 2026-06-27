@@ -1,6 +1,12 @@
 # Changelog
 
-All notable changes to Bandcamp Deck are recorded here, one entry per released version. It is written for people rebuilding the extension, so entries carry the technical detail needed to understand what changed and why. This file reflects version updates only — entries are added when the version number is bumped, not per commit.
+All notable changes to Bandcamp Deck are recorded here, one entry per released version. It is written for people rebuilding the extension, so entries carry the technical detail needed to understand what changed and why. Land notable changes as bullets under **Unreleased** as you go; running `npm run bump <version>` folds that section into a dated release entry. The dated entries below are frozen — one per shipped version.
+
+## Unreleased
+
+<!-- Accruing notes for the next release. Add a bullet here when you land something
+     notable; `npm run bump <version>` folds this section into the dated entry below.
+     Audience: people rebuilding the extension — keep the detail technical. -->
 
 ## 3.7.0 — 2026-06-26
 
