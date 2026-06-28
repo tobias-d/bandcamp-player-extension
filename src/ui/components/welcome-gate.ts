@@ -572,12 +572,13 @@ function buildWelcomePages(): HTMLElement[] {
   // users know what it is even though they don't have it).
   const preload = page(
     'Preload tracks',
-    text(feature('Preload tracks'), ' ', newBadge()),
-    dom('ul', { class: 'bc-welcome-gate-list is-compact' }, [
-      dom('li', {}, [dom('strong', {}, ['Off']), ' — saves memory, CPU and network.']),
-      dom('li', {}, [dom('strong', {}, ['Normal']), ' — readies a few tracks ahead.']),
-      dom('li', {}, [dom('strong', {}, ['High']), ' (Chrome) — many more, for instant skips.'])
-    ])
+    text(feature('Preload tracks')),
+    text(
+      'Each track is analysed several ways, so Deck is fairly resource-intensive. ',
+      dom('strong', {}, ['Off']), ' is lightest, ',
+      dom('strong', {}, ['Normal']), ' preps a few tracks ahead, ',
+      dom('strong', {}, ['High']), ' (Chrome) many more.'
+    )
   );
   preload.classList.add('is-tight');
 
