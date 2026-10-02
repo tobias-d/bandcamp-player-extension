@@ -25,6 +25,12 @@ heavy work is scheduled to keep the browser responsive. The rest is a thin UI ov
 - Tempo Adjust for BPM-based playback-speed changes through extension-owned runtime audio.
 - Wishlist and collection integration with guarded, identity-checked album/track mutations.
 
+Hardware media keys use the browser's Media Session API while Bandcamp Deck is playing:
+play/pause pauses playback, and previous/next navigate the playlist. Paused, stopped, and idle
+Deck playback registers no media-key handlers; resume playback from the page or panel first.
+Deck never captures hardware volume keys. The browser and operating system choose which
+playing application receives media keys.
+
 Release notes live in [`CHANGELOG.md`](CHANGELOG.md) — one entry per version, added on
 `npm run bump <version>`.
 
@@ -268,8 +274,8 @@ begin with no wait. So the extension fetches and decodes upcoming tracks in the 
 where the user currently is. Decoded audio is large, though, so this work has to stay within a
 memory budget.
 
-**Preparation is bounded, not greedy.** The extension prepares upcoming tracks ahead of time (so
-the next one plays instantly) but never all of them at once. A memory-aware policy
+**Normal preloading is bounded by a memory budget.** The extension prepares upcoming tracks ahead
+of time (so the next one plays instantly) but never all of them at once. A memory-aware policy
 (`runtime-predecode-policy.ts`) picks a window of the next several tracks and a parallelism cap from
 the available memory — roughly 6–10 tracks with 1–3 in flight. Decoded audio beyond the budget is
 evicted, but the small encoded blobs are kept, so revisiting a track is decode-only with no
@@ -281,9 +287,17 @@ flowchart TD
     Window --> Preload[Decode upcoming tracks ahead of time<br/>so the next one plays instantly]
 ```
 
-**Performance mode (Chrome, opt-in).** On a powerful machine you can trade memory for readiness:
-Performance mode widens that window substantially — more tracks prepared, more in parallel. It is
-Chrome-only and off by default, a deliberate choice rather than a silent one.
+**Preload tracks: Off, Normal, and High.** Preloading prepares upcoming tracks in the background
+so they are ready when you select them. Choose a level in Settings:
+
+- **Off** — does not prepare upcoming tracks ahead of time, saving memory, CPU work, and network
+  traffic.
+- **Normal (default)** — prepares a few upcoming tracks. The extension adjusts how many it
+  prepares and decodes at once according to available memory.
+- **High (Chrome only, opt-in)** — prepares many more tracks for faster skipping through the
+  playlist. It uses substantially more memory and is intended for powerful machines.
+
+Firefox offers **Off** and **Normal**. Changing the preload level reloads the page.
 
 Exact worker counts, memory budgets, and the predecode table live in
 [`rules/audio-rules.md`](rules/audio-rules.md),

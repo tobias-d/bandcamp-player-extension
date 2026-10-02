@@ -1726,24 +1726,10 @@ function init(): void {
     }
   };
 
-  let shortcutPanelHandlers: PanelHandlers | null = null;
   const playbackHandoff = createPlaybackHandoff({
     context: 'player',
     onPauseRequested: () => {
       getPlaybackBridge()?.pause();
-    },
-    onShortcutCommand: (action) => {
-      if (action === 'toggle-play-pause') {
-        shortcutPanelHandlers?.onTogglePlayPause();
-        return;
-      }
-      if (action === 'previous-track') {
-        shortcutPanelHandlers?.onPrevTrack();
-        return;
-      }
-      if (action === 'next-track') {
-        shortcutPanelHandlers?.onNextTrack();
-      }
     }
   });
 
@@ -2890,7 +2876,6 @@ function init(): void {
       deactivateExtension();
     }
   });
-  shortcutPanelHandlers = handlers;
 
   const maybeAutoAdvancePlaylist = (origin: 'origin-ended' | 'runtime-ended'): boolean => {
     if (!settings.autoPlayEnabled) {

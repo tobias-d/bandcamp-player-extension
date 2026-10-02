@@ -252,6 +252,18 @@ export function createPlayerPanelHandlers(input: CreatePlayerPanelHandlersInput)
   const canAdjustTempo = (): boolean => isPlayerTempoAdjustReady(state);
 
   return {
+    isPlaybackActive() {
+      if (!state.hasPlaybackStarted || state.runtimePlaylistSelectionPending) {
+        return false;
+      }
+      if (state.runtimePlaybackOwned || state.detachedPlaybackActive) {
+        const playback = state.bridgeAudioState;
+        return Boolean(playback?.src && !playback.paused);
+      }
+      const audio = getBridge()?.getActiveAudio();
+      return Boolean(audio && (audio.currentSrc || audio.src) && !audio.paused && !audio.ended);
+    },
+
     onTogglePlayPause() {
       if (!state.hasPlaybackStarted) {
         recordGuard('toggle-play-pause-blocked-gate', 'playback-gate-closed');

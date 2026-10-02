@@ -115,6 +115,38 @@ by itself mean runtime is audible; the Discover bridge receives `runtime-owns-pl
 the actual ownership-claim path. A Discover playlist click is an authoritative runtime selection,
 never native detached playback.
 
+### Hardware media controls
+
+- `src/ui/media-session.ts` is the sole Deck media-session controller, shared by the player
+  and Discover panels. Registration requires `PanelInput.isPlaying` and the live
+  `PanelHandlers.isPlaybackActive()` owner check; callbacks check that owner again instead
+  of trusting a rendered UI snapshot. Pending playlist selections are inactive.
+- MUST NOT declare hardware media-key commands in any browser manifest. Those shortcuts
+  reserve keys while the extension is installed, even when no Bandcamp page is open;
+  ignoring a command in the background does not return the key to another media session.
+- Register only `pause`, `previoustrack`, and `nexttrack` during active playback. The browser
+  maps the hardware play/pause key to pause while playing. Deck MUST NOT register a `play`
+  handler to resume inactive playback, or handle hardware volume keys.
+- Pause/end/pending playback, panel destruction, pagehide, and extension-context invalidation
+  release registered handlers, clear Deck metadata, and reset declared playback state to
+  `none`. An initially idle panel MUST NOT write the page's native media session.
+- Callbacks recheck playback and extension validity. Each activation has a generation guard
+  so a callback queued before release cannot act on a later playback session.
+  A hardware pause also waits for an observed inactive state before registration can resume,
+  because runtime pause commands are asynchronous.
+- Browser/OS audio-focus selection and native page media handlers remain browser-owned.
+  `playbackState = 'none'` withdraws Deck's declared state; it is not an OS audio-focus API
+  and does not disable the browser's default controls for native Bandcamp audio.
+- Cross-tab pause broadcasts remain separate in `content/playback-handoff.ts` and
+  `background/handlers/playback-handoff.ts`; neither routes hardware media keys.
+
+Regression checks: `npm test` covers manifest reservations and controller lifecycle with a
+browser API double. Hardware delivery requires Chrome/macOS and Chrome/Windows smoke tests:
+YouTube with no Bandcamp tab; an idle Bandcamp tab; active native and runtime Deck playback;
+paused/ended Deck followed by YouTube; Discover; cross-tab handoff; panel close; and volume keys.
+Reload the extension and refresh existing Bandcamp tabs before testing so previously injected
+page-bridge handlers cannot remain from the old build. Check Firefox for the same controls.
+
 ---
 
 ## 3. Architecture: two-host ping-pong

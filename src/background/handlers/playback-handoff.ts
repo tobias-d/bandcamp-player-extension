@@ -1,19 +1,10 @@
 import type { BackgroundPush, ContentMessage } from '@/shared/types';
-import type { KeyboardShortcutAction } from '@/shared/keyboard-shortcuts';
 import { browserApi } from '@/utils/browser-api';
 import { createLogger } from '@/utils/debug';
 
 const logger = createLogger('MESSAGING');
 
-interface ActivePlaybackState {
-  tabId: number;
-  src: string;
-  context: 'player' | 'discover';
-  ts: number;
-}
-
-let activePlayback: ActivePlaybackState | null = null;
-let commandsRegistered = false;
+let lastPlaybackTabId: number | null = null;
 
 async function pushPauseToTab(targetTabId: number, fromTabId: number, src: string): Promise<void> {
   const push: BackgroundPush = {
@@ -67,10 +58,10 @@ export async function handleNotifyPlaybackStarted(
     return { ok: false };
   }
 
-  const previous = activePlayback;
-  if (previous && previous.tabId !== nextTabId) {
+  const previousTabId = lastPlaybackTabId;
+  if (previousTabId !== null && previousTabId !== nextTabId) {
     logger.info('cross-tab handoff', {
-      fromTabId: previous.tabId,
+      fromTabId: previousTabId,
       toTabId: nextTabId,
       context: msg.context
     });
@@ -84,65 +75,7 @@ export async function handleNotifyPlaybackStarted(
     });
   }
 
-  activePlayback = {
-    tabId: nextTabId,
-    src,
-    context: msg.context,
-    ts: Date.now()
-  };
+  lastPlaybackTabId = nextTabId;
 
   return { ok: true };
-}
-
-function mapCommandToShortcutAction(command: string): KeyboardShortcutAction | null {
-  switch (command) {
-    case 'media-play-pause':
-      return 'toggle-play-pause';
-    case 'media-previous-track':
-      return 'previous-track';
-    case 'media-next-track':
-      return 'next-track';
-    default:
-      return null;
-  }
-}
-
-async function pushShortcutCommandToActiveTab(action: KeyboardShortcutAction): Promise<void> {
-  const tabId = activePlayback?.tabId;
-  if (!Number.isFinite(tabId)) {
-    logger.info('media key ignored; no active Bandcamp playback tab');
-    return;
-  }
-
-  const push: BackgroundPush = {
-    type: 'PLAYBACK_SHORTCUT_COMMAND',
-    action,
-    source: 'media-key'
-  };
-
-  try {
-    await browserApi.tabs.sendMessage(Number(tabId), push);
-  } catch (error) {
-    logger.warn('media key dispatch failed', error);
-  }
-}
-
-export function registerPlaybackCommandHandlers(): void {
-  if (commandsRegistered) {
-    return;
-  }
-  const commands = browserApi.commands;
-  if (!commands?.onCommand) {
-    logger.warn('commands API unavailable; media keys not registered');
-    return;
-  }
-
-  commandsRegistered = true;
-  commands.onCommand.addListener((command) => {
-    const action = mapCommandToShortcutAction(command);
-    if (!action) {
-      return;
-    }
-    void pushShortcutCommandToActiveTab(action);
-  });
 }

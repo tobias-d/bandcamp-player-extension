@@ -48,12 +48,12 @@ Browser load paths:
 
 | Fact | Current value |
 |------|---------------|
-| Package version | `3.6.4` |
-| Last verified | `2026-06-24` |
-| Verified commands | `npm run release:all` |
+| Package version | `3.7.1` |
+| Last verified | `2026-10-02` |
+| Verified commands | `npm test`, `npx tsc --noEmit`, `npm run release:all` |
 | Firefox production build | Passing |
 | Chrome production build | Passing |
-| Test suite | `npm test` — Node's built-in runner over `tools/**/*.test.js` (currently the changelog-fold logic in `bump-version.js`). No browser/runtime tests. |
+| Test suite | `npm test` — Node's built-in runner over `tools/**/*.test.js` (changelog-fold logic and media-session lifecycle/manifest checks with a browser API double). No hardware/browser integration tests. |
 | Primary verification | Build-time TypeScript through webpack, plus manual browser loading |
 | Custom WASM source | `vendor/essentia-wasm-custom/` |
 

@@ -9,21 +9,6 @@ export function buildOriginBridgeScriptSectionA(marker: string, source: string, 
       const post = (type, payload) => {
         window.postMessage({ source: ${JSON.stringify(source)}, type, payload, ts: Date.now() }, '*');
       };
-      const MEDIA_SESSION_ACTIONS = ['play', 'pause', 'previoustrack', 'nexttrack'];
-      const registerMediaSessionBridge = () => {
-        try {
-          if (!navigator.mediaSession || typeof navigator.mediaSession.setActionHandler !== 'function') {
-            return;
-          }
-          MEDIA_SESSION_ACTIONS.forEach((action) => {
-            try {
-              navigator.mediaSession.setActionHandler(action, () => {
-                post('MEDIA_SESSION_ACTION', { action });
-              });
-            } catch (_) {}
-          });
-        } catch (_) {}
-      };
       const emittedIdentityKeys = new Set();
       const trackedAudios = new Set();
       let activeAudio = null;

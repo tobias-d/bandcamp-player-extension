@@ -8,6 +8,15 @@ All notable changes to Bandcamp Deck are recorded here, one entry per released v
      notable; `npm run bump <version>` folds this section into the dated entry below.
      Audience: people rebuilding the extension — keep the detail technical. -->
 
+## 3.7.1 — 2026-09-17
+
+- Fixed Chrome media keys being blocked on other sites: removed hardware media-key commands from
+  all browser manifests and consolidated player/Discover handling in `src/ui/media-session.ts`.
+  Deck registers pause/previous/next only during active playback, rechecks the playback owner
+  before dispatch, and releases handlers when playback becomes inactive or the panel/page/
+  extension context closes. Generation guards reject queued callbacks from earlier sessions;
+  asynchronous pause must settle before controls can register again. Volume keys remain untouched.
+
 - Panel CSS design tokens: panel custom properties moved into a single source of truth (`ui/styles/tokens.ts`, injected first), with new `--panel-radius-*`, `--panel-duration-fast`, and `--panel-blur-surface` tokens. ~70 duplicated radius/timing/font/blur literals across the style modules now reference these tokens — no visual change. The body-mounted Appearance panel (`.bc-appearance-panel`) was added to the token selector since it lives outside `.bc-panel-root` and would otherwise not inherit the tokens.
 
 ## 3.7.0 — 2026-06-26

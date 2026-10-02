@@ -162,7 +162,6 @@ import {
   createResourceDiagnosticsController,
   type ResourceDiagnosticsController
 } from '@/content/debug/resource-diagnostics';
-import type { KeyboardShortcutAction } from '@/shared/keyboard-shortcuts';
 import { clearMetadataRuntimeCaches } from '@/content/metadata/extractor/state';
 import {
   isApiMetadataSource,
@@ -460,7 +459,6 @@ export function initDiscoverController(): void {
   // Forward-declared; assigned after all callback dependencies are defined.
   let analysisReqCtrl: ReturnType<typeof createAnalysisRequestController>;
   const transportDebug: DiscoverTransportDebugState = createDiscoverTransportDebugState();
-  let handlePlaybackShortcutCommand: (action: KeyboardShortcutAction) => void = () => {};
   const appendJumpTrace = (stage: string, detail: string): void => {
     jumpTrace.push({ ts: Date.now(), stage, detail });
     if (jumpTrace.length > 80) {
@@ -472,9 +470,6 @@ export function initDiscoverController(): void {
     onPauseRequested: () => {
       runtimeAudioController?.pause();
       sendDiscoverAudioCommand('pause');
-    },
-    onShortcutCommand: (action) => {
-      handlePlaybackShortcutCommand(action);
     }
   });
 
@@ -1690,29 +1685,6 @@ export function initDiscoverController(): void {
     playbackHandoff.reportPlaybackState(false, nowPlaying.streamUrl);
   };
 
-  handlePlaybackShortcutCommand = (action): void => {
-    if (action === 'toggle-play-pause') {
-      recordTransportAction(transportDebug, 'media-key-toggle-play-pause', `playing=${nowPlaying.isPlaying ? '1' : '0'}`);
-      if (runtimeAudioController) {
-        runtimeAudioController.togglePlayPause();
-        recordTransportResult(transportDebug, 'media-key-toggle-play-pause-dispatched', 'runtime-controller');
-      } else {
-        sendDiscoverAudioCommand('toggle-play-pause');
-        recordTransportResult(transportDebug, 'media-key-toggle-play-pause-dispatched', 'origin-bridge');
-      }
-      return;
-    }
-    if (action === 'previous-track') {
-      recordTransportAction(transportDebug, 'media-key-prev-track', `current=${playlistState.currentIndex}`);
-      jumpDiscoverRelative(-1);
-      return;
-    }
-    if (action === 'next-track') {
-      recordTransportAction(transportDebug, 'media-key-next-track', `current=${playlistState.currentIndex}`);
-      jumpDiscoverRelative(1);
-    }
-  };
-
   const maybeAutoAdvanceDiscoverPlaylist = (origin: 'origin-ended' | 'runtime-ended'): boolean => {
     if (!settings.autoPlayEnabled) {
       return false;
@@ -2005,6 +1977,9 @@ export function initDiscoverController(): void {
   const panel = showResultsPanel(
     buildPanelInput(),
     {
+    isPlaybackActive() {
+      return Boolean(nowPlaying.streamUrl && nowPlaying.isPlaying && !runtimePlaylistSelectionPending);
+    },
     onTogglePlayPause() {
       recordTransportAction(transportDebug, 'toggle-play-pause', `playing=${nowPlaying.isPlaying ? '1' : '0'}`);
       if (runtimeAudioController) {

@@ -1,5 +1,4 @@
 import type { BackgroundPush } from '@/shared/types';
-import type { KeyboardShortcutAction } from '@/shared/keyboard-shortcuts';
 import { sendMessage } from '@/utils/messaging';
 import { isExtensionContextValid, markExtensionContextInvalidated } from '@/utils/extension-context';
 import { browserApi } from '@/utils/browser-api';
@@ -16,7 +15,6 @@ export interface PlaybackHandoff {
 interface CreatePlaybackHandoffInput {
   context: 'player' | 'discover';
   onPauseRequested(): void;
-  onShortcutCommand?(action: KeyboardShortcutAction): void;
 }
 
 export function createPlaybackHandoff(input: CreatePlaybackHandoffInput): PlaybackHandoff {
@@ -27,9 +25,6 @@ export function createPlaybackHandoff(input: CreatePlaybackHandoffInput): Playba
   const onMessage = (raw: unknown): void => {
     const push = raw as BackgroundPush | null;
     if (!push || typeof push !== 'object' || push.type !== 'PAUSE_LOCAL_PLAYBACK') {
-      if (push?.type === 'PLAYBACK_SHORTCUT_COMMAND') {
-        input.onShortcutCommand?.(push.action);
-      }
       return;
     }
 

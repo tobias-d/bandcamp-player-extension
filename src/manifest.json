@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bandcamp Deck",
-  "version": "3.7.0",
+  "version": "3.7.1",
   "description": "The most complete DJ-ready Bandcamp player, with accurate BPM analysis, tempo adjust, waveform visualization, and more.",
   "permissions": ["storage", "offscreen", "tabs"],
   "host_permissions": [
@@ -13,26 +13,6 @@
   ],
   "background": {
     "service_worker": "background/index.js"
-  },
-  "commands": {
-    "media-play-pause": {
-      "suggested_key": {
-        "default": "MediaPlayPause"
-      },
-      "description": "Play or pause Bandcamp Deck"
-    },
-    "media-previous-track": {
-      "suggested_key": {
-        "default": "MediaPrevTrack"
-      },
-      "description": "Play the previous Bandcamp Deck track"
-    },
-    "media-next-track": {
-      "suggested_key": {
-        "default": "MediaNextTrack"
-      },
-      "description": "Play the next Bandcamp Deck track"
-    }
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"

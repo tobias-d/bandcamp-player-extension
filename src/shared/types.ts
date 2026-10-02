@@ -1,4 +1,4 @@
-import type { KeyboardShortcutAction, KeyboardShortcutMap } from '@/shared/keyboard-shortcuts';
+import type { KeyboardShortcutMap } from '@/shared/keyboard-shortcuts';
 import type { ContextResourceSample } from '@/shared/resource-sampler';
 
 export type BeatTypeAuto = 'straight' | 'breakbeat' | 'unknown';
@@ -449,6 +449,7 @@ export interface PanelInput {
 }
 
 export interface PanelHandlers {
+  isPlaybackActive(): boolean;
   onTogglePlayPause(): void;
   onSetVolume(volume: number): void;
   onSeekToFraction(fraction: number): void;
@@ -566,8 +567,7 @@ export type ContentMessage =
 export type BackgroundPush =
   | ({ type: 'ANALYSIS_PARTIAL'; url: string } & Partial<AnalysisResult>)
   | { type: 'PING'; ts: number }
-  | { type: 'PAUSE_LOCAL_PLAYBACK'; reason: 'other-tab-started'; fromTabId?: number; src?: string }
-  | { type: 'PLAYBACK_SHORTCUT_COMMAND'; action: KeyboardShortcutAction; source: 'media-key' };
+  | { type: 'PAUSE_LOCAL_PLAYBACK'; reason: 'other-tab-started'; fromTabId?: number; src?: string };
 
 export interface TralbumFetchResponse {
   ok: boolean;

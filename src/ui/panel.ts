@@ -15,6 +15,7 @@ import { createPlaylistView } from '@/ui/components/playlist-view';
 import { createSettings } from '@/ui/components/settings';
 import { createTapTempo } from '@/ui/components/tap-tempo';
 import { createTransport } from '@/ui/components/transport';
+import { createPanelMediaSessionController } from '@/ui/media-session';
 import { createWarningBanner } from '@/ui/components/warning-banner';
 import { isExtensionContextValid, onExtensionContextInvalidated } from '@/utils/extension-context';
 import { createWaveformCanvas } from '@/ui/components/waveform-canvas';
@@ -49,7 +50,6 @@ const KEYBOARD_TEMPO_STEP_BPM = 1;
 const SHORTCUTS_PANEL_GAP_PX = 8;
 const SHORTCUTS_PANEL_TOP_OFFSET_PX = 27;
 const SHORTCUTS_PANEL_VIEWPORT_PADDING_PX = 8;
-const PAGE_MEDIA_SESSION_MESSAGE_SOURCE = 'bc-player-origin-bridge';
 const OPEN_LINK_ICON_URL = extensionAssetUrl('public/new-tab.svg');
 // Shown (CSS uppercases it) when this content script is orphaned by an extension reload.
 const EXTENSION_RELOADED_NOTICE = 'Bandcamp Deck updated\nReload this tab to continue';
@@ -127,128 +127,6 @@ function isEditableShortcutEvent(event: KeyboardEvent): boolean {
     }
   }
   return isEditableElement(event.target) || isEditableElement(document.activeElement);
-}
-
-function getMediaSession(): MediaSession | null {
-  try {
-    return navigator.mediaSession || null;
-  } catch {
-    return null;
-  }
-}
-
-function assignMediaSessionActionHandler(
-  mediaSession: MediaSession,
-  action: MediaSessionAction,
-  handler: MediaSessionActionHandler | null
-): boolean {
-  try {
-    mediaSession.setActionHandler(action, handler);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function dispatchMediaSessionAction(
-  action: string,
-  handlers: PanelHandlers,
-  getInput: () => PanelInput
-): void {
-  if (action === 'play') {
-    if (!getInput().isPlaying) {
-      handlers.onTogglePlayPause();
-    }
-    return;
-  }
-  if (action === 'pause') {
-    if (getInput().isPlaying) {
-      handlers.onTogglePlayPause();
-    }
-    return;
-  }
-  if (action === 'previoustrack') {
-    handlers.onPrevTrack();
-    return;
-  }
-  if (action === 'nexttrack') {
-    handlers.onNextTrack();
-  }
-}
-
-function createPanelMediaSessionController(
-  handlers: PanelHandlers,
-  getInput: () => PanelInput
-): { sync(input: PanelInput): void; destroy(): void } {
-  const mediaSession = getMediaSession();
-  const registeredActions: MediaSessionAction[] = [];
-  const onPageMediaSessionMessage = (event: MessageEvent): void => {
-    const data = event.data as {
-      source?: unknown;
-      type?: unknown;
-      payload?: { action?: unknown };
-    } | null;
-    if (
-      !data ||
-      data.source !== PAGE_MEDIA_SESSION_MESSAGE_SOURCE ||
-      data.type !== 'MEDIA_SESSION_ACTION'
-    ) {
-      return;
-    }
-    dispatchMediaSessionAction(String(data.payload?.action || ''), handlers, getInput);
-  };
-  window.addEventListener('message', onPageMediaSessionMessage);
-
-  if (mediaSession) {
-    const register = (action: MediaSessionAction, handler: MediaSessionActionHandler): void => {
-      if (assignMediaSessionActionHandler(mediaSession, action, handler)) {
-        registeredActions.push(action);
-      }
-    };
-
-    register('play', () => dispatchMediaSessionAction('play', handlers, getInput));
-    register('pause', () => dispatchMediaSessionAction('pause', handlers, getInput));
-    register('previoustrack', () => dispatchMediaSessionAction('previoustrack', handlers, getInput));
-    register('nexttrack', () => dispatchMediaSessionAction('nexttrack', handlers, getInput));
-  }
-
-  return {
-    sync(input) {
-      if (!mediaSession) {
-        return;
-      }
-      try {
-        mediaSession.playbackState = input.isPlaying ? 'playing' : 'paused';
-      } catch {
-        // Some browsers expose MediaSession without playbackState support.
-      }
-      try {
-        if (typeof window.MediaMetadata === 'function') {
-          mediaSession.metadata = new window.MediaMetadata({
-            title: String(input.metadata?.trackTitle || input.metadata?.combined || 'Bandcamp Deck'),
-            artist: String(input.metadata?.artistName || ''),
-            album: String(input.metadata?.albumTitle || '')
-          });
-        }
-      } catch {
-        // Metadata is decorative; action handlers above are the control path.
-      }
-    },
-    destroy() {
-      window.removeEventListener('message', onPageMediaSessionMessage);
-      if (!mediaSession) {
-        return;
-      }
-      registeredActions.forEach((action) => {
-        assignMediaSessionActionHandler(mediaSession, action, null);
-      });
-      try {
-        mediaSession.playbackState = 'none';
-      } catch {
-        // Ignore cleanup gaps in partial MediaSession implementations.
-      }
-    }
-  };
 }
 
 function styleLeftFromVisualLeft(visualLeft: number, panelWidth: number, panelScale: number): number {
@@ -1139,7 +1017,7 @@ export function showResultsPanel(
     autoPlayEnabled: Boolean(input.autoPlayEnabled),
     keyboardShortcuts: normalizeShortcutMap(input.keyboardShortcuts || DEFAULT_KEYBOARD_SHORTCUTS)
   };
-  const mediaSessionController = createPanelMediaSessionController(handlers, () => lastInput);
+  const mediaSessionController = createPanelMediaSessionController(handlers);
   tapTempo.update(true, lastInput); // hidden initially
   root.classList.remove('bc-tap-open');
 

@@ -559,12 +559,9 @@ export const ORIGIN_BRIDGE_SCRIPT_SECTION_C = `
       document.addEventListener('playing', scanWindowForTrackIdentity, true);
       document.addEventListener('play', scanWindowForDiscoverPayload, true);
       document.addEventListener('playing', scanWindowForDiscoverPayload, true);
-      document.addEventListener('play', registerMediaSessionBridge, true);
-      document.addEventListener('playing', registerMediaSessionBridge, true);
 
       ownedPlaybackHostStatus = 'ready';
       ownedPlaybackHostDetail = 'page-context bridge ready';
-      registerMediaSessionBridge();
       emitOwnedPlaybackHostState();
 
       setTimeout(postGlobals, 50);

@@ -143,7 +143,9 @@ Single `initDiscoverController()` closure. Pure helpers are extracted to `contro
 - Types: shared types live in `src/shared/types.ts`. Import as `import type { X } from '@/shared/types'`. Module-local types may live alongside their module.
 - Logging: use `const logger = createLogger('TAG')` from `@/utils/debug`. Enable in browser with `localStorage.setItem('__BC_DEBUG__', '1')`.
 - Architecture pattern: no classes except `LikesStatusController` and `PlayerState`. Other modules use closure-returning factory functions or plain named exports.
-- No test framework is configured. TypeScript strict mode through webpack is the primary correctness check.
+- Tests use Node's built-in runner (`npm test`), including changelog transforms and media-session
+  lifecycle/manifest regression checks. TypeScript strict mode through webpack is the primary
+  source correctness check; hardware media routing still requires browser validation.
 - Browser-targeted code should prefer the build-time `__BUILD_TARGET__` constant, typed in `src/types/build-globals.d.ts` and injected by webpack `DefinePlugin`.
 - Worker count and preload concurrency are derived at runtime from `navigator.hardwareConcurrency` via `src/shared/concurrency.ts`. Do not hardcode them.
 - Do not introduce non-deterministic behavior, hidden retries, random timing guesses, or fallback-heavy control flow unless there is a clearly documented product need.
